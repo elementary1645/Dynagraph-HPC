@@ -1,13 +1,14 @@
 # Architecture
 
-## Current implementation: Phase 1B
+## Current implementation: Phase 2B
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
 and the OpenMP specification date used to compile the library, plus fixed-topology
-CSR storage, strict text edge-list loading, and sequential Dijkstra with optional
-work counters. Incremental repair and adaptive selection remain planned. The CLI
-retains help/version commands and adds SSSP queries with JSON output.
+CSR storage, strict text edge-list loading, sequential Dijkstra, and OpenMP
+delta-stepping with optional work counters. Incremental repair and adaptive
+selection remain planned. The CLI retains help/version commands and supports
+both SSSP algorithms with JSON output.
 
 CMake requires C++17 without compiler extensions and finds OpenMP through its
 imported CXX target. GCC is the supported toolchain for this phase. OpenMP linkage
@@ -21,10 +22,10 @@ active in Release; CTest handles discovery, timeouts, and CLI checks.
 | --- | --- |
 | include/dynagraph/, src/ | Public API and implementation |
 | graph/ | Contiguous CSR storage, weight replacement, and text input validation |
-| algorithms/ | Sequential Dijkstra and shared SSSP result; future delta-stepping |
+| algorithms/ | Sequential Dijkstra, parallel delta-stepping, shared SSSP result |
 | dynamic/ | Future propagation of edge-weight decreases |
 | adaptive/ | Future validated algorithm-selection policy |
-| instrumentation/ | Reserved for future timing; Dijkstra work counters live in its API |
+| instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
 | apps/ | Command-line entry points |
 | tests/ | Correctness and integration tests |
 | benchmarks/configs/, benchmarks/python/ | Future experiment definitions and Python tooling |
@@ -164,13 +165,11 @@ line-length resource quota is imposed by this library.
 
 ## Future phase gates
 
-Phase 1B should define distance types, checked distance addition, infinity, source
-validation, and result semantics before implementing sequential Dijkstra. Validate
-it against an independent small-graph oracle. Later phases add separately validated
-parallel delta-stepping, decrease-only incremental updates, then adaptive selection.
-Each stage requires explicit approval. Weight-increase processing remains deferred.
-Benchmark tooling will invoke the CLI and consume structured outputs; Python
-bindings are not initially needed.
+Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
+delta-stepping. Phase 3 requires explicit approval. Decrease-only incremental
+repair, adaptive selection, and automatic delta tuning remain future work.
+Storage updates and full recomputation support increases; incremental processing
+of increases remains deferred. Benchmark tooling will later consume CLI JSON.
 
 
 ## Phase 1B: sequential SSSP baseline
@@ -225,4 +224,139 @@ sizes. Counters measure work, not runtime or performance benefit.
 The CLI owns parsing/loading/JSON presentation; algorithms depend only on CSR.
 Schema v1 and error behavior are documented in README.md. There is no timing in
 the CLI. Full recomputation after serial increases or decreases is implemented;
-incremental processing and parallel algorithms remain future gated work.
+Parallel recomputation is implemented in Phase 2B below; incremental processing
+remains future gated work.
+
+
+## Phase 2B: parallel delta-stepping
+
+Public header: dynagraph/algorithms/delta_stepping.hpp. The API is
+`SSSPResult delta_stepping(const CSRGraph&, VertexId,
+const DeltaSteppingOptions&, DeltaSteppingMetrics* = nullptr)`.
+Options contain required Distance delta and int thread_count=0. Zero delta and
+negative threads throw invalid_argument. Invalid sources throw out_of_range.
+Argument validation precedes metric reset; metrics may be incomplete after an
+execution failure. Allocation/container failures propagate without partial results.
+Result source, uint64 distances, infinity, and predecessor omission match Dijkstra.
+No sequential algorithm or graph-storage code is changed.
+
+### Bucket and arithmetic invariants
+
+Buckets are an ordered std::map<Distance, vector<Entry>>, keyed by label/delta.
+Delta accepts 1 through UINT64_MAX. Keys are selected using map.begin(), never by
+incrementing through empty indices. No bucket endpoint multiplication is used.
+Light edges have weight <= delta; heavy edges have weight > delta. Entries retain
+(vertex, label) snapshots. At a quiescent boundary, labels differing from the
+current atomic label are stale and discarded, both on publication and extraction.
+
+The current bucket repeatedly processes all valid entries until no valid entries
+remain in it. Every improvement, including an improvement to a previously seen
+vertex in the same bucket, can generate another light pass. A coordinator-owned
+byte membership array only deduplicates the per-bucket heavy scan list. Once
+closure is reached, that list's vertices are scanned using their final labels.
+A heavy edge cannot generate a current/earlier-bucket distance. No later bucket
+can improve an already closed bucket under nonnegative weights.
+
+Finite shortest paths have simple representatives, so L=(V-1)*UINT32_MAX is a safe
+cap, strictly below infinity. With nonempty validated V, the product fits uint64.
+All stored finite labels are <=L. Before evaluating du+w, test w>L-du; if true,
+discard that walk. Otherwise addition is safe and the candidate is below infinity.
+This preserves all shortest paths and all their prefixes without assuming tentative
+labels are settled. Static assertions pin the graph bounds used in the proof.
+For V=1, L=0 and positive self-loops are skipped safely. Strict improvements stop
+zero cycles from producing equal-label work. Unreachable vertices stay at infinity.
+
+### Ownership and synchronization
+
+Each call owns a fixed atomic distance array, thread-state vector, sparse buckets,
+work descriptors, heavy-list membership bytes, and result. No mutable global state
+or OpenMP global-setting changes occur. The thread-state ownership vector is sized
+before entering one persistent `parallel num_threads(requested)` region. Zero
+requested threads resolves through omp_get_max_threads() in the caller's context;
+the actual team size is observed inside the region. Nested/runtime constraints may
+reduce it. Independent host threads may query the same immutable CSR with separate
+metrics. Assignment, movement, destruction, and weight replacement of that graph
+must be externally serialized against every query.
+
+Only the `single` coordinator changes map/vector structure for shared buckets,
+work descriptors, the heavy list, and membership bytes. The coordinator role can
+move between team threads across rounds; barriers transfer ownership. Work splits
+CSR rows into at most 256-edge descriptors with a source-label snapshot, allowing
+high-degree rows to be shared. Workers use `for schedule(dynamic,1)` and only read
+the descriptors/CSR. Each worker appends exclusively to its own update vector and
+updates exclusively its own metric/exception slot. Update capacity is retained
+within a query; outer thread-state storage never resizes during execution.
+
+Every round has:
+
+1. single preparation and its implicit publication barrier;
+2. a collective completion/failure decision;
+3. worksharing scan and its implicit worker-completion barrier;
+4. single failure inspection/update merge and its implicit publication barrier;
+5. collective re-entry to the next single preparation before any exit decision.
+
+No nowait or OpenMP cancellation is used. Atomic min uses compare_exchange_weak
+with relaxed success/failure memory orders, and relaxed loads. Distances publish
+no associated payload; barrier synchronization publishes ordinary work/buffer
+state. No ordinary access aliases the atomic distance array. Successful CAS
+operations append scheduling records; superseded records are discarded after the
+worker barrier, preserving the final winner. Copying into ordinary result distances
+occurs after the team exits.
+
+### Exception safety
+
+All potentially throwing coordinator work is inside a try/catch in `single`.
+Each worker catches scan exceptions on that same thread, records exception_ptr,
+and still encounters the worksharing barrier. A worker with a recorded exception
+skips further assigned scans, while peers finish the round. The coordinator
+inspects slots before merging; a failed round is never used to return a result.
+All threads re-enter the next single/publication barrier, then exit collectively.
+Only after team shutdown is the exception rethrown. If update-vector allocation
+fails after CAS, the entire query fails; no label with lost work is returned.
+Pre-region and result/metric allocation failures propagate through normal RAII.
+
+The initial implementation had a failure-exit decision immediately after merge.
+A fast coordinator could set the next round's exception while another thread was
+still testing the old round, causing divergent barrier participation. Fault
+injection exposed a timeout. The fixed design makes failure exit decisions only
+after the next preparation publication barrier. The allocation-failure sweep and
+post-CAS publication-failure test retain regression coverage.
+
+### Work metrics
+
+Instrumentation uses a one-time dispatch to template specializations. Uninstrumented
+scans have no event counter updates. Coordinator counters have a single writer;
+worker counters are private to fixed thread-state slots and copied after team exit.
+No shared atomic metric increments are used. Counter increments saturate at
+UINT64_MAX and set counters_saturated rather than wrap. Metrics are work counts,
+not benchmark timing; scheduling can change successes, retries, and work assignment.
+
+| Field | Exact definition |
+| --- | --- |
+| actual_thread_count | Actual team size observed inside the region |
+| buckets_processed | Bucket keys selected with at least one valid entry; excludes stale-only keys |
+| light_edge_passes | Nonempty valid frontier rounds, even when their vertices have no outgoing edges |
+| heavy_edge_passes | One completed heavy phase per processed bucket, including empty-edge phases |
+| stale_entries | Superseded scheduling records discarded during merge or extraction |
+| per_thread.edges_examined | All CSR records inspected, including edges filtered out by phase |
+| per_thread.relaxation_attempts | Edges matching the phase class, including cap-rejected candidates |
+| per_thread.successful_relaxations | Successful strictly decreasing CAS operations |
+| per_thread.cas_retries | Failed CAS attempts, including spurious compare_exchange_weak failures |
+
+Each reachable row is scanned in heavy processing once, and in one or more light
+passes. The current CSR layout filters weights in each phase; inspections therefore
+include classification overhead. No prepartitioned edge copies are maintained.
+
+### Complexity and limitations
+
+Do not transfer Dijkstra's bounds to this implementation. Let C be total scanned
+CSR records, R successful relaxations, M maximum live sparse bucket keys, and Q
+maximum retained scheduling records. Work includes O(V+C+R log(M+1)) plus frontier,
+merge, and synchronization costs; label reprocessing can make C and R much larger
+than E. Extra storage includes atomic/result arrays, O(V) membership/heavy lists,
+work descriptors, Q entries, map nodes, and retained per-thread capacities.
+Lazy duplicates mean there is no claimed O(V+E) peak-memory bound for arbitrary
+workloads. The serial coordinator can bottleneck; atomics may contend or be
+implemented with runtime locks on other platforms. One persistent team reduces
+repeated startup but small queries can still be slower than Dijkstra. There is
+no automatic fallback, delta tuning, incremental processing, or speedup claim.

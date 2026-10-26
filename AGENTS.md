@@ -2,12 +2,12 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 1B sequential binary-heap Dijkstra, independent
-  oracle tests, optional counters, CLI integration, and documentation. Phases 0
-  and 1A are complete; the user's Phase 1B request explicitly approved this gate.
-- Stop after reporting Phase 1B verification; obtain explicit user approval before
-  Phase 2 or later. Parallel algorithms, incremental repair, adaptive policies,
-  topology changes, and parallel mutation remain deferred.
+- Current authorized scope: Phase 2B parallel delta-stepping, instrumentation,
+  CLI integration, tests, audit corrections, CI, and documentation. Phase 2A's
+  design and Phase 2B implementation were explicitly approved by the user.
+- Stop after reporting Phase 2B verification; obtain explicit approval before
+  Phase 3. Incremental repair, adaptive policies, automatic delta tuning,
+  topology changes, and parallel graph mutation remain deferred.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.
 

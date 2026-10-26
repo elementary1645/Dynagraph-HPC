@@ -1,5 +1,6 @@
 #include "dynagraph/algorithms/sssp.hpp"
 #include "test_support.hpp"
+#include "sssp_test_support.hpp"
 
 #include <random>
 #include <stdexcept>
@@ -9,25 +10,6 @@ namespace {
 using namespace dynagraph;
 using dynagraph::test::require;
 
-// Independent synchronous Bellman-Ford, using input records rather than CSR.
-std::vector<Distance> oracle(std::size_t n, const std::vector<InputEdge>& edges, VertexId source) {
-    std::vector<Distance> distances(n, unreachable_distance);
-    distances[source] = 0;
-    for (std::size_t pass = 1; pass < n; ++pass) {
-        auto next = distances;
-        for (const auto& edge : edges) {
-            const auto u = static_cast<std::size_t>(edge.source);
-            const auto v = static_cast<std::size_t>(edge.destination);
-            if (distances[u] != unreachable_distance) {
-                const auto candidate = distances[u] + static_cast<Distance>(edge.weight);
-                if (candidate < next[v]) { next[v] = candidate; }
-            }
-        }
-        if (next == distances) { break; }
-        distances = std::move(next);
-    }
-    return distances;
-}
 
 void compare(std::uint32_t n, const std::vector<InputEdge>& edges) {
     const auto graph = CSRGraph::from_edges(n, edges);
@@ -36,7 +18,7 @@ void compare(std::uint32_t n, const std::vector<InputEdge>& edges) {
     const auto destinations = graph.destinations();
     for (VertexId source = 0; source < n; ++source) {
         DijkstraMetrics metrics;
-        const auto expected = oracle(n, edges, source);
+        const auto expected = test::bellman_ford(n, edges, source);
         const auto result = dijkstra(graph, source, &metrics);
         require(result.source == source && result.distances == expected, "Bellman-Ford agreement");
         require(dijkstra(graph, source).distances == expected, "Repeated uninstrumented query");
@@ -105,9 +87,23 @@ void randomized() {
         }
         compare(n, edges);
         if (!edges.empty()) {
+            // Preserve the original rebuilt-graph differential cases as well as
+            // adding storage-update integration checks below.
             edges.front().weight = 0;
             compare(n, edges);
             edges.front().weight = 4294967295LL;
+            compare(n, edges);
+            auto graph = CSRGraph::from_edges(n, edges);
+            for (unsigned update = 0; update < 4; ++update) {
+                auto& edge = edges[static_cast<std::size_t>(random()) % edges.size()];
+                edge.weight = update % 2 == 0 ? 0 : 4294967295LL;
+                graph.replace_weight(static_cast<VertexId>(edge.source),
+                                     static_cast<VertexId>(edge.destination), edge.weight);
+                for (VertexId source = 0; source < n; ++source) {
+                    require(dijkstra(graph, source).distances == test::bellman_ford(n, edges, source),
+                            "Randomized in-place replacement then recomputation");
+                }
+            }
             compare(n, edges);
         }
     }

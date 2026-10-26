@@ -23,3 +23,22 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }} --parallel 2
       - name: Run CTest
         run: ctest --preset ${{ matrix.preset }}
+
+  sanitize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ASan and UBSan
+        run: >-
+          cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++
+          -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+          -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON
+          '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
+          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+      - name: Build sanitizer targets
+        run: cmake --build build/sanitize --parallel 2
+      - name: Run instrumented CTest
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build/sanitize --output-on-failure

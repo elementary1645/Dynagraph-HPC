@@ -6,12 +6,13 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 1B implements sequential binary-heap Dijkstra as the full-recomputation
-baseline, with optional work counters, strict JSON CLI output, and independent
-Bellman–Ford differential tests. CSR construction, serial weight replacement,
-text loading, existing CLI options, and OpenMP smoke tests remain available.
-Parallel shortest paths, incremental repair, adaptive selection, and benchmarks
-are planned work.
+Phase 2B implements OpenMP parallel delta-stepping with a configurable fixed
+delta, atomic distance relaxation, sparse buckets, optional per-thread metrics,
+and coordinated exception propagation. Sequential binary-heap Dijkstra remains
+the full-recomputation reference. Both use the existing CSR and SSSP result API.
+Tests compare both algorithms with independent Bellman–Ford and cover concurrent
+queries and allocation failures. Incremental repair, adaptive selection,
+automatic delta tuning, and benchmarks remain planned work.
 There are no performance results or speedup claims.
 
 The approved initial graph scope is directed, fixed topology with nonnegative
@@ -58,13 +59,13 @@ cmake --build build/manual --parallel 2
 ctest --test-dir build/manual --output-on-failure
 ```
 
-GitHub Actions defines Ubuntu Debug/Release builds and tests. Hosted CI execution
-is separate from local verification and requires the workflow to reach GitHub.
+GitHub Actions defines Ubuntu Debug/Release and ASan/UBSan builds and tests.
+Hosted CI execution is separate from local verification and requires the workflow to reach GitHub.
 
 ## Layout and development
 
 - include/dynagraph/ and src/: library API and CSR implementation; reserved modules
-  for algorithms, dynamic updates, adaptation, and instrumentation
+  for dynamic updates, adaptation, and instrumentation
 - apps/ and tests/: CLI and automated checks
 - benchmarks/: future configuration and Python experiment tooling
 - data/manifests/ and results/: provenance and generated experiment artifacts
@@ -72,7 +73,8 @@ is separate from local verification and requires the workflow to reach GitHub.
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 1B is implemented; Phase 2 requires explicit approval.
+Each implementation phase requires approval before work begins. Phase 2B is
+implemented; Phase 3 requires explicit approval.
 
 ## Graph API and semantics
 
@@ -158,7 +160,7 @@ For the six-vertex input above, output is:
 ```
 
 Schema v1 is an object with integer `schema_version` equal to 1, string `algorithm`
-equal to `dijkstra`, integer `source`, and array `distances` with exactly V entries
+equal to `dijkstra` or `delta-stepping`, integer `source`, and array `distances` with exactly V entries
 in vertex order. Each entry is a nonnegative integer distance or JSON null for
 unreachable. Consumers must preserve uint64 integers (JavaScript Number loses
 precision above 2^53-1). No timing or counters are included. Required options may
@@ -168,3 +170,51 @@ diagnostic and exit 2. Success exits 0. Existing no-argument/help/version comman
 remain available.
 
 See architecture.md for the overflow proof, complexity, and exact metric definitions.
+
+## Parallel shortest paths
+
+```cpp
+#include "dynagraph/algorithms/delta_stepping.hpp"
+dynagraph::DeltaSteppingMetrics metrics;
+auto parallel = dynagraph::delta_stepping(graph, 0, {16, 2}, &metrics);
+// Omit the last argument to compile out event-counter updates.
+```
+
+`DeltaSteppingOptions` requires positive uint64 delta (including UINT64_MAX).
+Its thread count defaults to 0 (the calling thread's OpenMP runtime default);
+positive values request a team, negative values are rejected. The runtime may
+supply fewer workers. Metrics report the actual team size. Invalid sources throw
+out_of_range; invalid options throw invalid_argument. Allocation failures propagate
+only after the team exits collectively; no incomplete result is returned.
+The existing Dijkstra implementation and result type are unchanged.
+
+```sh
+./build/debug/dynagraph_cli sssp --input graph.txt --source 0 --algorithm delta-stepping --delta 16 --threads 2
+```
+
+For the six-vertex input above with an actual team of two:
+
+```json
+{"schema_version":1,"algorithm":"delta-stepping","source":0,"delta":16,"requested_threads":2,"actual_threads":2,"distances":[0,0,7,null,null,null]}
+```
+
+The common v1 fields and distance ordering are preserved. Parallel results add
+integer `delta`, `requested_threads` (0 means default), and `actual_threads`.
+`--delta` is required for delta-stepping; `--threads` defaults to 0. Both options
+are forbidden with Dijkstra. Values must be unsigned decimal and fit their API
+types; duplicate options are rejected. The CLI collects optional metrics to
+report the actual team size, but emits no work counters or timing.
+
+The implementation repeatedly closes each bucket over light edges (weight <=
+delta), then scans heavy edges once per distinct vertex using final labels.
+Workers update atomic distances and their own buffers; one coordinator owns all
+bucket and work-container mutations between barrier-separated phases. Concurrent
+independent queries on an immutable graph are supported; all graph mutations
+must wait for every query using that graph to finish.
+
+Checked additions discard walks above (V-1)*UINT32_MAX, a bound on every finite
+shortest distance. Sparse buckets avoid allocation proportional to maximum
+bucket index. A serial coordinator, barrier costs, atomic contention, repeated
+light scans, and retained stale entries limit performance and memory capacity;
+no speedup is asserted. Test settings and reproducibility details are in
+[experimental protocol](docs/experimental-protocol.md).
