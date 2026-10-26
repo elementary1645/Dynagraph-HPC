@@ -1,6 +1,10 @@
 # Architecture
 
-## Current implementation: Phase 4B-2
+## Current implementation: Phase 5B-1
+
+Phase 5B-1 adds standard-library Python graph/trace generation and independent
+replay validation, specified in [workload artifacts](workload-artifacts.md).
+It does not add a benchmark executable, clocks or SSSP algorithm changes.
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
@@ -31,7 +35,7 @@ active in Release; CTest handles discovery, timeouts, and CLI checks.
 | instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
 | apps/ | Command-line entry points |
 | tests/ | Correctness and integration tests |
-| benchmarks/configs/, benchmarks/python/ | Future experiment definitions and Python tooling |
+| benchmarks/configs/, benchmarks/python/ | Deterministic graph/trace specs, randomness, artifact I/O and replay CLI; no timing |
 | data/manifests/ | Dataset provenance and checksums; generated data ignored |
 | results/ | Generated outputs, ignored by default |
 | docs/, paper/ | Design, research records, protocol, and future manuscript |
@@ -172,11 +176,13 @@ line-length resource quota is imposed by this library.
 Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
 delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4B-1
 adds forced-strategy switching; Phase 4B-2 adds a deterministic heuristic.
-Phase 4B-3 or Phase 5 requires approval.
+Phase 5A's read-only experimental design is complete; Phase 5B-1 implements only
+artifact generation/integrity/replay. Phase 5B-2 requires approval.
 Batch/parallel repair, adaptive selection, and automatic
 delta tuning remain future work.
 Storage updates and full recomputation support increases; incremental processing
-of increases remains deferred. Benchmark tooling will later consume CLI JSON.
+of increases remains deferred. Future timed replay will use the adaptive engine;
+current artifact interoperability tests consume the existing CLI JSON.
 
 
 ## Phase 1B: sequential SSSP baseline
