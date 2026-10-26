@@ -1,10 +1,13 @@
-foreach(test_name IN ITEMS project_info openmp csr_graph edge_list_io dijkstra delta_stepping)
+foreach(test_name IN ITEMS project_info openmp csr_graph edge_list_io dijkstra delta_stepping
+                           incremental_sssp incremental_failure)
     add_executable(test_${test_name} test_${test_name}.cpp)
     target_link_libraries(test_${test_name} PRIVATE DynaGraph::dynagraph)
     dynagraph_set_warnings(test_${test_name})
     add_test(NAME ${test_name} COMMAND test_${test_name})
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 10)
 endforeach()
+
+set_tests_properties(incremental_sssp incremental_failure PROPERTIES TIMEOUT 60)
 
 set_tests_properties(openmp PROPERTIES
     PROCESSORS 2

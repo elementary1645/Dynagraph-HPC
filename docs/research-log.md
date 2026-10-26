@@ -1,5 +1,176 @@
 # Research log
 
+## 2026-10-26 — Phase 3B transactional incremental SSSP
+
+### Authorization and implementation
+
+The user explicitly approved the Phase 3A design and requested Phase 3B
+implementation. Inspected AGENTS.md, the graph/SSSP/Dijkstra/delta APIs and
+implementations, CMake, test harness/oracles, workflow and existing documentation.
+Started on main at 9eb51be with a clean working tree. Updated AGENTS.md for this
+authorization and the Phase 4 gate. No dependencies installed, sub-agents used,
+commits, pushes, source resets or discarded files. Phase 4 was not started.
+
+Added IncrementalSSSPState with owned CSR, fixed source, owned distances, and one
+byte of journal membership per vertex. Factories initialize through Dijkstra or
+validate an incoming result by recomputing Dijkstra before adoption. Inputs are
+passed by value (lvalue copies, rvalue transfer); failed initialization may consume
+rvalues. The state has no unchecked public constructor or mutable accessors and
+is noncopyable/nonmovable; guaranteed C++17 return elision supports factories.
+Source/graph rebinding is unavailable. External changes to a copied input graph
+cannot invalidate a state. Views retain storage but reflect current values;
+all access must be serialized against an update.
+
+Single-edge decrease returns unchanged_weight, weight_only, or distances_repaired
+with old/new weights and distinct improved count. Invalid endpoints/missing edges,
+unsupported weights and increases reject without state/metric changes. Successful
+strict decreases always commit their graph weight, even with unchanged distances.
+No batches, increases, topology edits, parallel repair or adaptive work was added.
+
+The deterministic min-heap propagates strict decreases through outgoing CSR,
+filters stale records, and substitutes the proposed weight through a local view.
+A first-change undo entry is allocated before marking a vertex; queue insertion
+succeeds before its distance write. The nonthrowing guard restores original
+distances and marks on failure. Staged scalar metrics are published only on
+success. Existing CSRGraph::replace_weight is the final potentially throwing
+operation; its only write follows validation/lookup and has no throwing work
+afterward. Remaining publication and journal/queue cleanup cannot throw. There
+are no production fault hooks or global state. No full distance copy, full mark
+clear, or Dijkstra call occurs inside decrease(). No CSR, Dijkstra, delta, CLI or
+workflow changes were necessary.
+
+Checked addition caps candidates at (V-1)*UINT32_MAX after source validation.
+Infinity is never subtracted/added, and finite accepted labels never exceed the
+cap. Correctness uses old distances as upper bounds on new distances, preserves
+that bound on relaxation, and restores shortest-path inequalities by queue
+publication. Simple shortest-path prefixes fit the cap. Nonnegative weights and
+min-heap order mean each improved row is scanned once; repeated improvements
+before a valid pop create stale entries. Strictness handles zero cycles and equal
+paths. Fixed topology with finite weights preserves reachability.
+
+For A distinct improved vertices, E_A outgoing edges of those vertices, R strict
+label improvements including the seed, and H peak queue entries, update time is
+O(log(outdegree(u)+1) + A + E_A + R log(R+1)), R<=E_A+1. Local storage is O(A+H),
+persistent repair arrays O(V) beyond CSR. No-distance-change updates perform no
+propagation scan/allocation. Large affected regions may make repair slower than
+recomputation; no speedups or novelty are asserted. Metrics and exact algorithm,
+transaction, ownership and measurement contracts are documented in architecture.md,
+README.md and experimental-protocol.md.
+
+### Exact verification commands
+
+Executed from the repository root. Existing build directories were reconfigured;
+the new source/tests were compiled in all three configurations. Builds and full
+suites were repeated after adding the explicit positive self-loop cap-zero case.
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+ctest --test-dir build/debug -R '^incremental_failure$' --verbose
+ctest --test-dir build/release -R '^incremental_(sssp|failure)$' --verbose
+ctest --test-dir build/debug -R '^incremental_(sssp|failure)$' --repeat until-fail:20 --output-on-failure
+git diff --check
+git diff --exit-code -- include/dynagraph/graph src/graph include/dynagraph/algorithms src/algorithms apps .github
+```
+
+Environment: GCC 13.3.0, CMake 3.28.3, OpenMP 4.5, two logical CPUs. Final builds
+passed without warnings under unchanged -Wall -Wextra -Wpedantic -Wconversion
+-Wshadow -Werror, C++17 and OpenMP flags. Release flags include -O3 -DNDEBUG;
+checks remain active in the dependency-free harness. The first Debug build found
+one new test-only range-loop copy warning. Changed the loop variable to a const
+reference; no warning flag was disabled. No correctness-test failure was observed.
+
+Final complete suites: Debug 14/14 passed (11.61 s), Release 14/14 (10.24 s),
+ASan/UBSan 14/14 (16.48 s). All existing Dijkstra, delta-stepping, storage, OpenMP
+and CLI entries passed. These elapsed CTest times reflect shared-host load and
+are not performance comparisons. No tests skipped, disabled, or weakened.
+
+The sanitizer CTest command ran outside the sandbox with approval because the
+previous phase established that sandbox ptrace prevents LeakSanitizer. Leak
+detection remained enabled; no ASan, UBSan, leak finding or timeout occurred.
+This phase did not run another knowingly unsupported sandbox sanitizer attempt.
+No TSan pass is claimed; the previously recorded startup failure is not evidence
+of race freedom. Repair itself is sequential and requires serialized access.
+The unchanged CI workflow includes all registered tests in Debug/Release and
+ASan/UBSan jobs. Hosted CI for these uncommitted changes remains unverified.
+
+### Correctness, fault coverage and repeat results
+
+The two new CTest entries contain five correctness groups and three failure groups.
+Randomized correctness uses mt19937 seed 0x31B2026, 120 dense/sparse graphs with
+1–16 vertices, every source, 24 updates per nonempty graph/source, small/full-range
+weights, equal requests and repeated edges. Each update runs instrumented/plain
+states, independently updates input records, rebuilds a reference graph, compares
+fresh Dijkstra and small-graph Bellman–Ford, and checks monotonicity, reachability,
+all graph topology/weight arrays, outcomes and counter identities. Hand cases
+cover local/multi-hop repair, invalid updates, unchanged/weight-only requests,
+unreachable tails, zero cycles, equal paths, source/non-source self-loops, a
+singleton positive loop at cap=0, edges into source, exact stale-queue accounting,
+6,000-vertex max-weight chains and 900-vertex hubs. Ownership/adoption tests check
+original graph isolation, independent states, stable views, invalid sources,
+dimensions and stale/malformed result rejection.
+
+The sequential failure executable faults every observed ordinary C++ allocation:
+14 initialization positions, 15 checked-adoption positions, 16 repair positions
+without metrics and 16 with metrics (61 injected exceptions per executable run).
+Fourteen repair positions per mode observe already changed live distances before
+throwing (28 failures after partial tentative repair). Fixed-size traces locate
+the initial journal/heap insertions and later journal/heap growth; they neither
+allocate nor modify the observed state. After each repair failure all graph
+arrays/distances and sentinel metrics match the pre-call snapshots, a same-state
+retry improves all 95 affected vertices, and a different update succeeds.
+Initialization failures preserve lvalue inputs and allow retry. An armed allocator
+confirms unchanged/weight-only requests perform zero propagation allocations.
+Debug and Release verbose checks reported the same allocation counts.
+
+Final Debug incremental correctness/failure entries each passed 20 consecutive
+CTest repetitions: 40 executions in 16.35 s, including 1,220 selected allocation
+failures and 560 failures observed after tentative writes across the failure-test
+repetitions. No mismatch, hang or timeout occurred. Whitespace verification passed;
+the separate diff check confirmed graph, recomputation algorithms, CLI and workflow
+remain unchanged.
+
+### Files and gate
+
+Created:
+- include/dynagraph/dynamic/incremental_sssp.hpp
+- src/dynamic/incremental_sssp.cpp
+- tests/test_incremental_sssp.cpp
+- tests/test_incremental_failure.cpp
+
+Modified:
+- AGENTS.md
+- CMakeLists.txt
+- tests/CMakeLists.txt
+- README.md
+- docs/architecture.md
+- docs/experimental-protocol.md
+- docs/research-log.md
+
+No unresolved local correctness, warning, build or sanitizer failures. Maximum
+representable graphs and practical counter saturation cannot be exercised here;
+fault injection covers ordinary C++ allocations, not all OS/hardware/aligned
+allocator failures. The state is intentionally fixed-identity/nonmovable. Strong
+exception guarantees apply to an existing state; by-value initialization can
+consume rvalues. Transactions require serialized access, including existing const
+views. Paths, batches, increases, parallel repair, shared graph state, adaptive
+scheduling and benchmark orchestration remain unimplemented.
+
+Phase 3B is complete. Stop and await approval. Recommended Phase 4 design topics:
+fair combined update-and-query timing boundaries, initialization amortization,
+reproducible traces/metadata, inexpensive predecision features, held-out workload
+evaluation, and state coherence/switching costs when recomputation is selected.
+Actual affected fraction/current repair duration are outcomes, not free features
+before deciding. Controlled multicore experiments remain necessary for scaling
+claims. No Phase 4 implementation was begun and nothing was committed or pushed.
+
 ## 2026-10-26 — Phase 2B final verification gate after Codespace restart
 
 Inspected all 11 modified tracked files and five untracked Phase 2B files against

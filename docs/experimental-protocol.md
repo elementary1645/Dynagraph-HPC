@@ -2,8 +2,9 @@
 
 ## Status
 
-This is a prospective measurement protocol. Phases 1B and 2B provide verified
-sequential and parallel recomputation baselines but no benchmark results or speedup claims.
+This is a prospective measurement protocol. Phases 1B, 2B, and 3B provide
+sequential/parallel recomputation and transactional single-decrease repair
+baselines but no benchmark results or speedup claims.
 The OpenMP smoke test verifies functionality, not performance.
 
 ## Correctness before timing
@@ -79,8 +80,72 @@ comparisons and measure their overhead before interpreting instrumented timings.
 No benchmark measurements or performance conclusions are supplied by this phase.
 
 Phase 2B implements the fixed-delta parallel recomputation baseline described
-below. Scaling studies, incremental repair, and adaptive selection need separate
-approval and independent validation.
+below. Phase 3B adds sequential single-decrease repair. Scaling studies, batch or
+parallel repair, and adaptive selection need separate approval and validation.
+
+## Implemented Phase 3B validation and future measurement boundaries
+
+IncrementalSSSPState is a sequential distance-repair baseline, not a novelty
+claim. Tests maintain original edge records independently, rebuild a reference
+graph and recompute Dijkstra after every accepted update, and use synchronous
+Bellman–Ford on small graphs. Every accepted update checks componentwise
+nonincrease, invariant reachability, exact stored weights/topology, outcomes,
+instrumented/plain agreement, and distinct-vertex/queue/edge identities.
+
+The deterministic suite uses mt19937 seed 0x31B2026, 120 graphs with 1–16 vertices,
+every source, and 24 updates per nonempty graph/source. Dense/sparse sampling
+probabilities alternate 1/2 and 1/7. Weights are full-range PRNG values or 0–31.
+Every fifth request keeps its weight; other requests choose by modulo
+old_weight+1 using uint64 arithmetic. Every third step reuses the previous edge.
+Finite-weight decreases cannot make unreachable vertices reachable; tests assert
+that invariant rather than inventing an impossible reachability-transition case.
+
+Hand fixtures exercise zero cycles, equal paths, self-loops, repeated decreases,
+unreachable tails, edges into the source, stale heap entries, wide distances,
+6,000-vertex chains and a 900-vertex hub/fan-in graph. Initialization/adoption tests
+cover invalid sources, dimensions, stale/malformed distances, nonzero sources,
+lvalue-copy/rvalue-transfer ownership, independent states and stable array views.
+Invalid update tests preserve graph/distances and sentinel metrics exactly.
+
+An isolated sequential allocation-failure executable overrides ordinary C++ new
+and delete; it has no OpenMP-specific activation and no production hooks. It first
+counts allocations, then faults every observed allocation in both factories and
+both repair instrumentation modes. Fixed-size allocation traces observe the live
+distance array without allocation to prove failures occur after tentative writes.
+Targeted stages cover initial journal/heap insertion and subsequent journal/heap
+growth. Each failed update must preserve all graph arrays/distances/metrics,
+then accept the same update and another independent update. An armed allocator
+also verifies unchanged and weight-only requests need no propagation allocations.
+This does not simulate every aligned allocator, OS, or hardware failure.
+
+Useful development commands (actual results in research-log.md):
+
+```sh
+ctest --preset debug --output-on-failure
+ctest --preset release --output-on-failure
+ctest --test-dir build/debug -R '^incremental_(sssp|failure)$' --verbose
+ctest --test-dir build/debug -R '^incremental_(sssp|failure)$' --repeat until-fail:20 --output-on-failure
+```
+
+Future comparisons must replay identical source/weight snapshots and ordered
+traces. Report initial Dijkstra/state construction, graph acquisition/copy,
+validation/lookup/commit, repair propagation including journal/heap allocation and
+cleanup, and combined public-call latency with explicit boundaries. Use monotonic
+wall time outside the kernel, no per-edge clocks. Main timings omit optional work
+counters; diagnostic runs may measure phase costs separately. Include full
+recomputation allocation/result costs and any future strategy-switching/state
+maintenance costs. Do not compare a persistent view with a copied snapshot without
+accounting for materialization. Keep loading, correctness oracles and trace resets
+outside algorithm timing, but report end-to-end workloads separately.
+
+Vary graph size, density, structure, source, update location/magnitude, warm/cold
+execution, delta and actual thread counts. Preserve trace/seed/provenance metadata
+and raw observations; monotone traces eventually reach zero, so reset snapshots
+between repetitions. Report affected vertices and edges as outcomes; they are not
+free features before a future adaptive decision. Tune on separate workloads,
+measure initialization amortization, randomize paired method order, and distinguish
+Codespaces exploratory checks from controlled multicore experiments. No batch or
+adaptive benchmark engine is introduced in this phase.
 
 
 ## Implemented Phase 2B validation and future measurements

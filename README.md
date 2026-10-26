@@ -6,17 +6,17 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 2B implements OpenMP parallel delta-stepping with a configurable fixed
-delta, atomic distance relaxation, sparse buckets, optional per-thread metrics,
-and coordinated exception propagation. Sequential binary-heap Dijkstra remains
-the full-recomputation reference. Both use the existing CSR and SSSP result API.
-Tests compare both algorithms with independent Bellman–Ford and cover concurrent
-queries and allocation failures. Incremental repair, adaptive selection,
-automatic delta tuning, and benchmarks remain planned work.
+Phase 3B adds sequential transactional incremental SSSP repair for single-edge
+weight decreases. Its state owns a graph, fixed source, and exact distances;
+failed updates preserve the graph, distances, and caller metrics. Sequential
+Dijkstra and OpenMP parallel delta-stepping remain recomputation baselines.
+Tests compare all three with independent Bellman–Ford and exercise allocation
+failures. Adaptive selection, batch/parallel repair, automatic delta tuning,
+and benchmarks remain planned work.
 There are no performance results or speedup claims.
 
 The approved initial graph scope is directed, fixed topology with nonnegative
-integer weights. Later incremental work prioritizes edge-weight decreases.
+integer weights. Incremental repair supports single-edge weight decreases only.
 Storage permits any valid weight replacement; incremental handling of increases,
 edge insertions/deletions, tombstones, and CSR compaction are deferred.
 
@@ -65,7 +65,7 @@ Hosted CI execution is separate from local verification and requires the workflo
 ## Layout and development
 
 - include/dynagraph/ and src/: library API and CSR implementation; reserved modules
-  for dynamic updates, adaptation, and instrumentation
+  for adaptation and instrumentation; dynamic/ contains incremental repair
 - apps/ and tests/: CLI and automated checks
 - benchmarks/: future configuration and Python experiment tooling
 - data/manifests/ and results/: provenance and generated experiment artifacts
@@ -73,8 +73,8 @@ Hosted CI execution is separate from local verification and requires the workflo
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 2B is
-implemented; Phase 3 requires explicit approval.
+Each implementation phase requires approval before work begins. Phase 3B is
+implemented; Phase 4 requires explicit approval.
 
 ## Graph API and semantics
 
@@ -218,3 +218,63 @@ bucket index. A serial coordinator, barrier costs, atomic contention, repeated
 light scans, and retained stale entries limit performance and memory capacity;
 no speedup is asserted. Test settings and reproducibility details are in
 [experimental protocol](docs/experimental-protocol.md).
+
+## Transactional incremental shortest paths
+
+```cpp
+#include "dynagraph/dynamic/incremental_sssp.hpp"
+
+auto graph = dynagraph::CSRGraph::from_edges(4, {{0, 1, 10}, {1, 2, 5}});
+auto state = dynagraph::IncrementalSSSPState::initialize(graph, 0); // Owns a copy.
+dynagraph::RepairMetrics metrics;
+const auto update = state.decrease(0, 1, 2, &metrics);
+// update: distances_repaired, old_weight=10, new_weight=2, vertices_improved=2.
+// state.distances(): [0, 2, 7, unreachable_distance].
+```
+
+`initialize(CSRGraph, VertexId)` runs Dijkstra. The graph argument copies an lvalue
+or consumes an rvalue. `from_result_checked(CSRGraph, SSSPResult)` validates source
+and dimensions, recomputes Dijkstra, compares every distance, then adopts the result.
+Checked adoption is not a shortcut around recomputation. Acquisition/initialization
+can allocate; rvalue inputs may have been consumed if initialization throws.
+There is no unchecked public constructor. The state cannot be copied, moved, or
+rebound; C++17 factory returns use guaranteed copy elision.
+
+The API exposes `source()`, `graph()` and `distances()` as scalar/const views.
+Changing the original graph does not affect a state created from its copy.
+Views retain their storage across updates and show the latest committed values;
+they are not historical snapshots. Serialize every update against all access to
+that state, including reads through existing views. Independent states own
+independent storage; no mutable graph or distance accessor is exposed.
+
+`decrease(uint64_t u, uint64_t v, int64_t new_weight, RepairMetrics* = nullptr)`
+returns scalar `DecreaseResult {outcome, old_weight, new_weight, vertices_improved}`:
+
+| Outcome | Meaning |
+| --- | --- |
+| unchanged_weight | Same weight, no graph write or propagation |
+| weight_only | Strict decrease committed, no distances change |
+| distances_repaired | Strict decrease committed, distances restored |
+
+Invalid endpoints/nonexistent edges throw out_of_range. Negative/out-of-range
+weights and increases throw invalid_argument. Every exception preserves the
+existing state's graph, distances, and caller metrics; the state remains reusable.
+Repair uses a deterministic min-heap, stale-entry checks, checked arithmetic, and
+an undo journal. It evaluates a proposed weight without mutating the graph, then
+commits that weight after propagation. No full distance copy, full mark clearing,
+or full recomputation occurs in `decrease()`.
+
+Zero cycles, self-loops, equal-cost alternatives, unreachable vertices, and wide
+uint64 distances are supported. Strict improvements alone generate queue work.
+Fixed topology and finite weights mean reachability cannot change. Only distances
+are maintained, not paths/predecessors. Source changes require a new state.
+Batch updates, increases, topology changes, parallel repair and concurrent access
+during an update are unsupported. Incremental repair currently has no CLI command.
+
+Optional per-call metrics are replaced only on success, not accumulated: strict
+updates, unchanged requests, no-distance-change requests (including unchanged),
+distinct improved vertices, edges, relaxation attempts (seed plus propagation),
+successful relaxations, queue pushes/pops, and stale entries. Event increments
+saturate with a flag. Omitting metrics compiles out event updates. No timings are
+collected. See architecture.md for exact definitions, invariants and complexity;
+large affected regions can cost as much as recomputation plus transaction overhead.
