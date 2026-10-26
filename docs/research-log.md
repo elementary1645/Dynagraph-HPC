@@ -1,5 +1,117 @@
 # Research log
 
+## 2026-10-26 — Phase 5B-1 interrupted Codespace recovery
+
+### Inspection and requirement audit
+
+Recovered branch `feature/benchmark-framework` at
+`647fa071ab12a170c6c108277aa63d563f12d82f` with the preserved dirty tree.
+Read AGENTS.md, experimental-protocol.md, workload-artifacts.md (the repository's
+Phase 5B-1 specification), all tracked diffs and all eight untracked files.
+No separate Phase 5B-1 requirements file was present. Inspected CMake, presets,
+CI, existing research records and production-interface boundaries. No reset,
+clean, stash, discard, dependency installation, delegation, commit or push.
+
+The preserved implementation already fully covered the documented functional
+scope; no implementation defect or missing functional requirement was found:
+
+- Five exact-count directed graph families: chain, grid, sparse_random, layered,
+  disconnected; sorted unique endpoints and checked resource quotas.
+- Separate graph/weight/source/trace SplitMix64 streams, integer rejection/Floyd
+  sampling, three integer weight distributions and explicit/random sources.
+- Strict/equal/repeat/unreachable-tail schedules with specified pool order,
+  expected-old weights, immutable records and explicit exhaustion errors.
+- Canonical graph/trace serialization, versioned complete provenance manifests,
+  SHA-256 before replay, independent endpoint-ledger replay, final graph hashes
+  and exact recipe regeneration.
+- Strict schema/numeric/count/version/identity validation; duplicate JSON keys,
+  malformed graph/trace data, increases, nonexistent edges, hash corruption,
+  rehashed semantic corruption, traversal paths and artifact symlinks rejected.
+- Exclusive output creation, manifest last, nonzero errors and no overwrite;
+  Python tests plus unchanged C++ loader/Dijkstra versus Bellman-Ford checks.
+
+Verification and its phase-gate research record were incomplete at recovery.
+Completed them here, preserving every implementation byte. This recovery changes
+only this research log. Full phase change set (including recovered files):
+AGENTS.md, README.md, docs/architecture.md, docs/experimental-protocol.md,
+docs/research-log.md, docs/workload-artifacts.md, tests/CMakeLists.txt,
+tests/test_workloads.py, tests/test_workload_loader.py,
+benchmarks/configs/chain-v1.json, benchmarks/python/artifacts.py,
+benchmarks/python/deterministic.py, benchmarks/python/generate.py,
+benchmarks/python/workloads.py. Production headers, sources, CLI, root CMake and
+CI are unchanged.
+
+### Exact verification commands and results
+
+Executed from the repository root; Python 3.14.2, GCC 13.3.0, CMake 3.28.3.
+Builds reused preserved build directories and completed without warnings.
+
+```sh
+python3 tests/test_workloads.py
+python3 tests/test_workload_loader.py build/debug/dynagraph_cli
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+python3 benchmarks/python/generate.py generate --spec benchmarks/configs/chain-v1.json --output /tmp/dynagraph-5b1-recovery-647fa071
+python3 benchmarks/python/generate.py verify --manifest /tmp/dynagraph-5b1-recovery-647fa071/manifest.json
+git diff --check
+git diff --exit-code -- include src apps CMakeLists.txt .github
+git status --short
+git diff --stat
+```
+
+Python: 22/22 tests passed. Standalone loader: one test with 30 C++ invocations
+passed (five families x three distributions x initial/final states). Debug and
+Release CTest: 18/18 passed each, including all prior correctness/failure suites.
+The sanitizer command initially returned 8 inside the sandbox: 16 entries failed
+with LeakSanitizer process-inspection/ptrace errors; workload_artifacts and
+cli_invalid_argument passed. After escalation approval, reran the identical
+sanitizer command outside the sandbox: 18/18 passed with leak detection enabled;
+no ASan, UBSan or leak findings. No tests were disabled or weakened.
+Whitespace and unchanged-production diff checks passed. Reviewed the complete
+tracked diff plus all untracked source/test/spec/document contents.
+
+### Golden fingerprints and reproducibility
+
+All 15 preserved GOLDEN digests in tests/test_workloads.py matched: initial graph,
+trace and replayed final graph for each of the five families. Regeneration also
+matched manifest bytes. The CLI test generates under PYTHONHASHSEED 0, 1 and
+12345 in different paths, with byte-identical graph/trace/manifest output.
+SplitMix64 reference vectors (including uint64 wrap), seed endpoints, sampling
+rejection/exhaustion, pool swap order and hand-pinned chain records passed.
+No golden values or generator versions were changed during recovery.
+
+Checked-in chain-v1.json CLI roundtrip: V=8, E=7, updates=12, source=0:
+
+- Initial graph: e7338d8f282737a360ae0f65fd731f7c576187e624e5fb94904246a08336ea6c
+- Trace: 5e2355594505cdc6536fe11de6fd7ba158578105715c2b9b32445925e72c9d38
+- Final graph: be98fdabd7e08cd2e88046fbc4269a9c95cd2481040279c981ffac19d57af927
+
+### Limitations and phase gate
+
+No unresolved observed Phase 5B-1 correctness failures. Only Python 3.14.2 and
+this Linux/GCC environment were executed; the documented Python 3.8 minimum and
+cross-platform byte stability have not been independently exercised. Goldens are
+regression pins, not an independent implementation of the full generator.
+Maximum-quota workloads and peak memory were not exercised. Inputs must remain
+stable during verification; no concurrent-writer defense or authenticity/signature
+protocol exists. I/O failure can leave an incomplete new output directory.
+Split labels do not enforce graph-instance isolation. No new race-detector result
+or hosted CI result is claimed.
+
+Deferred as specified: further graph families and oracle-targeted localized/broad
+traces, timed adaptive-engine replay, experimental metadata collection, repetition,
+analysis, calibration/learning, batch/increase/parallel repair, delta tuning,
+topology changes and concurrent mutation. No timing code, benchmark measurements
+or performance claims were added. Phase 5B-1 is ready for review. Stop here;
+proposed next phase is Phase 5B-2 only after explicit approval and scope agreement.
+
 ## 2026-10-26 — Phase 4B-2 deterministic adaptive heuristic
 
 ### Authorization, inspection and implementation

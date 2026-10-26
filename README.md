@@ -6,7 +6,9 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 4B-2 adds deterministic heuristic selection over sequential Dijkstra, OpenMP
+Phase 5B-1 adds deterministic graph/update-trace artifacts with SHA-256 integrity
+and independent Python replay. It adds no timing or benchmark execution.
+Phase 4B-2 provides deterministic heuristic selection over sequential Dijkstra, OpenMP
 delta-stepping, and transactional incremental repair. One owning incremental
 state remains current across strategy switches. Failed updates preserve graph,
 distances, and caller metrics. Shared no-effect fast paths apply to every policy.
@@ -25,7 +27,8 @@ edge insertions/deletions, tombstones, and CSR compaction are deferred.
 - GCC with C++17 and OpenMP headers/runtime
 - CMake 3.21 or newer and Make
 - No downloaded C++ testing framework or Python package is required
-- Python is reserved for later benchmarking; it is not invoked by this build
+- Python 3.8+ standard library for artifact generation and CTest artifact checks;
+  library-only builds with BUILD_TESTING=OFF do not require Python
 
 GCC 13.3.0 and CMake 3.28.3 are available in the initial Ubuntu 24.04 environment.
 
@@ -67,14 +70,32 @@ Hosted CI execution is separate from local verification and requires the workflo
 - include/dynagraph/ and src/: library API and CSR implementation; reserved modules
   for future instrumentation; dynamic/ contains repair and adaptive/ the forced engine
 - apps/ and tests/: CLI and automated checks
-- benchmarks/: future configuration and Python experiment tooling
+- benchmarks/: deterministic artifact generation/configuration; timing remains deferred
 - data/manifests/ and results/: provenance and generated experiment artifacts
 - docs/ and paper/: design, research records, protocol, and future manuscript
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 4B-2 is
-implemented; Phase 4B-3 or Phase 5 requires explicit approval.
+Each implementation phase requires approval before work begins. Phase 5B-1 is
+implemented; Phase 5B-2 requires explicit approval.
+
+## Deterministic workload artifacts
+
+Generate a new bundle and verify it independently (output must not exist):
+
+```sh
+python3 benchmarks/python/generate.py generate --spec benchmarks/configs/chain-v1.json --output data/generated/chain-v1
+python3 benchmarks/python/generate.py verify --manifest data/generated/chain-v1/manifest.json
+```
+
+Initial families are directed chains/grids, sparse random, layered and disconnected
+graphs. Three integer weight distributions and strict/equal/repeated/unreachable-tail
+requests use separate graph/weight/source/trace seeds and specified SplitMix64
+sampling. Canonical graph.txt, trace.txt and manifest.json contain no host/time
+metadata; regeneration is byte-identical for the same versioned configuration.
+Existing output is never overwritten. Invalid inputs, exhaustion or integrity
+failures exit nonzero. Generation never consults adaptive decisions or times SSSP.
+See [formats, configuration, quotas and reproducibility rules](docs/workload-artifacts.md).
 
 ## Graph API and semantics
 

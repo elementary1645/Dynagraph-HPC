@@ -48,3 +48,12 @@ set_tests_properties(delta_failure PROPERTIES TIMEOUT 60 PROCESSORS 2
     ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
 set_tests_properties(cli_sssp PROPERTIES
     ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=8;OMP_DYNAMIC=FALSE")
+
+# Standard-library-only artifact tooling; no Python dependency for library-only builds.
+find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
+add_test(NAME workload_artifacts COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_workloads.py)
+add_test(NAME workload_loader COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_workload_loader.py $<TARGET_FILE:dynagraph_cli>)
+set_tests_properties(workload_artifacts workload_loader PROPERTIES TIMEOUT 60
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")

@@ -8,6 +8,44 @@ baselines. Phase 4B-1 adds forced-strategy switching with a shared fast path and
 Phase 4B-2 adds a deterministic metadata-only heuristic with uncalibrated thresholds.
 No calibrated model, benchmark results or speedup claims exist.
 The OpenMP smoke test verifies functionality, not performance.
+Phase 5A completed a read-only measurement architecture review. Phase 5B-1 now
+implements deterministic inputs and independent replay only; no measurements.
+
+## Phase 5B-1 implemented artifact protocol
+
+The normative configuration, PRNG/draw order, canonical graph/trace/manifest
+schemas, quotas, CLI and integrity checks are in [workload-artifacts.md](workload-artifacts.md).
+Use the checked-in chain example or a complete schema-1 configuration. Seeds are
+separate canonical uint64 decimal strings for graph/weight/source/trace; no host
+RNG/distribution or float sampling determines bytes. All five initial families
+have exact declared/derived counts and sorted unique endpoint pairs.
+
+Initial requests cycle a declared strict/equal/repeat/unreachable schedule.
+Positive-edge pools use specified swap removal; exhausted budgets fail rather
+than reset/increase weights, shorten traces, change seeds or substitute modes.
+Unreachable classification uses fixed topology, not measured backend outcomes.
+Oracle-targeted localized/broad traces and additional families remain deferred.
+
+Bundles preserve full generation configuration, versions, split label, resolved
+source, counts, graph/trace SHA-256 and canonical final-graph SHA-256. The verifier
+checks hashes before replay, validates each expected old weight using an independent
+endpoint ledger, and checks exact regeneration against the recipe. Invalid data
+or inconsistent provenance is an error, not a silently skipped observation.
+Split labels record provenance; graph-instance split isolation is a later
+experimental orchestration requirement, not enforced by this generator.
+
+```sh
+python3 benchmarks/python/generate.py generate --spec benchmarks/configs/chain-v1.json --output data/generated/chain-v1
+python3 benchmarks/python/generate.py verify --manifest data/generated/chain-v1/manifest.json
+ctest --test-dir build/debug -R '^workload_(artifacts|loader)$' --output-on-failure
+```
+
+Both artifact tests are in normal Debug/Release/sanitizer CTest. Loader tests use
+the built C++ executable on initial/final graphs and independent small-graph
+Bellman-Ford, without modifying graph or SSSP contracts. Existing failures/race
+limitations remain. No latency, scaling, calibrated thresholds or novelty result
+is inferred from regeneration, SHA-256, CTest durations or correctness checks.
+Do not implement timing or Phase 5B-2 before approval.
 
 ## Correctness before timing
 

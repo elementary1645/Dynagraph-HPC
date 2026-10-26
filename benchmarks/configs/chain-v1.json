@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "workload_id": "chain-v1-example",
+  "split": "development",
+  "seeds": {"graph": "1", "weight": "2", "source": "3", "trace": "4"},
+  "graph": {"family": "chain", "vertices": 8},
+  "weights": {"kind": "positive_uniform", "min": 16, "max": 32},
+  "source": {"kind": "explicit", "vertex": 0},
+  "trace": {"count": 12, "schedule": ["strict", "repeat", "equal"], "max_decrement": 2}
+}
