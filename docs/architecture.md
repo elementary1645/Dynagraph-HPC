@@ -1,10 +1,14 @@
 # Architecture
 
-## Current implementation: Phase 5B-1
+## Current implementation: Phase 5B-2
 
 Phase 5B-1 adds standard-library Python graph/trace generation and independent
 replay validation, specified in [workload artifacts](workload-artifacts.md).
-It does not add a benchmark executable, clocks or SSSP algorithm changes.
+Phase 5B-2 adds the separate correctness-only `dynagraph_bench` executable,
+whose CLI, strict canonical parser, independent ledger and full-state oracle
+checks are described in [benchmark replay](benchmark-replay.md).
+It adds no clocks or production SSSP algorithm changes. The C++ executable relies
+on the existing Python verifier for SHA-256/manifest/provenance verification.
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
@@ -177,7 +181,8 @@ Phases 1B and 2B implement independently verified sequential Dijkstra and parall
 delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4B-1
 adds forced-strategy switching; Phase 4B-2 adds a deterministic heuristic.
 Phase 5A's read-only experimental design is complete; Phase 5B-1 implements only
-artifact generation/integrity/replay. Phase 5B-2 requires approval.
+artifact generation/integrity/replay. Phase 5B-2 adds correctness-only engine
+replay; stop for review before Phase 5B-3.
 Batch/parallel repair, adaptive selection, and automatic
 delta tuning remain future work.
 Storage updates and full recomputation support increases; incremental processing

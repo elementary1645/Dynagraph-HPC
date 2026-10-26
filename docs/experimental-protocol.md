@@ -10,6 +10,25 @@ No calibrated model, benchmark results or speedup claims exist.
 The OpenMP smoke test verifies functionality, not performance.
 Phase 5A completed a read-only measurement architecture review. Phase 5B-1 now
 implements deterministic inputs and independent replay only; no measurements.
+Phase 5B-2 adds correctness-only adaptive-engine execution with independent
+per-update state/oracle checks, specified in [benchmark-replay.md](benchmark-replay.md).
+
+## Phase 5B-2 correctness execution
+
+Run the Python manifest verifier before C++ replay, and preserve the verified
+bundle and JSON record together. The runner does not check cryptographic
+identities or attest prerequisite completion. All four policies use the same
+public engine update path and configuration of shared fast paths. Each update
+advances a separate endpoint/weight ledger; a fresh reference graph, Dijkstra
+and eligible small-graph Bellman–Ford check all weights and all distances.
+Returned update outcomes and improved counts are independently checked.
+
+Full mode checks initialization, every update and final state (including empty
+traces). Bounded mode is deferred. Final arrays support comparison with Python's
+independent final graph hash. Failures stop execution, exit nonzero and never
+emit a success record. There are no clocks, performance comparisons, calibration,
+statistics, threshold changes or Phase 5B-3 implementation. The JSON counts refer
+to verification work, not performance measurements. Stop at the 5B-2 review gate.
 
 ## Phase 5B-1 implemented artifact protocol
 
