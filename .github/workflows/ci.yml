@@ -1,0 +1,25 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gcc:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure GCC and OpenMP
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build with warnings as errors
+        run: cmake --build --preset ${{ matrix.preset }} --parallel 2
+      - name: Run CTest
+        run: ctest --preset ${{ matrix.preset }}

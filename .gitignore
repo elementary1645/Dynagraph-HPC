@@ -1,0 +1,38 @@
+# Out-of-source builds and local CMake overrides.
+/build/
+/build-*/
+/cmake-build-*/
+/CMakeUserPresets.json
+/CMakeCache.txt
+/CMakeFiles/
+/Testing/
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+/compile_commands.json
+
+# Generated/downloaded data and benchmark outputs. Keep curated metadata tracked.
+/data/*
+!/data/manifests/
+/results/*
+!/results/.gitkeep
+!/results/README.md
+/paper/generated/
+
+# Python environments and caches.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local tooling and operating system files.
+.DS_Store
+*.swp
+*.swo
