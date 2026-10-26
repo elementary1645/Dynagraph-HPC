@@ -20,6 +20,7 @@ function(dynagraph_set_warnings target)
 endfunction()
 
 add_library(dynagraph STATIC
+    src/dynamic/incremental_sssp.cpp
     src/algorithms/delta_stepping.cpp
     src/algorithms/dijkstra.cpp
     src/project_info.cpp

@@ -1,14 +1,15 @@
 # Architecture
 
-## Current implementation: Phase 2B
+## Current implementation: Phase 3B
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
 and the OpenMP specification date used to compile the library, plus fixed-topology
 CSR storage, strict text edge-list loading, sequential Dijkstra, and OpenMP
-delta-stepping with optional work counters. Incremental repair and adaptive
-selection remain planned. The CLI retains help/version commands and supports
-both SSSP algorithms with JSON output.
+delta-stepping with optional work counters, and an owning sequential transactional
+single-decrease repair state. Adaptive selection remains planned. The CLI retains
+help/version and both recomputation algorithms with JSON output; repair is a
+library API only.
 
 CMake requires C++17 without compiler extensions and finds OpenMP through its
 imported CXX target. GCC is the supported toolchain for this phase. OpenMP linkage
@@ -23,7 +24,7 @@ active in Release; CTest handles discovery, timeouts, and CLI checks.
 | include/dynagraph/, src/ | Public API and implementation |
 | graph/ | Contiguous CSR storage, weight replacement, and text input validation |
 | algorithms/ | Sequential Dijkstra, parallel delta-stepping, shared SSSP result |
-| dynamic/ | Future propagation of edge-weight decreases |
+| dynamic/ | Owning transactional single-edge decrease repair |
 | adaptive/ | Future validated algorithm-selection policy |
 | instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
 | apps/ | Command-line entry points |
@@ -108,8 +109,9 @@ is a snapshot. Ranges/iterators require a live, unmoved, unassigned graph; stand
 iterator preconditions apply (do not dereference end). Weight replacement does not
 invalidate ranges, iterators, or array references. All mutation is serial and must
 be externally synchronized against every read or write; no concurrent mutation
-support is provided. Storage accepts increases as ordinary replacements, but no
-shortest-path maintenance for either increases or decreases exists in this phase.
+support is provided. Storage accepts increases as ordinary replacements. The
+Phase 3B owning repair API below supports decreases only; it never exposes mutable
+graph access and does not borrow an externally mutable graph.
 
 ## Construction and complexity
 
@@ -166,8 +168,9 @@ line-length resource quota is imposed by this library.
 ## Future phase gates
 
 Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
-delta-stepping. Phase 3 requires explicit approval. Decrease-only incremental
-repair, adaptive selection, and automatic delta tuning remain future work.
+delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4
+requires explicit approval. Batch/parallel repair, adaptive selection, and automatic
+delta tuning remain future work.
 Storage updates and full recomputation support increases; incremental processing
 of increases remains deferred. Benchmark tooling will later consume CLI JSON.
 
@@ -224,8 +227,8 @@ sizes. Counters measure work, not runtime or performance benefit.
 The CLI owns parsing/loading/JSON presentation; algorithms depend only on CSR.
 Schema v1 and error behavior are documented in README.md. There is no timing in
 the CLI. Full recomputation after serial increases or decreases is implemented;
-Parallel recomputation is implemented in Phase 2B below; incremental processing
-remains future gated work.
+parallel recomputation is implemented in Phase 2B, and single-decrease repair in
+Phase 3B below.
 
 
 ## Phase 2B: parallel delta-stepping
@@ -359,4 +362,155 @@ Lazy duplicates mean there is no claimed O(V+E) peak-memory bound for arbitrary
 workloads. The serial coordinator can bottleneck; atomics may contend or be
 implemented with runtime locks on other platforms. One persistent team reduces
 repeated startup but small queries can still be slower than Dijkstra. There is
-no automatic fallback, delta tuning, incremental processing, or speedup claim.
+no automatic fallback, delta tuning, or speedup claim in this recomputation API.
+
+## Phase 3B: transactional single-edge decrease repair
+
+### Public API and ownership
+
+`dynagraph/dynamic/incremental_sssp.hpp` declares IncrementalSSSPState,
+DecreaseOutcome, DecreaseResult, and RepairMetrics. Factories take CSRGraph by
+value: lvalues are copied; rvalues transfer ownership and may be consumed even if
+initialization fails. initialize(graph, source) calls Dijkstra, which validates the
+source, including rejecting empty graphs. from_result_checked(graph, result)
+validates source/dimensions and compares every distance with independently
+recomputed Dijkstra before adopting the result. Matching dimensions are not proof
+of freshness; arbitrary results are never trusted. Both factories allocate and
+perform O(V + E log(E+1)) recomputation. Lvalue graph acquisition adds O(V+E).
+
+A state owns graph, fixed source, distance vector, and V journal-membership bytes.
+It is noncopyable/nonmovable and cannot be rebound; C++17 guaranteed factory-return
+elision avoids needing partially moved-from state semantics. There is no public
+unchecked constructor or mutable accessor. source(), graph(), and distances()
+return a scalar or const view. Updates do not resize the graph/distance arrays.
+Views reflect the latest committed state, not snapshots, and require a live state.
+The caller serializes an update against all access to that state. Independent
+states have independent storage; no graph revisions, global state, OpenMP teams,
+or mutation hooks are needed. External changes to a copied input graph are isolated.
+
+decrease(uint64_t u, uint64_t v, int64_t new_weight, RepairMetrics* = nullptr)
+validates weight range, then both endpoints and edge existence, then rejects an
+increase. If multiple preconditions fail, that validation order selects the error.
+Range/increase errors use invalid_argument; invalid endpoints/absent edges use
+out_of_range. Equal weights return unchanged_weight without a graph write.
+Strict decreases return weight_only if no distances change or distances_repaired
+otherwise. DecreaseResult contains old/new weights and distinct improved count.
+No snapshots are allocated for return. Every successful strict decrease commits
+its weight even when it cannot improve a label. Future requests compare against
+that committed weight. There is no insertion, deletion, increase, source-change,
+batch, or parallel-repair API.
+
+### Algorithm and arithmetic
+
+The min-priority_queue orders (distance, vertex) lexicographically. The only seed
+is checked_add(d[u], new_weight) for v. Successful strict improvements journal the
+vertex once, push a queue record, then change its distance. Pops with labels
+differing from current distances are stale and skipped. Each valid pop scans its
+outgoing CSR row. A local weight view substitutes new_weight for the changed
+ordered endpoint pair; all other edges read stored weights. Topology uniqueness
+makes that substitution unambiguous. Propagation never mutates graph storage and
+never invokes Dijkstra.
+
+After source validation ensures V>0, L=(V-1)*UINT32_MAX is below UINT64_MAX.
+Initial correct distances are infinity or <=L. checked_add returns infinity for
+an infinite tail or weight>L-label; otherwise it adds safely. Every accepted
+finite candidate is <=L, maintaining the induction needed for the subtraction.
+No tentative-label settled-distance assumption is used. Simple shortest paths
+and every nonnegative prefix fit L, so rejecting longer walks loses no shortest
+path. V=1 gives L=0 safely. Strict improvements prevent zero-cycle/equal-path
+work. Nonnegative loops and edges into the source cannot improve its zero label.
+Unreachable tails cannot seed improvements. Reachability itself is invariant
+under finite-weight changes on fixed topology.
+
+### Correctness and termination
+
+Let D be the old correct distances and delta' the new true distances. Initially
+d=D>=delta' because weights only decrease. A relaxation candidate d[x]+w'(x,y)
+is also >=delta'(y); accepted labels therefore never underestimate true distances.
+Old labels need not remain exact path lengths, only valid upper bounds.
+
+Initially all old shortest-path inequalities hold except possibly the changed
+edge. Seeding restores its inequality. Decreasing a vertex label preserves
+incoming inequalities and may violate only outgoing ones; queue publication
+ensures those are eventually scanned with the final label. At queue exhaustion
+all inequalities hold with addition capped to infinity. Following a new simple
+shortest path from source proves d<=delta': every prefix fits L and is therefore
+not capped. Together the two inequalities establish exact distances. If the seed
+does not improve, no propagation is necessary.
+
+Heap extraction keys are nondecreasing: all candidates generated from a valid
+pop are at least its key. A vertex cannot improve after its valid pop, so its row
+is scanned once. It may improve repeatedly before that pop, leaving stale queue
+records. Every accepted change is strict; zero-weight cycles do not invalidate
+the argument. These bounds apply to this sequential single-update design, not
+automatically to future unordered/parallel repair.
+
+### Transaction and failure guarantees
+
+UndoJournal is a local RAII guard holding original distance entries and references
+to distances/marks. A first change appends (vertex, original distance) before
+setting the mark; subsequent improvements reuse that entry. Heap insertion also
+precedes every distance write. Journal/heap allocation exceptions therefore leave
+enough information for complete rollback, including earlier tentative writes.
+Journal insertion may succeed and a later heap push fail before a write; restoring
+that entry is harmless. Metrics are staged as a local scalar aggregate.
+
+After propagation, compute the scalar result/metrics, then call the existing
+CSRGraph::replace_weight as the final potentially throwing operation. Its
+validation and lookup precede the scalar store; it cannot throw after the store.
+Then mark the journal committed and publish scalar metrics/result. All remaining
+assignments and container/guard cleanup are nonthrowing. The guard clears marks
+for its own entries on success; on failure it additionally restores original
+distances. Rollback performs no graph writes, allocation, lookup, logging, or
+callbacks and its destructor is noexcept. Queue and journal payloads are trivial.
+
+At every public call boundary, graph and distances represent the same completed
+query state. Any exception preserves graph arrays, distances, and caller metrics,
+restores marks, and permits retry. There is no invalid-state recovery mode.
+This guarantee covers ordinary C++ exceptions, not process termination, hardware
+failure, or unsupported concurrent/reentrant access. Construction failure creates
+no state; normal by-value acquisition rules apply to its arguments.
+
+### Exact per-call metrics
+
+Metrics are replaced only on success, including unchanged requests; rejected or
+failed requests leave caller metrics unchanged. A one-time template dispatch
+removes per-event updates when the pointer is omitted. Counters saturate and set
+counters_saturated; there are no timing calls or shared atomic counters.
+
+| Field | Definition |
+| --- | --- |
+| updates_applied | 1 for a committed strict decrease; otherwise 0 |
+| unchanged_weight_requests | 1 only for unchanged_weight |
+| updates_without_distance_change | 1 if affected count is zero, including unchanged weights |
+| vertices_improved | Distinct vertices in the successful journal, including seed |
+| edges_examined | All outgoing CSR records scanned during propagation, excluding lookup/seed |
+| relaxation_attempts | Seed check for a strict decrease plus edges_examined; includes cap rejection |
+| successful_relaxations | Every strict label reduction, including seed and repeated improvements |
+| queue_pushes / queue_pops | All inserted/removed records, including stale records |
+| stale_entries | Pops with obsolete labels |
+
+Before saturation, a successful update has pushes=pops=successful_relaxations
+and stale_entries+vertices_improved=pops. Affected fraction is derived as A/V
+outside the kernel. Aggregate statistics and timings belong to future orchestration.
+
+### Complexity and research limits
+
+Let A be distinct improved vertices, E_A their outgoing edges, R successful
+relaxations including seed, and H maximum live queue records. Each affected row
+is scanned once, R<=E_A+1, H<=R. Update time is
+O(log(outdegree(u)+1) + A + E_A + R log(R+1)), including journal cleanup.
+Both validation and commit use binary search. A no-distance-change request needs
+only lookup/seed/commit, no graph scan or heap/journal allocation. Membership bytes
+are initialized once in O(V) and cleared in O(A), never O(V) per update.
+Persistent repair arrays are O(V) beyond CSR. Local journal is O(A), queue O(H),
+and vector capacities grow geometrically; no per-entry node allocation is used.
+Containers are local to each update, so repeated repairs include their allocation
+and destruction costs. No full distance vector is copied or returned per update.
+
+Worst-case A and E_A cover the reachable graph. Transaction overhead can make
+repair slower than full recomputation; no speedup or novelty claim is made.
+Paths/predecessors and shared graph ownership are not maintained. Batches,
+increases, parallel repair, adaptive scheduling and benchmark orchestration remain
+outside this phase. Any future policy must include state-coherence/switching cost
+and must not use the actual affected region as a free predecision feature.
