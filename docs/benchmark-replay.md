@@ -4,7 +4,8 @@
 execution. `apps/dynagraph_bench.cpp` handles CLI/output; the separate
 `src/benchmark/replay.cpp` handles canonical parsing, ledger, oracles and replay.
 Production storage, Dijkstra, delta-stepping, repair and adaptive implementations
-are unchanged. No clocks or measurements are collected.
+are unchanged. The `verify` command collects no clocks or measurements. Separate Phase 5B-3B
+`time` and Python orchestration are specified in [benchmark-timing.md](benchmark-timing.md).
 
 ## Invocation and integrity boundary
 
@@ -159,4 +160,5 @@ verification, independent final weights/distances, deterministic repetitions,
 parser/CLI/ledger rejection and the explicit external integrity boundary. Existing
 algorithm/fault-injection tests remain unchanged. This establishes correctness on
 tested cases, not performance, race freedom or cryptographic authentication.
-Stop at the Phase 5B-2 review gate; Phase 5B-3 remains unapproved.
+The existing verification contract remains unchanged. Stop at the Phase 5B-3B
+review gate; Phase 5B-4 remains unapproved.

@@ -62,3 +62,17 @@ add_test(NAME benchmark_replay COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_replay.py $<TARGET_FILE:dynagraph_bench>)
 set_tests_properties(benchmark_replay PROPERTIES TIMEOUT 120 PROCESSORS 2
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+
+add_executable(test_benchmark_timing test_benchmark_timing.cpp
+    ../src/benchmark/timing.cpp ../src/benchmark/replay.cpp)
+target_include_directories(test_benchmark_timing PRIVATE "${PROJECT_BINARY_DIR}/generated")
+target_link_libraries(test_benchmark_timing PRIVATE DynaGraph::dynagraph)
+dynagraph_set_warnings(test_benchmark_timing)
+add_test(NAME benchmark_timing COMMAND test_benchmark_timing)
+set_tests_properties(benchmark_timing PROPERTIES TIMEOUT 30
+    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+
+add_test(NAME benchmark_experiment COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_experiment.py $<TARGET_FILE:dynagraph_bench>)
+set_tests_properties(benchmark_experiment PROPERTIES TIMEOUT 120 PROCESSORS 2
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")

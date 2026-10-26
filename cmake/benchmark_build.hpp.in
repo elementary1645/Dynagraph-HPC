@@ -1,0 +1,11 @@
+#pragma once
+namespace dynagraph::benchmark_build {
+inline constexpr char cmake_version[] = R"meta(@CMAKE_VERSION@)meta";
+inline constexpr char compiler_path[] = R"meta(@CMAKE_CXX_COMPILER@)meta";
+inline constexpr char compiler[] = R"meta(@CMAKE_CXX_COMPILER_ID@ @CMAKE_CXX_COMPILER_VERSION@)meta";
+inline constexpr char build_type[] = R"meta(@CMAKE_BUILD_TYPE@)meta";
+inline constexpr char flags[] = R"meta(@DYNAGRAPH_BENCH_FLAGS@)meta";
+inline constexpr char sanitizers[] = R"meta(@DYNAGRAPH_BENCH_SANITIZERS@)meta";
+inline constexpr char revision[] = R"meta(@DYNAGRAPH_BENCH_REVISION@)meta";
+inline constexpr char dirty[] = R"meta(@DYNAGRAPH_BENCH_DIRTY@)meta";
+}

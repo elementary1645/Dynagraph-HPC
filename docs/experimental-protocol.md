@@ -13,6 +13,18 @@ implements deterministic inputs and independent replay only; no measurements.
 Phase 5B-2 adds correctness-only adaptive-engine execution with independent
 per-update state/oracle checks, specified in [benchmark-replay.md](benchmark-replay.md).
 
+## Phase 5B-3B implemented timing infrastructure
+
+The normative [timing contract](benchmark-timing.md) defines full-trace and
+per-update boundaries, clock probes, raw integer units, fresh engines/processes,
+balanced seeded policy order, provenance, durable JSONL and acceptance rules.
+Python stages and SHA-256/recipe-verifies the bundle, runs all policies through
+full verification, then launches separate measured workers. Each worker performs
+independent final-state checks outside timing on its actual measured engine.
+Separate preflight per-update verification is never attributed to the timed run.
+No statistical analysis, speedups, calibration or performance claims are included.
+Codespaces and sanitizer experiments are validation only. Stop at 5B-3B review.
+
 ## Phase 5B-2 correctness execution
 
 Run the Python manifest verifier before C++ replay, and preserve the verified
@@ -64,7 +76,7 @@ the built C++ executable on initial/final graphs and independent small-graph
 Bellman-Ford, without modifying graph or SSSP contracts. Existing failures/race
 limitations remain. No latency, scaling, calibrated thresholds or novelty result
 is inferred from regeneration, SHA-256, CTest durations or correctness checks.
-Do not implement timing or Phase 5B-2 before approval.
+Timing infrastructure is now separately authorized in Phase 5B-3B; later phases remain gated.
 
 ## Correctness before timing
 
