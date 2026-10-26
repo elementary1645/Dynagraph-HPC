@@ -1,5 +1,165 @@
 # Research log
 
+## 2026-10-26 — Phase 5B-3B reproducible timing infrastructure
+
+### Authorization and implementation
+
+The attached 5B-3B request explicitly approved implementation after the read-only
+5B-3A design review. Started on feature/benchmark-timing at e548d0a with a clean
+working tree. Read engineering guidance, existing replay/artifact/protocol/design
+records, generator/verifier, adaptive API, tests, CMake and presets. Updated the
+phase gate; no dependencies installed, agents delegated, commits or pushes.
+
+Preserved verify's CLI/JSON/per-update oracle behavior and existing tests/goldens.
+Exposed existing parser/oracle through workload.hpp and added complete independent
+ledger prevalidation for timing. Timing uses the same public decrease call with
+metrics and overrides disabled. Full-trace has exactly two clock reads; latency
+has two per update and preallocated storage. Initialization, warm-ups, all oracle
+checks, output and final destruction are outside timing. Public-call validation,
+selection, allocation, synchronization, commit and temporary cleanup remain inside.
+Every warm-up and trial initializes a fresh engine. Actual timed-engine final
+weights/topology and fresh Dijkstra/eligible Bellman-Ford are independently checked.
+Failed latency-prefix observations are diagnostic only; failed trials stay invalid.
+
+Added steady-clock raw tick/period and checked nanosecond contracts, 1024 raw
+back-to-back probes, CMake build metadata, and explicit unavailable actual-team
+metadata. Optional work counters remain off. Python stages/snapshots inputs and
+executable, verifies artifact SHA-256/recipe and all-policy full C++ preflight,
+launches sequential fresh worker processes, checks identities throughout, retains
+stdout/stderr/exit evidence, and writes fsynced schema-versioned JSONL. A seeded,
+pinned SplitMix64/Fisher-Yates balanced schedule precedes execution. Completion
+is checked against the entire evidence directory before terminal success is
+written; default/public validation rejects missing/truncated terminals. No retry,
+resume, statistical analysis, speedups, calibration or Phase 5B-4 implementation.
+
+Initial new-test failures were test-expectation defects: a hand-written seed-zero
+schedule transposed labels C/D (correct draws are [3,0,1]), and an evidence-corruption
+test initially appended harmless JSON whitespace to an exit file. Corrected the
+fixtures to pin the specified draws and mutate exit semantics. Balance tests
+already passed. No existing golden values or production algorithm were changed.
+
+### Commands and results
+
+Toolchain: Python 3.14.2, GCC 13.3.0, CMake 3.28.3. Commands executed from root:
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+python3 tests/test_workloads.py
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 tests/test_benchmark_replay.py build/debug/dynagraph_bench
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 tests/test_benchmark_experiment.py build/debug/dynagraph_bench
+ctest --test-dir build/debug -R '^benchmark_timing$' --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ./build/sanitize/tests/test_project_info
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+git diff --check
+git diff --exit-code -- src/adaptive src/algorithms src/dynamic src/graph include/dynagraph/adaptive include/dynagraph/algorithms include/dynagraph/dynamic include/dynagraph/graph apps/dynagraph_cli.cpp benchmarks/python/artifacts.py benchmarks/python/workloads.py benchmarks/python/deterministic.py tests/test_workloads.py tests/test_benchmark_replay.py .github
+```
+
+Debug/Release final builds passed all existing warning flags with Werror; CTest
+21/21 passed in each. Standalone workload tests 22/22 passed, unchanged replay
+integration 9/9 passed, experiment integration 6/6 passed, and the C++ timing
+contract entry passed. Existing loader integration also passed in all full suites.
+After final changes, rebuilt Debug/Release/sanitizer targets and repeated the full
+suites. Repetition was justified by added oracle/evidence rejection and failed
+latency-prefix tests, not by timing stability or policy comparisons.
+
+The instrumented sandbox probe exited 1 with the known LeakSanitizer ptrace/process
+inspection restriction. Full ASan/UBSan CTest ran outside the sandbox with approval
+and leak detection enabled: 21/21 passed, no findings. Sanitizer data is validation
+only. No tests were disabled and no new dependency was installed. Hosted CI was
+not executed; its existing full CTest jobs automatically include the new entries.
+
+Tests cover both modes, every policy/no-effect pair, fresh/repeated engines,
+equal/repeated decreases, disconnected zero cycles, all final weights/distances,
+independent final oracles and deliberately wrong final-ledger rejection. Fake
+clocks prove bracket/read counts, failure index and retained successful latency
+prefix. Checked arithmetic covers zero duration, negative clock progression,
+signed epoch differences and conversion overflow. Python checks seeded position/
+adjacency balance, schema/duplicate/numeric rejection, configuration/executable
+identity mismatches, prerequisites, failed exits, real subprocess timeout evidence,
+fail-fast/no-retry behavior, changed artifacts, invalid exit evidence, malformed/
+truncated JSONL and missing terminal records. No test orders algorithm runtimes.
+
+### End-to-end smoke evidence
+
+Created /tmp/dynagraph-5b3-4prq3p1i using tempfile.mkdtemp, generated the existing
+chain-v1.json bundle with write_bundle, and wrote canonical configuration files.
+Full config used blocks=4, seed=0, delta=16, threads=2, shared_fast_path, warmups=1
+and timeout_seconds=30; latency config changed only timing_mode to per-update.
+Manifest paths were bundle/manifest.json relative to those configs. Exact final
+experiment/validation commands:
+
+```sh
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 benchmarks/python/run.py run --config /tmp/dynagraph-5b3-4prq3p1i/config.json --runner build/release/dynagraph_bench --output /tmp/dynagraph-5b3-4prq3p1i/reviewed-full-trace
+python3 benchmarks/python/run.py validate --input /tmp/dynagraph-5b3-4prq3p1i/reviewed-full-trace/records.jsonl
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 benchmarks/python/run.py run --config /tmp/dynagraph-5b3-4prq3p1i/per-update-config.json --runner build/release/dynagraph_bench --output /tmp/dynagraph-5b3-4prq3p1i/reviewed-per-update
+python3 benchmarks/python/run.py validate --input /tmp/dynagraph-5b3-4prq3p1i/reviewed-per-update/records.jsonl
+```
+
+Every command exited 0 with schema_version=1, status=complete, trials="16".
+Each experiment had four successful preflights, 16 fresh-process trials, 16 warm-ups,
+16 timed-final-state checks and four complete blocks over all policies. Full-trace
+produced 16 trace observations and zero latency samples. Per-update produced
+192 latency samples (12 updates x 16 trials) and zero trace observations. Their
+independent final checks used Dijkstra and small-graph Bellman-Ford. Source=0,
+V=8, E=7. Executable snapshot SHA-256:
+84ab1106bc1bca003c47cd50bd3742b230edc0f35cb25a7ac739f55bbad30b3d.
+Graph/trace hashes remain the Phase 5B-1 pinned chain hashes. Complete evidence
+is retained in the two /tmp directories; no raw duration or CTest duration is
+interpreted as performance/scaling evidence.
+
+Deterministic regeneration was additionally checked with:
+
+```sh
+PYTHONPATH=benchmarks/python python3 - <<'CHECK'
+from experiment_records import schedule
+assert schedule(8, 0) == schedule(8, 0)
+print(schedule(4, 0))
+CHECK
+```
+
+Automated tests also prove every policy position and every directed adjacent pair
+appears once per four-block group, for seed endpoints and multiple groups.
+
+### Files and limitations
+
+Added: benchmarks/configs/timing-smoke-v1.json,
+benchmarks/python/experiment_records.py, benchmarks/python/run.py,
+cmake/benchmark_build.hpp.in, docs/benchmark-timing.md,
+include/dynagraph/benchmark/timing.hpp, include/dynagraph/benchmark/workload.hpp,
+src/benchmark/timing.cpp, tests/test_benchmark_experiment.py,
+tests/test_benchmark_timing.cpp.
+
+Modified: AGENTS.md, CMakeLists.txt, README.md, apps/dynagraph_bench.cpp,
+docs/architecture.md, docs/benchmark-replay.md, docs/experimental-protocol.md,
+docs/workload-artifacts.md, docs/research-log.md, src/benchmark/replay.cpp,
+tests/CMakeLists.txt.
+
+Inspected tracked and new source/test/schema/build changes. Whitespace and
+unchanged-production diff checks passed. No production graph/SSSP/adaptive or
+existing artifact generator/golden modifications occurred.
+
+Limitations: actual executed teams remain unavailable with timed metrics disabled;
+OpenMP settings are not team observations. Cgroup metadata describes the exposed
+v2 root view and may be unavailable. Build Git metadata is configure-time; dirty
+source patches and shared libraries are not archived. JSONL completion validation
+loads the dataset in memory, and raw evidence can grow substantially; successful
+maximum-quota experiments/peak RSS and cross-platform behavior remain untested.
+Clock conversion rejects unsupported overflowing intermediates. Inputs are assumed
+stable across hash/read intervals; this is not authentication or hostile-writer
+protection. Process isolation/warm-ups do not control frequency, thermal state,
+scheduling, cache residency or NUMA placement. Dedicated hardware is required for
+performance/scaling conclusions. No race-detector or hosted CI result is claimed.
+
+Phase 5B-3B is ready for review; stop here. Phase 5B-4 and all statistical analysis,
+speedups, heuristic tuning and performance claims remain unapproved.
+
 ## 2026-10-26 — Phase 5B-2 correctness-checked benchmark replay
 
 ### Authorization and implementation

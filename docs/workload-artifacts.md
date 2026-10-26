@@ -263,4 +263,5 @@ updates, timed engine replay, hardware metadata, performance repetitions/statist
 cost calibration and learned policies. Resource quotas bound work/data, not peak
 RSS or wall time. Artifact inputs are assumed stable during verification; no
 concurrent writer or cryptographic authentication protocol is implemented.
-Stop after Phase 5B-2 review; Phase 5B-3 needs separate approval.
+Phase 5B-3B now adds separately authorized [timing infrastructure](benchmark-timing.md)
+over these unchanged artifacts. Stop at its review gate before Phase 5B-4.

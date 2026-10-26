@@ -9,14 +9,16 @@ Correctness, measured performance, and reproducibility guide development.
 Phase 5B-2 adds `dynagraph_bench`, a correctness-only adaptive-engine replay
 runner over Phase 5B-1 deterministic graph/update-trace artifacts. It checks an
 independent weight ledger, fresh Dijkstra and small-graph Bellman–Ford.
-There are no timing or performance measurements.
+Phase 5B-3B adds separate full-trace and per-update raw timing infrastructure
+with fresh-process orchestration, integrity/preflight checks and final-state oracles.
+No performance conclusions, scaling results or speedup claims are supplied.
 Phase 4B-2 provides deterministic heuristic selection over sequential Dijkstra, OpenMP
 delta-stepping, and transactional incremental repair. One owning incremental
 state remains current across strategy switches. Failed updates preserve graph,
 distances, and caller metrics. Shared no-effect fast paths apply to every policy.
 Tests compare all three with independent Bellman–Ford and exercise allocation
 failures. Calibrated/learned selection, batch/parallel repair,
-automatic delta tuning, and timed benchmarks remain planned work.
+automatic delta tuning, and controlled performance studies remain planned work.
 There are no performance results or speedup claims.
 
 The approved initial graph scope is directed, fixed topology with nonnegative
@@ -79,7 +81,7 @@ Hosted CI execution is separate from local verification and requires the workflo
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
 Each implementation phase requires approval before work begins. Stop at the
-Phase 5B-2 review gate; Phase 5B-3 requires explicit approval.
+Phase 5B-3B review gate; Phase 5B-4 requires explicit approval.
 
 ## Deterministic workload artifacts
 
@@ -436,3 +438,23 @@ two 512-vertex graphs with E=511 and destination degree 1: the same local_degree
 decision improves 2 vertices in one and 511 in the other. This demonstrates a
 feature limitation, not a measured timing comparison. Full recomputation still
 pays staged-copy and result-scan costs. No speedup or policy optimality is established.
+
+## Reproducible timing infrastructure
+
+After generating the chain bundle above:
+
+```sh
+python3 benchmarks/python/run.py run --config benchmarks/configs/timing-smoke-v1.json --runner build/release/dynagraph_bench --output results/raw/timing-smoke
+python3 benchmarks/python/run.py validate --input results/raw/timing-smoke/records.jsonl
+```
+
+The output directory must be new. Four balanced blocks run all four policies in
+fresh worker processes, with one fresh-engine warm-up each by default. Full-trace
+and per-update timing use separate experiments; set timing_mode in configuration.
+The orchestrator stages and verifies artifacts, runs full per-update verification
+for every policy, checks identities throughout, and validates each timed engine's
+final state outside timing. Keep the complete evidence directory with its JSONL.
+Direct `dynagraph_bench time` never attests external integrity/preflight completion.
+See the [timing contract](docs/benchmark-timing.md) for exact CLI, boundaries,
+schema, metadata provenance, failures, quotas and hardware limitations. Codespaces
+and sanitizer runs validate the harness; they provide no scaling evidence.

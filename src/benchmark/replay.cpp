@@ -1,4 +1,4 @@
-#include "dynagraph/benchmark/replay.hpp"
+#include "dynagraph/benchmark/workload.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -75,10 +75,7 @@ std::string_view header(Reader& reader, std::string_view key) {
     return tokens[1];
 }
 
-struct Graph {
-    std::uint64_t vertices;
-    std::vector<InputEdge> edges; // Independent canonical endpoint/weight ledger.
-};
+using Graph = ReferenceGraph;
 Graph read_graph(const std::string& path) {
     Reader reader(path, 32U * 1024U * 1024U);
     const auto counts = fields(reader.line(), 2);
@@ -101,7 +98,7 @@ Graph read_graph(const std::string& path) {
     reader.done();
     return graph;
 }
-struct Update { std::uint64_t u, v, old_weight, new_weight; };
+using Update = TraceUpdate;
 std::vector<Update> read_trace(const Options& options, Report& report) {
     Reader reader(options.trace_path, 16U * 1024U * 1024U);
     require(reader.line() == "DYNAGRAPH_TRACE 1", "unsupported trace schema/version");
@@ -181,6 +178,38 @@ std::string quoted(const std::string& value) {
     return result + '"';
 }
 } // namespace
+
+std::string json_quote(const std::string& value) { return quoted(value); }
+
+void verify_final_state(const ReferenceGraph& ledger, const AdaptiveSSSPEngine& engine, Report& report) {
+    (void)check(ledger, engine, report);
+}
+
+PreparedWorkload prepare_workload(const Options& options, Report& report) {
+    report.category = "artifact_validation";
+    auto initial = read_graph(options.graph_path);
+    auto updates = read_trace(options, report);
+    require(options.source < initial.vertices, "source outside graph");
+    auto final = initial;
+    for (std::size_t index = 0; index < updates.size(); ++index) {
+        report.update_index = index;
+        report.category = "trace_validation";
+        const auto& update = updates[index];
+        require(update.u < initial.vertices && update.v < initial.vertices, "invalid update vertex");
+        const auto key = std::make_pair(static_cast<std::int64_t>(update.u), static_cast<std::int64_t>(update.v));
+        const auto edge = std::lower_bound(final.edges.begin(), final.edges.end(), key,
+            [](const InputEdge& candidate, const auto& pair) {
+                return std::make_pair(candidate.source, candidate.destination) < pair;
+            });
+        require(edge != final.edges.end() && std::make_pair(edge->source, edge->destination) == key,
+                "nonexistent update edge");
+        require(static_cast<std::uint64_t>(edge->weight) == update.old_weight, "expected old weight mismatch");
+        require(update.new_weight <= update.old_weight, "weight increase");
+        edge->weight = static_cast<std::int64_t>(update.new_weight);
+    }
+    report.update_index.reset();
+    return {std::move(initial), std::move(final), std::move(updates)};
+}
 
 void replay(const Options& options, Report& report) {
     report.category = "artifact_validation";

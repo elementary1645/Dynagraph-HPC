@@ -2,12 +2,13 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5B-2 correctness-checked C++ workload replay,
-  independent ledger/oracles, strict parsing, tests and documentation, explicitly
-  authorized by the attached Phase 5B-2 request after Phase 5B-1 merged.
-- Stop after Phase 5B-2 verification; obtain approval before Phase 5B-3.
-  Timing/performance measurement, calibrated/learned selection, batch/increase/parallel repair,
-  automatic delta tuning, topology changes and concurrent mutation remain deferred.
+- Current authorized scope: Phase 5B-3B reproducible timing infrastructure,
+  independently checked final state, metadata, orchestration, tests and docs,
+  explicitly approved by the attached implementation request after 5B-3A design.
+- Stop after Phase 5B-3B verification and review; obtain approval before Phase 5B-4.
+  Statistical analysis, speedup calculations, performance claims, heuristic tuning,
+  calibrated/learned selection, batch/increase/parallel repair, automatic delta tuning,
+  topology changes and concurrent mutation remain deferred.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.
 
