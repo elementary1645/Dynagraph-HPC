@@ -2,12 +2,12 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 3B sequential transactional single-edge
-  decrease repair, optional metrics, tests, CMake integration, and documentation.
-  Phase 3A's design and Phase 3B implementation were explicitly approved.
-- Stop after reporting Phase 3B verification; obtain explicit approval before
-  Phase 4. Batch repair, weight-increase repair, parallel repair, adaptive policies,
-  automatic delta tuning, topology changes, and concurrent mutation remain deferred.
+- Current authorized scope: Phase 4B-1 forced-strategy engine core, transactional
+  switching, shared fast paths, metrics, tests, CMake integration and documentation.
+  Phase 4A's design and Phase 4B-1 implementation were explicitly approved.
+- Stop after Phase 4B-1 verification; obtain approval before Phase 4B-2 or later.
+  Heuristic/calibrated selection, benchmarking, batch/increase/parallel repair,
+  automatic delta tuning, topology changes and concurrent mutation remain deferred.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.
 

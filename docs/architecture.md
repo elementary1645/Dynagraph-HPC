@@ -1,13 +1,14 @@
 # Architecture
 
-## Current implementation: Phase 3B
+## Current implementation: Phase 4B-1
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
 and the OpenMP specification date used to compile the library, plus fixed-topology
 CSR storage, strict text edge-list loading, sequential Dijkstra, and OpenMP
 delta-stepping with optional work counters, and an owning sequential transactional
-single-decrease repair state. Adaptive selection remains planned. The CLI retains
+single-decrease repair state. A forced-strategy engine maintains that authoritative
+state across all three strategies; heuristic/calibrated selection remains planned. The CLI retains
 help/version and both recomputation algorithms with JSON output; repair is a
 library API only.
 
@@ -25,7 +26,7 @@ active in Release; CTest handles discovery, timeouts, and CLI checks.
 | graph/ | Contiguous CSR storage, weight replacement, and text input validation |
 | algorithms/ | Sequential Dijkstra, parallel delta-stepping, shared SSSP result |
 | dynamic/ | Owning transactional single-edge decrease repair |
-| adaptive/ | Future validated algorithm-selection policy |
+| adaptive/ | Forced-strategy execution core; future heuristic/calibrated selection |
 | instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
 | apps/ | Command-line entry points |
 | tests/ | Correctness and integration tests |
@@ -168,8 +169,9 @@ line-length resource quota is imposed by this library.
 ## Future phase gates
 
 Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
-delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4
-requires explicit approval. Batch/parallel repair, adaptive selection, and automatic
+delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4B-1
+adds forced-strategy switching. Phase 4B-2 or later requires approval.
+Batch/parallel repair, adaptive selection, and automatic
 delta tuning remain future work.
 Storage updates and full recomputation support increases; incremental processing
 of increases remains deferred. Benchmark tooling will later consume CLI JSON.
@@ -514,3 +516,120 @@ Paths/predecessors and shared graph ownership are not maintained. Batches,
 increases, parallel repair, adaptive scheduling and benchmark orchestration remain
 outside this phase. Any future policy must include state-coherence/switching cost
 and must not use the actual affected region as a free predecision feature.
+
+## Phase 4B-1: forced-strategy execution and transactional switching
+
+### Ownership and API
+
+AdaptiveSSSPEngine owns one IncrementalSSSPState member and a const PolicyConfig.
+There is no second persistent graph, distance vector, history, or policy model.
+The engine and state are noncopyable/nonmovable. Engine factory return and member
+initialization use direct prvalues under C++17 guaranteed elision, not optional
+NRVO or a heap wrapper. Initialization validates policy/no-effect enums, positive
+delta and nonnegative requested threads, then initializes every policy through
+Dijkstra. Graph argument ownership and source validation match Phase 3B.
+
+The public API in dynagraph/adaptive/adaptive_sssp.hpp exposes initialize, source,
+graph, distances, and decrease(u,v,new_weight,AdaptiveMetrics*=nullptr,
+optional<Strategy>=nullopt). Strategy has dijkstra, delta_stepping, incremental;
+PolicyKind has only the three corresponding always policies. Config defaults to
+incremental, shared_fast_path, delta 1, runtime-default threads; these are valid
+defaults, not calibrated choices. An optional per-call strategy overrides the
+policy. Unsupported enum values are rejected, including invalid forced overrides
+before request preparation. All parallel options are validated at initialization
+even when a nonparallel policy is configured. No heuristic/model fields exist.
+
+All engine updates and access through existing views require caller serialization.
+Separate engines own independent state and can run concurrently, including
+independent OpenMP teams. No OpenMP global settings are changed. Recompute swaps
+distance storage: element references/pointers/iterators must be reacquired after
+successful updates; vector-object and graph const references still expose current
+values while their engine lives. On exceptions old storage is preserved. The
+standalone repair API continues to preserve its array storage on decrease.
+No mutable accessors or unchecked public result setters are exposed.
+
+### Preparation, execution and fast paths
+
+The incremental class grants friendship only to AdaptiveSSSPEngine. Its private
+PreparedDecrease contains validated VertexId endpoints, old/new EdgeWeight and a
+checked seed. prepare_decrease preserves the standalone validation order and
+messages: weight bounds, graph endpoint/existence lookup, then increase rejection.
+Narrowing follows endpoint validation. The prepared value lives on the current
+call's stack, never escapes or becomes a cached handle. Public standalone decrease
+and the engine reuse it; repair_prepared dispatches the existing journal algorithm
+with or without instrumentation. Seed arithmetic is shared, not duplicated.
+
+AdaptiveUpdateResult holds DecreaseResult plus DecisionResult. Decision route is
+unchanged, weight_only, or execute; reasons are equal_weight, no_distance_effect,
+or forced. selected is optional and is engaged only for an executed backend.
+distances_repaired describes a distance change under any backend, not necessarily
+use of the incremental algorithm.
+
+Equal weights always return unchanged/equal_weight without any backend or graph
+write. Under shared_fast_path, a strict seed >= current destination distance
+commits just the weight and returns weight_only/no_distance_effect, without calling
+an SSSP backend. No queue, journal, staged graph, or backend metrics are allocated.
+This route applies to every policy and override. An unreachable tail has an
+infinite seed. With execute_selected, every strict update dispatches the selected
+backend and reports execute/forced, even when its final outcome is weight_only.
+Full strategies actually recompute; repair may stop at its intrinsic seed check.
+These are separate experimental configurations; bypasses are not strategy wins.
+
+### Recompute transaction
+
+Engine recompute is private and accepts the same prepared request. It copies the
+authoritative graph temporarily, applies the weight there, and calls exactly the
+chosen Dijkstra or delta-stepping function with local metrics. It does not call
+from_result_checked or run repair to synchronize afterward. The backend produces
+its own result; arbitrary caller-supplied distances cannot be adopted.
+
+Before commit, verify result source and vector size, zero source distance,
+componentwise nonincrease, unchanged infinity/reachability classification, and
+finite labels <= the existing cap. Count distinct improved vertices in the same
+O(V) scan. The scan guards against specified consistency violations, not arbitrary
+algorithm bugs; reference/oracle tests establish algorithm correctness. Aggregate
+delta's per-thread counters into a fixed-size summary before committing. All delta
+result/per-thread metric allocation occurs before the algorithm returns.
+
+Then call authoritative CSRGraph::replace_weight as the last potentially throwing
+operation; its validation/lookup precede its scalar store. Swap the completed
+distance vector with the authoritative vector, publish scalar results/metrics, and
+destroy staging, old distances and local metric vectors. Scratch marks stay zero;
+no mark reset or repair pass is needed after recomputation. Static assertions
+enforce nonthrowing distance swap, scalar publication/copy/move and relevant
+destructors. A copy-swap of the entire nonmovable state is unnecessary.
+
+Any recoverable C++ exception during validation, staging, algorithm execution or
+allocating result preparation preserves authoritative graph/distances/caller
+metrics and permits retry and subsequent strategy switching. Existing repair
+exceptions use its first-change undo journal. No silent backend retry occurs.
+OpenMP exceptions are caught on executing threads and rethrown after collective
+team exit by the existing algorithm; process-fatal runtime/OS failures cannot be
+turned into recoverable C++ exceptions by this engine.
+
+### Metrics and cost boundaries
+
+AdaptiveMetrics is an allocation-free scalar aggregate staged locally and replaced
+only on success. It contains decision, work_collected, RepairMetrics,
+DijkstraMetrics and DeltaWorkSummary. Bypasses have work_collected=false, no
+selected strategy, and default work fields. For execute, work_collected is true
+only when caller metrics were requested; only the chosen backend fields are
+populated. Inactive fields reset, preventing previous-query metadata from leaking.
+Delta summary includes optional actual_threads, bucket/light/heavy pass and stale
+counts, and sums of edges/attempts/successes/CAS retries across workers. Sums
+saturate and propagate the saturation flag. Actual team size is absent unless
+measured for an executed delta call. Parallel schedules may change work counters;
+decisions, distances and scalar update outcomes agree across instrumentation modes.
+There are no clocks, learned thresholds, selection features, or policy history.
+
+Preparation/fast paths cost O(log(outdegree(u)+1)) without graph scans or propagation
+allocation. Repair retains Phase 3B complexity. Full strategies add O(V+E) graph
+copying and O(V) result checking to their existing algorithm work, plus logarithmic
+staged/authoritative weight writes and temporary teardown. Commit swaps vectors
+without copying their payload, but old-buffer and graph destruction is part of the
+complete update cost. Persistent ownership is one CSR + distance + journal marks;
+full execution additionally holds temporary CSR, new distances, and algorithm
+scratch. No O(V) per-call scratch reset is introduced. Future comparisons must
+charge these coherence, allocation and publication costs to each forced strategy.
+Phase 4B-2 heuristic selection, P4, tuning, batches, increases and benchmarking
+remain gated. There is no adaptive-policy or performance claim in Phase 4B-1.

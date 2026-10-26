@@ -1,5 +1,5 @@
 foreach(test_name IN ITEMS project_info openmp csr_graph edge_list_io dijkstra delta_stepping
-                           incremental_sssp incremental_failure)
+                           incremental_sssp incremental_failure adaptive_sssp adaptive_failure)
     add_executable(test_${test_name} test_${test_name}.cpp)
     target_link_libraries(test_${test_name} PRIVATE DynaGraph::dynagraph)
     dynagraph_set_warnings(test_${test_name})
@@ -33,6 +33,9 @@ add_test(NAME cli_sssp COMMAND ${CMAKE_COMMAND}
 set_tests_properties(cli_sssp PROPERTIES TIMEOUT 20)
 
 find_package(Threads REQUIRED)
+target_link_libraries(test_adaptive_sssp PRIVATE Threads::Threads)
+set_tests_properties(adaptive_sssp adaptive_failure PROPERTIES TIMEOUT 120 PROCESSORS 2
+    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=8;OMP_DYNAMIC=FALSE")
 target_link_libraries(test_delta_stepping PRIVATE Threads::Threads)
 set_tests_properties(delta_stepping PROPERTIES TIMEOUT 120 PROCESSORS 2
     ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=8;OMP_DYNAMIC=FALSE")
