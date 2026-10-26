@@ -16,13 +16,37 @@ static_assert(std::is_nothrow_destructible_v<CSRGraph>);
 static_assert(std::is_nothrow_destructible_v<SSSPResult>);
 static_assert(std::is_nothrow_destructible_v<DeltaSteppingMetrics>);
 
-Strategy policy_strategy(PolicyKind policy) {
+void validate_policy(PolicyKind policy) {
     switch (policy) {
-    case PolicyKind::always_dijkstra: return Strategy::dijkstra;
-    case PolicyKind::always_delta_stepping: return Strategy::delta_stepping;
-    case PolicyKind::always_incremental: return Strategy::incremental;
+    case PolicyKind::always_dijkstra:
+    case PolicyKind::always_delta_stepping:
+    case PolicyKind::always_incremental:
+    case PolicyKind::heuristic: return;
     }
     throw std::invalid_argument("invalid policy kind");
+}
+
+DecisionResult policy_decision(const PolicyConfig& config, const CSRGraph& graph, VertexId destination) {
+    switch (config.kind) {
+    case PolicyKind::always_dijkstra: return {DecisionRoute::execute, Strategy::dijkstra, DecisionReason::forced};
+    case PolicyKind::always_delta_stepping: return {DecisionRoute::execute, Strategy::delta_stepping, DecisionReason::forced};
+    case PolicyKind::always_incremental: return {DecisionRoute::execute, Strategy::incremental, DecisionReason::forced};
+    case PolicyKind::heuristic:
+        // Validated destination; degree is a pair of CSR offsets, not a traversal.
+        // All features precede execution; no counters, clocks, runtime team query,
+        // allocation, graph scan or history enters the decision.
+        if (graph.edge_count() <= config.heuristic.small_graph_edges) {
+            return {DecisionRoute::execute, Strategy::dijkstra, DecisionReason::small_graph};
+        }
+        if (graph.degree(destination) <= config.heuristic.repair_max_degree) {
+            return {DecisionRoute::execute, Strategy::incremental, DecisionReason::local_degree};
+        }
+        if (graph.edge_count() >= config.heuristic.parallel_min_edges && config.parallel.thread_count >= 2) {
+            return {DecisionRoute::execute, Strategy::delta_stepping, DecisionReason::parallel_work};
+        }
+        return {DecisionRoute::execute, Strategy::incremental, DecisionReason::fallback};
+    }
+    throw std::invalid_argument("invalid policy kind"); // Factory validation + immutable config exclude this.
 }
 
 void validate_strategy(Strategy strategy) {
@@ -63,12 +87,15 @@ AdaptiveSSSPEngine::AdaptiveSSSPEngine(CSRGraph&& graph, VertexId source, Policy
     : state_(IncrementalSSSPState::initialize(std::move(graph), source)), config_(config) {}
 
 AdaptiveSSSPEngine AdaptiveSSSPEngine::initialize(CSRGraph graph, VertexId source, PolicyConfig config) {
-    (void)policy_strategy(config.kind);
+    validate_policy(config.kind);
     if (config.no_effect != NoEffectMode::shared_fast_path && config.no_effect != NoEffectMode::execute_selected) {
         throw std::invalid_argument("invalid no-effect mode");
     }
     if (config.parallel.delta == 0 || config.parallel.thread_count < 0) {
         throw std::invalid_argument("delta must be positive and threads nonnegative");
+    }
+    if (config.heuristic.small_graph_edges >= config.heuristic.parallel_min_edges) {
+        throw std::invalid_argument("heuristic small-graph threshold must be below parallel-work threshold");
     }
     // Direct prvalues: guaranteed C++17 elision, no named-local NRVO or heap wrapper.
     return AdaptiveSSSPEngine(std::move(graph), source, config);
@@ -109,8 +136,7 @@ DecreaseResult AdaptiveSSSPEngine::recompute(const IncrementalSSSPState::Prepare
 
 AdaptiveUpdateResult AdaptiveSSSPEngine::decrease(std::uint64_t u, std::uint64_t v,
     std::int64_t new_weight, AdaptiveMetrics* metrics, std::optional<Strategy> forced) {
-    const auto strategy = forced.value_or(policy_strategy(config_.kind));
-    validate_strategy(strategy);
+    if (forced) { validate_strategy(*forced); }
     const auto request = state_.prepare_decrease(u, v, new_weight);
     AdaptiveMetrics pending;
     DecreaseResult update{DecreaseOutcome::unchanged_weight, request.previous, request.replacement, 0};
@@ -121,7 +147,9 @@ AdaptiveUpdateResult AdaptiveSSSPEngine::decrease(std::uint64_t u, std::uint64_t
         update.outcome = DecreaseOutcome::weight_only;
         state_.graph_.replace_weight(request.u, request.v, request.replacement);
     } else {
-        pending.decision = {DecisionRoute::execute, strategy, DecisionReason::forced};
+        pending.decision = forced ? DecisionResult{DecisionRoute::execute, *forced, DecisionReason::forced} :
+                                   policy_decision(config_, state_.graph_, request.v);
+        const auto strategy = *pending.decision.selected;
         pending.work_collected = metrics != nullptr;
         update = strategy == Strategy::incremental ?
             state_.repair_prepared(request, metrics == nullptr ? nullptr : &pending.repair) :

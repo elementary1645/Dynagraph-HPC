@@ -1,5 +1,164 @@
 # Research log
 
+## 2026-10-26 — Phase 4B-2 deterministic adaptive heuristic
+
+### Authorization, inspection and implementation
+
+The user explicitly approved Phase 4B-2 after the Phase 4B-1 merge. Verified
+feature/adaptive-heuristic at ee2db24 with a clean working tree before edits;
+no unrelated work existed. Inspected engineering instructions, current adaptive
+and incremental APIs/implementations, existing correctness/failure tests, CMake,
+architecture, protocol and research record. Updated AGENTS.md for this scope and
+the next approval gate. No dependencies installed, agents delegated, commits,
+pushes, source resets/discards, calibrated models, ML, online learning or benchmark
+infrastructure. Phase 4B-3 and Phase 5 were not started.
+
+Appended PolicyKind::heuristic and four reason values without changing existing
+enum values. PolicyConfig appends HeuristicConfig with small_graph_edges=4096,
+repair_max_degree=32 and parallel_min_edges=65536. All are unsigned EdgeOffset
+thresholds and explicit uncalibrated hypotheses, not measured optimal values.
+Default policy remains always_incremental; heuristic use is opt-in. Existing
+three-field aggregate configs retain valid defaults. All initialization validates
+small_graph_edges < parallel_min_edges, even for fixed policies, after existing
+enum/no-effect/delta/thread checks. Zero small/degree thresholds are valid; equal
+or reversed small/parallel thresholds reject without constructing a state. No
+threshold arithmetic can overflow; uint64-scale comparisons are tested.
+
+For a valid update requiring execution, a forced override takes precedence. With
+no override, the first matching heuristic rule is E<=small -> Dijkstra/small_graph;
+degree(destination)<=repair -> incremental/local_degree;
+E>=parallel_min and explicit requested threads>=2 -> delta/parallel_work;
+otherwise incremental/fallback. Equal/shared no-effect bypasses precede selection
+and retain no selected strategy. Under execute_selected, strict no-effect updates
+also use the ordered policy. Fixed policies and overrides retain forced. Invalid
+override enums still reject before request preparation. The same transactional
+execution paths and all post-commit nonthrowing assertions remain unchanged.
+
+Thread request 0 remains runtime-default behavior for forced delta, but specifies
+no explicit two-worker heuristic budget; it therefore fails the parallel rule.
+This avoids runtime/environment-based selection for fixed configuration. Counts
+1/2 and selected 4 are tested. No runtime team query/tuning is added. Selection
+reads graph edge count, at most one constant-time CSR degree, and immutable config;
+it does not traverse, allocate, sample, read timings/counters/history, or use any
+current affected-region observation. Parallel timing/work counts can vary while
+strategy, reasons and distances remain deterministic across instrumentation modes.
+
+No graph ownership, incremental public contract, journal, recomputation commit,
+SSSP algorithm or CLI code changed. CMake/workflow settings remain unchanged;
+the extended tests use the existing two CTest entries. No performance/novelty
+claim is made. Defaults and the degree-one counterexample are documented.
+
+### Exact commands and observed verification
+
+Executed from repository root using the existing reconfigured build directories:
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --verbose
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --repeat until-fail:20 --output-on-failure
+ctest --test-dir build/release -R '^adaptive_(sssp|failure)$' --verbose
+git diff --check
+git diff --exit-code -- include/dynagraph/dynamic src/dynamic include/dynagraph/graph src/graph include/dynagraph/algorithms src/algorithms apps CMakeLists.txt tests/CMakeLists.txt .github
+```
+
+GCC 13.3.0, CMake 3.28.3, OpenMP 4.5, two logical CPUs. All builds succeeded
+warning-free with unchanged C++17/OpenMP and -Wall -Wextra -Wpedantic -Wconversion
+-Wshadow -Werror settings. Debug full CTest: 16/16 passed (4.44 s); Release: 16/16
+(1.84 s); ASan/UBSan: 16/16 (15.72 s). All Phase 1–4B-1 regression/failure entries
+passed. No failed, skipped, disabled or weakened tests; no build warnings occurred.
+CTest elapsed times are verification observations under shared host load, not
+benchmarks or evidence of speedup.
+
+Sanitizer CTest ran outside the sandbox with approval because earlier phases
+established the LeakSanitizer/ptrace restriction. Leak detection remained enabled;
+no ASan, UBSan or leak findings, hangs or timeouts. No TSan pass is claimed and
+the older startup failure does not establish race freedom. Hosted CI for these
+uncommitted changes remains unverified; its unchanged workflow runs the full
+registered suites. Whitespace and unchanged-core diff checks passed.
+
+### New tests and failure/overhead checks
+
+Adaptive correctness now has eight groups. Existing forced cases remain, and
+shared/execute-selected tests include all four policies. Eleven explicit boundary
+configs use a verified E=7 graph with changed destination degree 2. They cover
+exact small/parallel boundaries, their neighbors, equal degree threshold, rule
+precedence, worker budgets 0/1/2/4 and maximum unsigned threshold values. Effective
+updates repeat, override every backend, and resume heuristic selection. Opt-in
+defaults, invalid threshold/config/request/override cases, rollback and reuse are
+checked. Instrumented/plain engines agree on exact decisions and all distances;
+reason predicates include earlier-rule precedence. Fresh Dijkstra uses separately
+updated input records, and small graphs use the independent Bellman–Ford oracle.
+
+New randomized stream: mt19937 seed 0x4B22026, 72 graphs with 1–12 vertices,
+every source, 24 requests per nonempty graph/source, four graph families, small
+and full-range weights, all six deltas, both no-effect modes, workers 0/1/2/4,
+explicit varied thresholds, repeated edges, unchanged requests and mixed automatic
+and forced schedules. Three of four requests are automatic. The old seed
+0x4B12026 random/switching and independent-engine tests remain intact.
+
+Counterexample fixtures each have 512 vertices, 511 edges, changed-edge labels
+d[0]=0/d[1]=100 and destination degree 1. Local-degree repair improves 2 vertices
+in the disconnected-tail graph and 511 along the reachable chain. This proves
+degree does not bound affected region; it does not measure which backend is faster.
+
+The failure entry now has four groups: retained forced host sweeps, automatic
+host sweeps/allocation equivalence, OpenMP-safe region failures, and initialization
+plus bypass checks. Automatic selection is configured to actually choose each
+backend. Its host allocation counts/sizes/pre-post-team positions match forced
+execution of that same backend, in both instrumentation modes, checking zero extra
+selection allocations. Audit confirms no selection traversal. No latency claim
+is inferred. Each automatic fault preserves graph/distances/caller metrics, retries
+automatically on that engine, and then switches successfully to another backend.
+All four policies' shared bypasses allocate no backend storage.
+
+Observed host positions per forced or automatic sweep: Dijkstra 12 without/12
+with metrics; delta 9/10 (including 1/2 post-team allocations); repair 16/16,
+with 14 partial-write failures per instrumentation mode. Thus each failure-test
+run injects 169 exceptions: 150 host update positions, 15 initialization positions,
+4 retained OpenMP-safe region triggers. Fifty-six occur after tentative repair
+writes; six after team exit. Debug and Release counts agree. Scalar selection,
+summary and commit do not allocate; no fabricated failure stage is claimed.
+
+Final Debug adaptive correctness/failure entries each passed 20 consecutive CTest
+repetitions, 40 executions (19.07 s). This includes 3,380 selected allocation
+exceptions, 1,120 after tentative repair writes, with successful rollback/retry/
+switching and no timeout or mismatch. Separate verbose Release tests passed.
+
+### Files and gate
+
+Modified only:
+- AGENTS.md
+- include/dynagraph/adaptive/adaptive_sssp.hpp
+- src/adaptive/adaptive_sssp.cpp
+- tests/test_adaptive_sssp.cpp
+- tests/test_adaptive_failure.cpp
+- README.md
+- docs/architecture.md
+- docs/experimental-protocol.md
+- docs/research-log.md
+
+No new files, dependencies, algorithm changes or known local correctness/build/
+sanitizer failures. Existing serialized-access, view invalidation and recoverable
+C++ exception limitations remain. The heuristic can choose expensive repair on
+large affected regions; staging can make recomputation costly. Requested workers
+need not equal actual workers. Fault injection covers selected ordinary allocations
+and the existing inspected 16-byte publication target, not every runtime/OS failure.
+Policy overhead latency, threshold quality, speedups and generalization remain
+unmeasured. Defaults have no empirical optimality claim.
+
+Phase 4B-2 is complete; stop for review. The correctness foundation supports a
+separately approved Phase 4B-3 or Phase 5 design, but calibrated costs and performance
+claims require reproducible measurements and held-out evaluation. No later phase
+has begun and nothing was committed or pushed.
+
 ## 2026-10-26 — Phase 4B-1 forced-strategy engine core
 
 ### Authorization, repository state and implementation

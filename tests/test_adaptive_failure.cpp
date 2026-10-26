@@ -116,33 +116,58 @@ CSRGraph fixture() {
 
 constexpr PolicyConfig config{PolicyKind::always_incremental, NoEffectMode::execute_selected, {16, 2}};
 
-void retry_and_switch(AdaptiveSSSPEngine& engine, Strategy strategy, bool measured) {
+void retry_and_switch(AdaptiveSSSPEngine& engine, Strategy strategy, bool measured, bool automatic = false) {
     AdaptiveMetrics metrics;
-    const auto retry = engine.decrease(0, 1, 0, measured ? &metrics : nullptr, strategy);
+    const auto retry = engine.decrease(0, 1, 0, measured ? &metrics : nullptr,
+        automatic ? std::optional<Strategy>{} : std::optional<Strategy>{strategy});
     require(retry.update.vertices_improved == 95 && engine.distances() == dijkstra(engine.graph(), 0).distances,
             "Same-engine retry restores all affected labels and marks");
+    require(retry.decision.selected == strategy && (automatic ? retry.decision.reason != DecisionReason::forced :
+            retry.decision.reason == DecisionReason::forced), "Retry preserves automatic/forced decision reporting");
     const auto other = strategy == Strategy::incremental ? Strategy::dijkstra : Strategy::incremental;
     const auto next = engine.decrease(0, 95, 0, measured ? &metrics : nullptr, other);
     require(next.update.vertices_improved == 1 && engine.distances() == dijkstra(engine.graph(), 0).distances,
             "Switch after failure/retry uses coherent state");
 }
 
-void outside_allocation_failures() {
+void outside_allocation_failures(bool automatic) {
     const auto graph = fixture();
     for (const auto strategy : {Strategy::dijkstra, Strategy::delta_stepping, Strategy::incremental}) {
+        auto current_config = config;
+        if (automatic) {
+            current_config.kind = PolicyKind::heuristic;
+            current_config.heuristic = strategy == Strategy::dijkstra ? HeuristicConfig{graph.edge_count(), 0, graph.edge_count() + 1} :
+                (strategy == Strategy::delta_stepping ? HeuristicConfig{0, 0, 1} : HeuristicConfig{0, graph.degree(1), 1});
+        }
+        const auto forced = automatic ? std::optional<Strategy>{} : std::optional<Strategy>{strategy};
         for (const bool measured : {false, true}) {
             std::size_t positions = 0;
             std::array<Allocation, 512> trace{};
             {
-                auto engine = AdaptiveSSSPEngine::initialize(graph, 0, config);
+                auto engine = AdaptiveSSSPEngine::initialize(graph, 0, current_config);
                 const auto before = engine.distances();
                 AdaptiveMetrics metrics;
                 FaultScope fault(Mode::outside, 0, &engine.distances(), &before);
-                (void)engine.decrease(0, 1, 0, measured ? &metrics : nullptr, strategy);
+                (void)engine.decrease(0, 1, 0, measured ? &metrics : nullptr, forced);
                 positions = injection.count;
                 trace = injection.trace;
             }
             require(positions > 4 && positions < trace.size(), "Sweep covers actual host allocations");
+            if (automatic) {
+                // Same input/backend/instrumentation, with selection bypassed by
+                // an explicit override. Every ordinary host allocation must match.
+                auto engine = AdaptiveSSSPEngine::initialize(graph, 0, current_config);
+                AdaptiveMetrics metrics;
+                {
+                    FaultScope fault(Mode::outside, 0);
+                    (void)engine.decrease(0, 1, 0, measured ? &metrics : nullptr, strategy);
+                }
+                require(injection.count == positions, "Heuristic selection adds zero dynamic allocations");
+                for (std::size_t i = 0; i < positions; ++i) {
+                    require(injection.trace[i].bytes == trace[i].bytes && injection.trace[i].after_team == trace[i].after_team,
+                            "Heuristic and forced-backend allocation sequences agree");
+                }
+            }
             if (strategy != Strategy::incremental) {
                 require(trace[0].bytes == graph.offsets().size() * sizeof(EdgeOffset) &&
                         trace[1].bytes == graph.destinations().size() * sizeof(VertexId) &&
@@ -151,14 +176,14 @@ void outside_allocation_failures() {
             std::size_t partial = 0;
             std::size_t after_team = 0;
             for (std::size_t position = 1; position <= positions; ++position) {
-                auto engine = AdaptiveSSSPEngine::initialize(graph, 0, config);
+                auto engine = AdaptiveSSSPEngine::initialize(graph, 0, current_config);
                 const auto before = engine.distances();
                 const auto snapshot = engine.graph();
                 auto metrics = sentinel();
                 bool failed = false;
                 {
                     FaultScope fault(Mode::outside, position, &engine.distances(), &before);
-                    try { (void)engine.decrease(0, 1, 0, measured ? &metrics : nullptr, strategy); }
+                    try { (void)engine.decrease(0, 1, 0, measured ? &metrics : nullptr, forced); }
                     catch (const std::bad_alloc&) { failed = true; }
                 }
                 require(failed && injection.count == position, "Every selected host allocation was faulted");
@@ -170,14 +195,14 @@ void outside_allocation_failures() {
                 require(engine.graph().weights() == snapshot.weights() && engine.graph().offsets() == snapshot.offsets() &&
                         engine.graph().destinations() == snapshot.destinations() && engine.distances() == before &&
                         metric_values(metrics) == metric_values(sentinel()), "Exact graph/distance/metric preservation");
-                retry_and_switch(engine, strategy, measured);
+                retry_and_switch(engine, strategy, measured, automatic);
             }
             if (strategy == Strategy::incremental) { require(partial > 5, "Repair failures occur after tentative writes"); }
             else { require(partial == 0, "Staged recomputation does not change authoritative labels before commit"); }
             if (strategy == Strategy::delta_stepping) {
                 require(after_team == (measured ? 2U : 1U), "Result vector and optional metric vector fail after team exit");
             }
-            std::cout << "Strategy " << static_cast<int>(strategy) << ", metrics=" << measured
+            std::cout << "Strategy " << static_cast<int>(strategy) << ", heuristic=" << automatic << ", metrics=" << measured
                       << ": host faults=" << positions << ", partial=" << partial << ", after_team=" << after_team << '\n';
         }
     }
@@ -227,7 +252,8 @@ void initialization_and_bypass() {
         auto retry = AdaptiveSSSPEngine::initialize(graph, 0, config);
         retry_and_switch(retry, Strategy::dijkstra, true);
     }
-    for (const auto policy : {PolicyKind::always_dijkstra, PolicyKind::always_delta_stepping, PolicyKind::always_incremental}) {
+    for (const auto policy : {PolicyKind::always_dijkstra, PolicyKind::always_delta_stepping, PolicyKind::always_incremental,
+                             PolicyKind::heuristic}) {
         auto engine = AdaptiveSSSPEngine::initialize(CSRGraph::from_edges(3, {{0, 1, 0}, {0, 2, 1}, {1, 2, 10}}),
             0, {policy, NoEffectMode::shared_fast_path, {16, 2}});
         AdaptiveMetrics metrics;
@@ -252,7 +278,12 @@ void operator delete[](void* pointer, std::size_t) noexcept { std::free(pointer)
 
 int main() {
     int failures = 0;
-    failures += test::run("all host allocations: staging, algorithms, result preparation and journal rollback", outside_allocation_failures);
+    failures += test::run("forced host allocations: staging, algorithms, result preparation and journal rollback", [] {
+        outside_allocation_failures(false);
+    });
+    failures += test::run("heuristic allocation equivalence, automatic failure rollback and recovery", [] {
+        outside_allocation_failures(true);
+    });
     failures += test::run("OpenMP-safe coordinator and post-CAS publication failures", parallel_failures);
     failures += test::run("engine initialization sweep and allocation-free shared bypasses", initialization_and_bypass);
     return failures == 0 ? 0 : 1;
