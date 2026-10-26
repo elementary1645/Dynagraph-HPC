@@ -4,8 +4,9 @@
 
 This is a prospective measurement protocol. Phases 1B, 2B, and 3B provide
 sequential/parallel recomputation and transactional single-decrease repair
-baselines. Phase 4B-1 adds forced-strategy switching with a shared fast path;
-heuristic/calibrated selection is not implemented. No benchmark results or speedup claims.
+baselines. Phase 4B-1 adds forced-strategy switching with a shared fast path and
+Phase 4B-2 adds a deterministic metadata-only heuristic with uncalibrated thresholds.
+No calibrated model, benchmark results or speedup claims exist.
 The OpenMP smoke test verifies functionality, not performance.
 
 ## Correctness before timing
@@ -82,7 +83,7 @@ No benchmark measurements or performance conclusions are supplied by this phase.
 
 Phase 2B implements the fixed-delta parallel recomputation baseline described
 below. Phase 3B adds sequential single-decrease repair. Scaling studies, batch or
-parallel repair, and adaptive selection need separate approval and validation.
+parallel repair, and calibrated selection need separate approval and validation.
 
 ## Implemented Phase 3B validation and future measurement boundaries
 
@@ -205,8 +206,72 @@ labeled ablation: full strategies recompute, repair retains its intrinsic check.
 Include graph copy, result scan, allocation, vector adoption, cleanup and future
 selection costs in public-call latency. Every strategy must remain ready for the
 next update. Kernel-only times are diagnostic, not service-level comparisons.
-The current engine has no timings, heuristic, calibrated model, trace orchestration
-or speedup claim. Hosted CI for new changes is distinct from local verification.
+The engine has no timings, calibrated model, trace orchestration or speedup claim.
+Phase 4B-2 heuristic validation is described below. Hosted CI for new changes is
+distinct from local verification.
+
+## Phase 4B-2 deterministic heuristic validation
+
+The policy is an opt-in, uncalibrated hypothesis. Always policies and shared fast
+paths remain baselines. Exact rules/reasons and defaults are documented in README
+and architecture: E<=4096 selects Dijkstra, otherwise destination degree<=32
+selects repair, otherwise E>=65536 and explicit requested workers>=2 selects delta,
+otherwise repair. Thresholds are configurable, unsigned and immutable, with
+small_graph_edges < parallel_min_edges checked at initialization. Defaults are
+not crossover measurements. Requested workers 0 is unspecified, so does not
+enable the parallel heuristic branch; forced delta still uses runtime defaults.
+No environment/team query or automatic tuning changes selection.
+
+Equal weights/shared no-effect requests bypass selection and backend execution.
+When execution is required, a per-call override precedes the configured policy.
+Always policies/overrides keep reason forced; automatic heuristic branches use
+small_graph, local_degree, parallel_work or fallback. execute_selected applies
+the same ordered heuristic to strict no-effect requests. Metrics capture the
+decision made before execution; outcomes/costs never feed back into it.
+
+Eleven explicit boundary configurations run on a verified E=7 graph with updated
+destination degree 2: exact small/parallel thresholds and their neighbors, exact
+degree threshold and its neighbor, precedence, workers 0/1/2/4 and uint64-scale
+thresholds. Effective repeated decreases alternate with all forced backends and
+resume automatic selection. Config and request rejection preserve state/metrics.
+Existing fast-path tests now include heuristic as well as all fixed policies.
+
+A new mt19937 stream with seed 0x4B22026 tests 72 graphs (1–12 vertices), every
+source and 24 requests per nonempty graph/source. Families are sparse/dense random,
+hub/fan-in and chains, with small/full-range weights and all six deltas. Small-edge
+threshold is E for every fourth trial and 0 otherwise; parallel threshold is
+small+1+(trial mod 3), with destination-degree and worker budgets varied. Both
+no-effect modes and automatic/forced schedules are exercised. Three of four
+requests use the configured heuristic, every fourth a cycling forced override;
+every fifth request is unchanged, and every third reuses the previous edge.
+Each accepted request runs paired measured/plain engines, checks exact decisions
+and reason predicates, updates independent input records, and compares fresh
+Dijkstra and small-graph Bellman–Ford. The older random stream and switching tests
+remain intact. No current affected count is read by production selection.
+
+Paired 512-vertex fixtures with E=511 and destination degree 1 produce the same
+local_degree decision, but improve 2 versus 511 vertices. This establishes a
+limitation of the features; it does not show which backend is faster. Keep such
+adversarial examples distinct from later representative performance traces.
+
+Failure tests now repeat all host-allocation sweeps under automatic selection
+of each backend as well as forced execution. Successful traces compare allocation
+count, size and pre/post-team placement with the same forced backend, in both
+metrics modes. This checks that selection adds zero dynamic allocations; source
+audit checks that metadata/degree work is bounded and has no traversal. No latency
+measurement is inferred from those checks. Every fault preserves state/metrics,
+then automatically retries and successfully switches to a forced strategy. Existing
+OpenMP-safe coordinator/publication and initialization failures still run; the
+sequential global injector is not used on workers. All four policies' shared
+bypasses remain allocation-free.
+
+Selection is deterministic for fixed pre-update state, immutable configuration and
+override, independent of instrumentation and actual OpenMP scheduling. Parallel
+latency, actual team size and some work counters can vary. Future performance
+studies must include policy, staging and publication costs, retain shared-fast-path
+fairness and held-out workloads, and test counterexamples/distribution shifts.
+No calibrated model, online learning, benchmark orchestration or speedup evidence
+is introduced by these correctness checks.
 
 ## Implemented Phase 2B validation and future measurements
 

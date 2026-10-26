@@ -2,11 +2,11 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 4B-1 forced-strategy engine core, transactional
-  switching, shared fast paths, metrics, tests, CMake integration and documentation.
-  Phase 4A's design and Phase 4B-1 implementation were explicitly approved.
-- Stop after Phase 4B-1 verification; obtain approval before Phase 4B-2 or later.
-  Heuristic/calibrated selection, benchmarking, batch/increase/parallel repair,
+- Current authorized scope: Phase 4B-2 deterministic heuristic selection,
+  explicit configuration/reasons, tests and documentation. The user explicitly
+  approved this phase after Phase 4B-1 was merged.
+- Stop after Phase 4B-2 verification; obtain approval before Phase 4B-3 or Phase 5.
+  Calibrated/learned selection, benchmarking, batch/increase/parallel repair,
   automatic delta tuning, topology changes and concurrent mutation remain deferred.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.

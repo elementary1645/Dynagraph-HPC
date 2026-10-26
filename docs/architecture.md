@@ -1,6 +1,6 @@
 # Architecture
 
-## Current implementation: Phase 4B-1
+## Current implementation: Phase 4B-2
 
 The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
 dynagraph_cli executable, and CTest tests. The public API exposes project version
@@ -8,7 +8,8 @@ and the OpenMP specification date used to compile the library, plus fixed-topolo
 CSR storage, strict text edge-list loading, sequential Dijkstra, and OpenMP
 delta-stepping with optional work counters, and an owning sequential transactional
 single-decrease repair state. A forced-strategy engine maintains that authoritative
-state across all three strategies; heuristic/calibrated selection remains planned. The CLI retains
+state across all three strategies. Deterministic metadata-only heuristic selection
+is implemented; calibrated/learned selection remains planned. The CLI retains
 help/version and both recomputation algorithms with JSON output; repair is a
 library API only.
 
@@ -26,7 +27,7 @@ active in Release; CTest handles discovery, timeouts, and CLI checks.
 | graph/ | Contiguous CSR storage, weight replacement, and text input validation |
 | algorithms/ | Sequential Dijkstra, parallel delta-stepping, shared SSSP result |
 | dynamic/ | Owning transactional single-edge decrease repair |
-| adaptive/ | Forced-strategy execution core; future heuristic/calibrated selection |
+| adaptive/ | Transactional strategy switching and deterministic heuristic selection |
 | instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
 | apps/ | Command-line entry points |
 | tests/ | Correctness and integration tests |
@@ -170,7 +171,8 @@ line-length resource quota is imposed by this library.
 
 Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
 delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4B-1
-adds forced-strategy switching. Phase 4B-2 or later requires approval.
+adds forced-strategy switching; Phase 4B-2 adds a deterministic heuristic.
+Phase 4B-3 or Phase 5 requires approval.
 Batch/parallel repair, adaptive selection, and automatic
 delta tuning remain future work.
 Storage updates and full recomputation support increases; incremental processing
@@ -532,12 +534,14 @@ Dijkstra. Graph argument ownership and source validation match Phase 3B.
 The public API in dynagraph/adaptive/adaptive_sssp.hpp exposes initialize, source,
 graph, distances, and decrease(u,v,new_weight,AdaptiveMetrics*=nullptr,
 optional<Strategy>=nullopt). Strategy has dijkstra, delta_stepping, incremental;
-PolicyKind has only the three corresponding always policies. Config defaults to
+PolicyKind has the three corresponding always policies and the Phase 4B-2 heuristic
+described below. Config defaults to
 incremental, shared_fast_path, delta 1, runtime-default threads; these are valid
 defaults, not calibrated choices. An optional per-call strategy overrides the
 policy. Unsupported enum values are rejected, including invalid forced overrides
 before request preparation. All parallel options are validated at initialization
-even when a nonparallel policy is configured. No heuristic/model fields exist.
+even when a nonparallel policy is configured. Heuristic thresholds are validated
+at initialization; no model fields exist.
 
 All engine updates and access through existing views require caller serialization.
 Separate engines own independent state and can run concurrently, including
@@ -561,7 +565,8 @@ with or without instrumentation. Seed arithmetic is shared, not duplicated.
 
 AdaptiveUpdateResult holds DecreaseResult plus DecisionResult. Decision route is
 unchanged, weight_only, or execute; reasons are equal_weight, no_distance_effect,
-or forced. selected is optional and is engaged only for an executed backend.
+or forced for fixed policies; the heuristic reasons below identify its branches.
+selected is optional and is engaged only for an executed backend.
 distances_repaired describes a distance change under any backend, not necessarily
 use of the incremental algorithm.
 
@@ -571,7 +576,7 @@ commits just the weight and returns weight_only/no_distance_effect, without call
 an SSSP backend. No queue, journal, staged graph, or backend metrics are allocated.
 This route applies to every policy and override. An unreachable tail has an
 infinite seed. With execute_selected, every strict update dispatches the selected
-backend and reports execute/forced, even when its final outcome is weight_only.
+backend and reports execute with the applicable policy reason, even when its final outcome is weight_only.
 Full strategies actually recompute; repair may stop at its intrinsic seed check.
 These are separate experimental configurations; bypasses are not strategy wins.
 
@@ -620,7 +625,8 @@ counts, and sums of edges/attempts/successes/CAS retries across workers. Sums
 saturate and propagate the saturation flag. Actual team size is absent unless
 measured for an executed delta call. Parallel schedules may change work counters;
 decisions, distances and scalar update outcomes agree across instrumentation modes.
-There are no clocks, learned thresholds, selection features, or policy history.
+There are no clocks, learned thresholds or policy history; Phase 4B-2 adds the
+bounded metadata-only selection described below.
 
 Preparation/fast paths cost O(log(outdegree(u)+1)) without graph scans or propagation
 allocation. Repair retains Phase 3B complexity. Full strategies add O(V+E) graph
@@ -631,5 +637,67 @@ complete update cost. Persistent ownership is one CSR + distance + journal marks
 full execution additionally holds temporary CSR, new distances, and algorithm
 scratch. No O(V) per-call scratch reset is introduced. Future comparisons must
 charge these coherence, allocation and publication costs to each forced strategy.
-Phase 4B-2 heuristic selection, P4, tuning, batches, increases and benchmarking
-remain gated. There is no adaptive-policy or performance claim in Phase 4B-1.
+P4, tuning, batches, increases and benchmarking remain gated. The forced core
+and Phase 4B-2 heuristic establish no performance superiority.
+
+## Phase 4B-2: deterministic workload-aware heuristic
+
+PolicyKind::heuristic is appended to the enum, preserving the original values.
+PolicyConfig appends HeuristicConfig with explicit unsigned EdgeOffset fields
+small_graph_edges=4096, repair_max_degree=32 and parallel_min_edges=65536. These
+are uncalibrated hypotheses, not measurements. Three-field aggregate initializers
+remain source-compatible. always_incremental remains the default policy. All
+initialization validates small_graph_edges < parallel_min_edges, including fixed
+policies, before constructing a state. Equality/reversal (including parallel
+threshold 0) is invalid_argument; small/degree threshold 0 is valid. Thresholds
+are compared directly without multiplication/addition, so UINT64-scale boundaries
+do not wrap. Degree thresholds may exceed any particular graph's degree and edge
+thresholds may exceed its size, intentionally suppressing later branches.
+
+Execution precedence is unchanged request preparation/validation and shared fast
+paths first, then per-call forced override if present, then configured selection.
+Invalid forced enums still reject before request preparation. Equal weights and
+shared no-effect requests do not select or execute any backend. Fixed policies
+and explicit overrides keep reason forced. For heuristic execution, the first
+matching rule is:
+
+1. E <= small_graph_edges: Dijkstra, small_graph.
+2. degree(destination) <= repair_max_degree: incremental, local_degree.
+3. E >= parallel_min_edges and configured parallel.thread_count >= 2:
+   delta-stepping, parallel_work.
+4. Otherwise: incremental, fallback.
+
+Only E and, after the first rule fails, destination degree are read by selection.
+CSR degree is O(1) offset subtraction; the destination was already validated.
+The helper performs no loop, allocation, traversal, sampling, backend call, clock
+or runtime-team query. Its valid-config path is O(1); existing request validation
+retains its binary edge lookup and checked seed. It consumes no affected count,
+work counter, latency or historical observations. Configuration is copied once
+and immutable. No source/graph/state ownership or transaction code changed.
+
+Requested threads 0 is an unspecified OpenMP runtime default, not an explicit
+two-worker budget, so it fails rule 3. This deliberately avoids environment-based
+policy choices for a fixed configuration. Counts 1/2 distinguish serial/parallel
+eligibility; actual runtime team size is a post-execution metric and may be lower.
+Forced delta retains thread-count-0 behavior. Delta and threads never auto-tune.
+Under execute_selected, strict no-effect requests also use the rule order; repair
+retains its seed check. Selection/reasons are independent of instrumentation and
+parallel schedule, while parallel execution time and event counts can vary.
+
+The four new reason values append to existing ones. Decisions are prepared before
+any backend and published through the unchanged scalar transaction path. No extra
+failure/commit stage, graph copy, journal reset or mutable history is introduced.
+Invalid requests preserve state/metrics. Existing failure tests remain, augmented
+with automatic selection of every backend followed by fault/retry/forced switch.
+Recorded host allocation sequences for heuristic vs forced execution of the same
+backend are identical, checking zero added selection allocations. Source review
+establishes bounded metadata operations; no timing-based overhead claim is made.
+
+Small/local rules are hypotheses about work, not guarantees. Paired 512-vertex
+fixtures have the same E=511, changed edge/labels and destination degree 1; a
+local_degree decision improves 2 vertices in one and 511 in the other. The latter
+is a long propagation chain. This does not establish which strategy is faster;
+it establishes that cheap degree metadata cannot bound the affected region.
+Neither optimality nor speedup nor novelty is claimed. Calibration/online learning,
+benchmark infrastructure, topology/increase/batch changes and later phases remain
+unimplemented and require separate approval.

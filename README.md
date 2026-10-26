@@ -6,12 +6,12 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 4B-1 adds a forced-strategy engine over sequential Dijkstra, OpenMP
+Phase 4B-2 adds deterministic heuristic selection over sequential Dijkstra, OpenMP
 delta-stepping, and transactional incremental repair. One owning incremental
 state remains current across strategy switches. Failed updates preserve graph,
 distances, and caller metrics. Shared no-effect fast paths apply to every policy.
 Tests compare all three with independent Bellman–Ford and exercise allocation
-failures. Heuristic/calibrated adaptive selection, batch/parallel repair,
+failures. Calibrated/learned selection, batch/parallel repair,
 automatic delta tuning, and benchmarks remain planned work.
 There are no performance results or speedup claims.
 
@@ -73,8 +73,8 @@ Hosted CI execution is separate from local verification and requires the workflo
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 4B-1 is
-implemented; Phase 4B-2 or later requires explicit approval.
+Each implementation phase requires approval before work begins. Phase 4B-2 is
+implemented; Phase 4B-3 or Phase 5 requires explicit approval.
 
 ## Graph API and semantics
 
@@ -302,21 +302,21 @@ accessors expose current state. No mutable accessor or public unchecked result
 adoption exists. Engine operations and all view access require external
 serialization; independently owned engines may execute concurrently.
 
-Policy kinds are always_dijkstra, always_delta_stepping, and always_incremental.
+Policy kinds are always_dijkstra, always_delta_stepping, always_incremental, and heuristic.
 The optional per-call Strategy overrides the configured policy. Configuration also
 sets delta (>0) and requested threads (>=0, 0 uses the runtime default); options
 are validated even for nonparallel policies so a later override is safe. Invalid
 enum values are rejected. Defaults are incremental/shared fast path/delta 1/runtime
-threads, not calibrated performance settings. No heuristic, cost model or timing
-instrumentation is implemented. This is a strategy-switching foundation, not yet
-an adaptive selection policy.
+threads, not calibrated performance settings. Existing fixed policies remain the
+default; heuristic selection is opt-in. No cost model or timing instrumentation
+is implemented.
 
 Equal weights always return route unchanged/reason equal_weight with no backend.
 Under shared_fast_path, a strict decrease whose checked seed cannot improve its
 destination commits only its weight, returning route weight_only/reason
 no_distance_effect. Both routes have no selected strategy and no backend work
 metrics. This shortcut is shared by all policies, including forced overrides.
-With execute_selected, strict no-effect requests use route execute/reason forced:
+With execute_selected, strict no-effect requests use route execute and the selected policy's reason:
 full strategies recompute, while incremental retains its intrinsic seed check.
 All executed calls report their selected strategy even when distances are unchanged.
 
@@ -342,3 +342,56 @@ value present only when that work was measured. No full distance copy is returne
 Staging adds O(V+E) copying and O(V) result checking to full strategies, with a
 temporary duplicate graph/result. These costs must be included in later fair
 comparisons; no performance advantage is claimed.
+
+## Deterministic heuristic selection
+
+```cpp
+dynagraph::PolicyConfig config;
+config.kind = dynagraph::PolicyKind::heuristic;
+config.parallel = {16, 2}; // Explicit requested budget for the parallel branch.
+config.heuristic = {4096, 32, 65536}; // Uncalibrated initial hypotheses.
+```
+
+HeuristicConfig contains unsigned edge-count/degree thresholds. In order, for an
+update requiring execution, let E be graph edge count and d the changed edge's
+destination outdegree:
+
+| First matching condition | Selected strategy | Decision reason |
+| --- | --- | --- |
+| E <= small_graph_edges | Dijkstra | small_graph |
+| d <= repair_max_degree | Incremental repair | local_degree |
+| E >= parallel_min_edges and requested threads >= 2 | Delta-stepping | parallel_work |
+| Otherwise | Incremental repair | fallback |
+
+Defaults are small_graph_edges=4096, repair_max_degree=32, parallel_min_edges=65536.
+They are explicit starting hypotheses, not measured crossover points or optimal
+settings. Initialization requires small_graph_edges < parallel_min_edges for all
+policies, in addition to existing enum/delta/thread validation; equal/reversed
+thresholds throw invalid_argument. Zero small/degree thresholds are allowed, and
+threshold extremes can intentionally suppress later rules. Thresholds never change
+automatically. Existing three-field PolicyConfig initializers retain their defaults.
+
+Thread count 0 requests the OpenMP runtime default when delta-stepping executes,
+but specifies no guaranteed two-worker budget. It therefore does not enable the
+heuristic parallel branch; use an explicit request >=2 for that branch. Forced
+delta-stepping still accepts 0 exactly as before. Selection does not inspect the
+environment or predict actual team size; runtime constraints may supply fewer
+workers. No delta/thread tuning is performed.
+
+Precedence is request validation, equal/shared-no-effect bypass, a valid per-call
+forced override, then the configured policy. A heuristic override uses reason
+forced; a bypass has no selected strategy. The existing always policies still
+use forced. Under execute_selected, strict no-effect requests also run this
+ordered policy; repair can still finish at its intrinsic seed check.
+
+Selection reads only E, CSR degree and immutable configuration after the existing
+checked-seed test. It performs O(1) work, no dynamic allocation, no traversal,
+sampling, timing feedback or post-execution observation. Decisions agree for the
+same pre-update state/configuration/override with metrics on/off. Parallel timing
+and work counters can vary without changing selection or distances.
+
+Low destination degree does not guarantee local or cheap repair. Tests construct
+two 512-vertex graphs with E=511 and destination degree 1: the same local_degree
+decision improves 2 vertices in one and 511 in the other. This demonstrates a
+feature limitation, not a measured timing comparison. Full recomputation still
+pays staged-copy and result-scan costs. No speedup or policy optimality is established.

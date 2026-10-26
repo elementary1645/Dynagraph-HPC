@@ -8,17 +8,27 @@
 namespace dynagraph {
 
 enum class Strategy { dijkstra, delta_stepping, incremental };
-enum class PolicyKind { always_dijkstra, always_delta_stepping, always_incremental };
+enum class PolicyKind { always_dijkstra, always_delta_stepping, always_incremental, heuristic };
 enum class NoEffectMode { shared_fast_path, execute_selected };
+
+// Uncalibrated initial hypotheses, not measured crossover/optimal values.
+// Counts are unsigned; small_graph_edges must be strictly below parallel_min_edges.
+struct HeuristicConfig {
+    EdgeOffset small_graph_edges = 4096;
+    EdgeOffset repair_max_degree = 32;
+    EdgeOffset parallel_min_edges = 65536;
+};
 
 struct PolicyConfig {
     PolicyKind kind = PolicyKind::always_incremental;
     NoEffectMode no_effect = NoEffectMode::shared_fast_path;
     DeltaSteppingOptions parallel{1, 0}; // Valid default, not a tuned parameter.
+    HeuristicConfig heuristic{};
 };
 
 enum class DecisionRoute { unchanged, weight_only, execute };
-enum class DecisionReason { equal_weight, no_distance_effect, forced };
+enum class DecisionReason { equal_weight, no_distance_effect, forced,
+                            small_graph, local_degree, parallel_work, fallback };
 
 struct DecisionResult {
     DecisionRoute route = DecisionRoute::unchanged;
@@ -55,14 +65,18 @@ struct AdaptiveMetrics {
     DeltaWorkSummary parallel;
 };
 
-// Forced execution foundation only: no heuristic/model selection or timings.
+// Forced or deterministic metadata-only heuristic selection; no models/timings.
+// Heuristic order: E<=small -> Dijkstra; degree(v)<=repair -> incremental;
+// E>=parallel_min && requested_threads>=2 -> delta; otherwise incremental.
+// Thread request 0 is unspecified and does not satisfy the heuristic's >=2
+// condition. Forced delta with 0 still uses the OpenMP runtime default.
 // One authoritative IncrementalSSSPState; no second persistent graph/result.
 // All access must be serialized against updates. Independent engines own all
 // state and may execute concurrently; the OpenMP runtime may reduce team sizes.
 class AdaptiveSSSPEngine {
 public:
     // Copies lvalue graphs or consumes rvalues. Validates config (including
-    // delta>0 and threads>=0 even for nonparallel policies), then uses Dijkstra
+    // delta>0, threads>=0 and threshold order even for forced policies), then uses Dijkstra
     // for initialization. Invalid config throws invalid_argument; invalid source
     // throws out_of_range. Failed acquisition may consume rvalue inputs.
     [[nodiscard]] static AdaptiveSSSPEngine initialize(CSRGraph graph, VertexId source,
