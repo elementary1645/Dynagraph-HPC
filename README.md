@@ -6,13 +6,13 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 3B adds sequential transactional incremental SSSP repair for single-edge
-weight decreases. Its state owns a graph, fixed source, and exact distances;
-failed updates preserve the graph, distances, and caller metrics. Sequential
-Dijkstra and OpenMP parallel delta-stepping remain recomputation baselines.
+Phase 4B-1 adds a forced-strategy engine over sequential Dijkstra, OpenMP
+delta-stepping, and transactional incremental repair. One owning incremental
+state remains current across strategy switches. Failed updates preserve graph,
+distances, and caller metrics. Shared no-effect fast paths apply to every policy.
 Tests compare all three with independent Bellman–Ford and exercise allocation
-failures. Adaptive selection, batch/parallel repair, automatic delta tuning,
-and benchmarks remain planned work.
+failures. Heuristic/calibrated adaptive selection, batch/parallel repair,
+automatic delta tuning, and benchmarks remain planned work.
 There are no performance results or speedup claims.
 
 The approved initial graph scope is directed, fixed topology with nonnegative
@@ -65,7 +65,7 @@ Hosted CI execution is separate from local verification and requires the workflo
 ## Layout and development
 
 - include/dynagraph/ and src/: library API and CSR implementation; reserved modules
-  for adaptation and instrumentation; dynamic/ contains incremental repair
+  for future instrumentation; dynamic/ contains repair and adaptive/ the forced engine
 - apps/ and tests/: CLI and automated checks
 - benchmarks/: future configuration and Python experiment tooling
 - data/manifests/ and results/: provenance and generated experiment artifacts
@@ -73,8 +73,8 @@ Hosted CI execution is separate from local verification and requires the workflo
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 3B is
-implemented; Phase 4 requires explicit approval.
+Each implementation phase requires approval before work begins. Phase 4B-1 is
+implemented; Phase 4B-2 or later requires explicit approval.
 
 ## Graph API and semantics
 
@@ -278,3 +278,67 @@ successful relaxations, queue pushes/pops, and stale entries. Event increments
 saturate with a flag. Omitting metrics compiles out event updates. No timings are
 collected. See architecture.md for exact definitions, invariants and complexity;
 large affected regions can cost as much as recomputation plus transaction overhead.
+
+## Forced-strategy engine core
+
+```cpp
+#include "dynagraph/adaptive/adaptive_sssp.hpp"
+
+dynagraph::PolicyConfig config{dynagraph::PolicyKind::always_incremental,
+    dynagraph::NoEffectMode::shared_fast_path, {16, 2}};
+auto engine = dynagraph::AdaptiveSSSPEngine::initialize(
+    dynagraph::CSRGraph::from_edges(4, {{0, 1, 10}, {1, 2, 5}}), 0, config);
+dynagraph::AdaptiveMetrics metrics;
+auto first = engine.decrease(0, 1, 2, &metrics, dynagraph::Strategy::dijkstra);
+auto second = engine.decrease(1, 2, 1); // Uses configured incremental strategy.
+// Current distances: [0, 2, 3, unreachable_distance].
+```
+
+The engine owns exactly one authoritative IncrementalSSSPState. It is noncopyable
+and nonmovable; factories construct direct prvalues using guaranteed C++17 elision.
+Initialization uses Dijkstra for every policy. Graph lvalues are copied and rvalues
+may be consumed even on initialization failure. Const source/graph/distance
+accessors expose current state. No mutable accessor or public unchecked result
+adoption exists. Engine operations and all view access require external
+serialization; independently owned engines may execute concurrently.
+
+Policy kinds are always_dijkstra, always_delta_stepping, and always_incremental.
+The optional per-call Strategy overrides the configured policy. Configuration also
+sets delta (>0) and requested threads (>=0, 0 uses the runtime default); options
+are validated even for nonparallel policies so a later override is safe. Invalid
+enum values are rejected. Defaults are incremental/shared fast path/delta 1/runtime
+threads, not calibrated performance settings. No heuristic, cost model or timing
+instrumentation is implemented. This is a strategy-switching foundation, not yet
+an adaptive selection policy.
+
+Equal weights always return route unchanged/reason equal_weight with no backend.
+Under shared_fast_path, a strict decrease whose checked seed cannot improve its
+destination commits only its weight, returning route weight_only/reason
+no_distance_effect. Both routes have no selected strategy and no backend work
+metrics. This shortcut is shared by all policies, including forced overrides.
+With execute_selected, strict no-effect requests use route execute/reason forced:
+full strategies recompute, while incremental retains its intrinsic seed check.
+All executed calls report their selected strategy even when distances are unchanged.
+
+Full recomputation copies the graph temporarily, applies the proposed weight,
+executes the chosen backend, checks source/size and all distance monotonicity,
+reachability and finite bounds, and counts improvements. It then commits the
+authoritative weight and swaps the completed distances. All allocating work,
+including delta result/metric preparation, precedes that commit. On a recoverable
+C++ exception the old state and caller metrics are unchanged; no fallback strategy
+is silently retried. Process-fatal runtime failures are outside this guarantee.
+
+After recomputation, distance element pointers/iterators are invalidated: reacquire
+them after successful updates. Current const vector views expose the new values,
+not historical snapshots. Standalone IncrementalSSSPState::decrease retains its
+existing stable-storage guarantee.
+
+AdaptiveUpdateResult contains the ordinary DecreaseResult plus DecisionResult
+(route, optional selected strategy, reason). Optional AdaptiveMetrics are scalar
+aggregates, published only on success. work_collected is false on bypasses. Only
+the executed backend's fields are populated; others reset. Delta work is summed
+with saturation from its per-thread metrics, and actual_threads is an optional
+value present only when that work was measured. No full distance copy is returned.
+Staging adds O(V+E) copying and O(V) result checking to full strategies, with a
+temporary duplicate graph/result. These costs must be included in later fair
+comparisons; no performance advantage is claimed.

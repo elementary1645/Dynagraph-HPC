@@ -1,5 +1,194 @@
 # Research log
 
+## 2026-10-26 — Phase 4B-1 forced-strategy engine core
+
+### Authorization, repository state and implementation
+
+The user approved Phase 4A and explicitly authorized only Phase 4B-1. Started on
+main at c171546 (Phase 3B PR #1 merge), with a clean working tree. Inspected the
+engineering rules, storage, both recomputation algorithms, incremental state,
+test harness/oracle, fault injectors and CMake. Phase 3B and its registered tests
+were present. Updated AGENTS.md to retain the next Phase 4B-2 gate. No dependencies
+installed, sub-agents used, commits, pushes, resets, or source discards. No heuristic,
+model, batch/increase support, benchmark orchestration or Phase 5 work was added.
+
+Added AdaptiveSSSPEngine with exactly one authoritative IncrementalSSSPState and
+const PolicyConfig. Factories and member construction use direct prvalues with
+guaranteed C++17 elision; neither nonmovable object relies on named-local NRVO or
+an extra heap wrapper. Every policy initializes with Dijkstra. Public strategy
+choices are dijkstra, delta_stepping and incremental; policies are their three
+always variants. An optional per-call override supports forced switching. Config
+also chooses shared_fast_path/execute_selected and fixed parallel delta/threads.
+Enums, positive delta and nonnegative threads are validated, even if the default
+policy is nonparallel. Const views expose no mutable state.
+
+Factored only the existing repair request preparation and dispatch: a private
+PreparedDecrease carries validated/narrowed endpoints, old/new weights and checked
+seed. Public standalone decrease and the engine reuse preparation; requests never
+escape or persist across calls. Original validation order/messages, journal,
+queue publication ordering, instrumentation and rollback remain intact. One friend
+class is the only new access to authoritative storage. No public unchecked result
+adoption or mutable accessor was added. CSR, Dijkstra, delta, CLI and workflow
+were not changed.
+
+Equal weights bypass every backend without graph writes. Shared strict no-effect
+requests commit only the weight and report no executed strategy/work, consistently
+for all policies and overrides. execute_selected dispatches a backend for every
+strict request; full strategies recompute, while incremental can stop after its
+intrinsic seed check. Decisions explicitly distinguish these cases.
+
+Private recomputation copies CSR temporarily, writes the staged weight, executes
+exactly the selected algorithm, checks source/size/zero-source label and every
+distance for monotonicity, reachability and cap consistency, and counts distinct
+improvements. All allocations, including delta result and per-thread metric
+preparation, finish before commit. Then authoritative replace_weight is the last
+potentially throwing call and distance-vector swap commits the completed result.
+The inspected storage setter validates/locates before its only scalar write and
+cannot throw afterward. Compile-time assertions enforce nonthrowing swap, scalar
+publication/copy/move and relevant destructors. Scratch marks remain clear; no
+extra repair or checked-adoption Dijkstra is run for synchronization. Future
+repair is immediately current. Distance element pointers/iterators must be
+reacquired after recomputation; standalone repair retains stable storage.
+
+AdaptiveMetrics is a locally staged scalar aggregate with decision, work-collected
+flag, existing repair/Dijkstra metrics and a saturated delta work summary. Only
+the executed backend's fields populate; all others reset. Delta actual team size
+is optional and absent unless measured. Recoverable exceptions preserve old graph,
+distances and caller metrics; no silent retry happens. Parallel exceptions use
+existing collective shutdown. Process-fatal OpenMP/OS failures are not recoverable
+C++ exceptions. All access must be serialized against updates; independent engines
+have independent ownership and may query concurrently. No timing was added.
+
+### Exact verification commands and outcomes
+
+Commands executed from repository root; existing build directories were
+reconfigured. Final builds/tests include the additional no-throw assertions and
+wide destination-validation case added during audit.
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --verbose
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --repeat until-fail:20 --output-on-failure
+ctest --test-dir build/release -R '^adaptive_(sssp|failure)$' --verbose
+git diff --check
+git diff --exit-code -- include/dynagraph/graph src/graph include/dynagraph/algorithms src/algorithms apps .github
+```
+
+Environment: GCC 13.3.0, CMake 3.28.3, OpenMP 4.5, two logical CPUs. All builds
+passed warning-free with unchanged -Wall -Wextra -Wpedantic -Wconversion -Wshadow
+-Werror, -std=c++17 and -fopenmp. Release includes -O3 -DNDEBUG; checks remain
+active. Final full suites passed Debug 16/16 (11.40 s), Release 16/16 (8.42 s),
+ASan/UBSan 16/16 (17.93 s), including all existing Phase 1–3 tests. There were no
+correctness/build/test failures and no tests were disabled or skipped. Elapsed
+CTest times are verification observations under shared load, not benchmarks.
+
+The exact sanitizer CTest invocation ran outside the sandbox with approval to
+avoid the previously established LeakSanitizer/ptrace restriction. Leak detection
+stayed enabled; no ASan, UBSan or leak findings, hangs or timeouts. No knowingly
+unsupported sandbox retry was needed. No TSan result is claimed; the older startup
+failure remains a limitation, not evidence of race freedom. The unchanged CI
+workflow discovers the new tests in its Debug/Release and full sanitizer jobs;
+hosted CI for these uncommitted changes is unverified.
+
+### Correctness, switching and failures
+
+Two new CTest entries contain five correctness groups and three failure groups.
+Every accepted correctness update compares both instrumentation modes with fresh
+Dijkstra over independently updated input records, and small graphs also use
+Bellman–Ford. Tests check all graph arrays, monotonicity, invariant reachability,
+distinct improved count, decision/outcome, active/inactive metrics and measured
+team metadata. All nine ordered pairs of three strategies are exercised, followed
+by additional repairs/recomputations and zero-cycle changes. Shared/execute modes
+cover every policy, equal/strict no-effect/unreachable-tail updates, singleton
+positive loops at cap=0, all six deltas, maximum weights and wide distances.
+Invalid weights/endpoints/edges/configurations/forced enums preserve state/metrics;
+ownership tests cover lvalue isolation, rvalue transfer, nonzero sources and direct
+nonmovable construction. Two async host calls each run 24 mixed updates on their
+own instrumented/plain engines while sharing only immutable input.
+
+Randomized switching: mt19937 seed 0x4B12026, 72 graphs, 1–10 vertices, every
+source, 18 requests per nonempty graph/source. Families are sparse/dense random,
+hub/fan-in and chain graphs; small/full-range weights, equal requests, cycling
+policies/overrides, both no-effect modes, deltas {1,2,3,16,UINT32_MAX,UINT64_MAX},
+requested threads 2 and selected 4. CTest fixes default workers=2, thread limit=8,
+and dynamic teams off. These are correctness checks, not multicore scaling data.
+
+The isolated adaptive failure executable uses atomic worker mode/one-shot flags;
+only the host accesses allocation counters and fixed-size distance traces outside
+parallel regions. The existing sequential injector is never used by workers.
+All observed host allocations are faulted with/without metrics. Counts were the
+same in Debug and Release:
+
+| Strategy | Without metrics | With metrics | Observed after tentative writes | Observed after parallel team exit |
+| --- | --- | --- | --- | --- |
+| Dijkstra | 12 | 12 | 0 | 0 |
+| Delta-stepping | 9 | 10 | 0 | 1 without / 2 with metrics |
+| Incremental | 16 | 16 | 14 per mode | 0 |
+
+The first three recomputation positions are checked as staged CSR array copies;
+subsequent positions include algorithm allocations. Delta's post-team faults are
+the distance result vector and optional per-thread metric vector. Scalar checks,
+summary aggregation and vector-swap commit do not allocate, so no fictitious
+allocation-failure coverage is claimed for them. Two one-shot parallel modes
+(first region allocation and 16-byte post-CAS Entry append) each fail with/without
+metrics, four region faults total. The publication target uses the same inspected
+allocation-size contract as the existing delta failure test. Initialization has
+15 fault positions. Each failed update preserves all graph arrays, distances and
+sentinel metrics, retries successfully on that engine and then switches to a
+different strategy. All policies' shared bypasses allocate no backend storage.
+
+Total: 94 selected allocation exceptions per failure-executable run (75 host
+update positions, 15 initialization positions, 4 parallel-region triggers),
+including 28 after tentative repair writes and 3 after team exit. Final Debug
+correctness/failure entries each passed 20 consecutive repetitions, 40 executions
+in 10.34 s: 1,880 selected exceptions, including 560 partial-repair and 80 region
+faults across those repetitions. No mismatch/hang/timeout. Separate verbose
+Release tests passed. Whitespace and unchanged-core diff checks passed.
+
+### Files, limitations and next gate
+
+Created:
+- include/dynagraph/adaptive/adaptive_sssp.hpp
+- src/adaptive/adaptive_sssp.cpp
+- tests/test_adaptive_sssp.cpp
+- tests/test_adaptive_failure.cpp
+
+Modified:
+- AGENTS.md
+- CMakeLists.txt
+- tests/CMakeLists.txt
+- include/dynagraph/dynamic/incremental_sssp.hpp
+- src/dynamic/incremental_sssp.cpp
+- README.md
+- docs/architecture.md
+- docs/experimental-protocol.md
+- docs/research-log.md
+
+No unresolved local build, correctness or sanitizer failures found. Recompute
+adds O(V+E) graph copy and O(V) result scan plus allocation/cleanup; these costs
+must be charged in future experiments. Peak memory includes a temporary graph,
+new result and backend scratch. Engine distance element views invalidate after
+recomputation. Fixed topology/finite weights/source and serialized mutation remain
+requirements. Fault injection covers ordinary C++ allocations, not every aligned
+allocator, runtime or hardware failure; its targeted publication size is tied to
+the inspected current implementation. Maximum graphs/counter saturation are not
+practically exercised. No heuristic/calibrated selection, tuning, benchmarking,
+batch/increase support, adaptive-policy claim or measured speedup was introduced.
+
+Phase 4B-1 is complete; stop for review. Phase 4B-2 can now add a separately
+approved deterministic heuristic over cheap pre-execution features, preserving
+shared fast-path fairness, failure semantics and coherent forced baselines.
+Threshold calibration and performance assessment require later measured evidence;
+no subsequent phase has begun and nothing was committed or pushed.
+
 ## 2026-10-26 — Phase 3B transactional incremental SSSP
 
 ### Authorization and implementation

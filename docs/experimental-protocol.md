@@ -4,7 +4,8 @@
 
 This is a prospective measurement protocol. Phases 1B, 2B, and 3B provide
 sequential/parallel recomputation and transactional single-decrease repair
-baselines but no benchmark results or speedup claims.
+baselines. Phase 4B-1 adds forced-strategy switching with a shared fast path;
+heuristic/calibrated selection is not implemented. No benchmark results or speedup claims.
 The OpenMP smoke test verifies functionality, not performance.
 
 ## Correctness before timing
@@ -147,6 +148,65 @@ measure initialization amortization, randomize paired method order, and distingu
 Codespaces exploratory checks from controlled multicore experiments. No batch or
 adaptive benchmark engine is introduced in this phase.
 
+
+## Phase 4B-1 switching validation and future fairness requirements
+
+Forced strategies share one authoritative state and must leave it ready for the
+next update. Every successful test update independently modifies original input
+records, builds a fresh reference graph, compares Dijkstra and small-graph
+Bellman–Ford, and verifies graph arrays, monotonicity, reachability, exact outcome,
+decision route/reason, active/inactive metric fields and metrics-on/off equivalence.
+Tests cover all ordered strategy pairs plus longer mixed sequences, default and
+override dispatch, all policies/no-effect modes, singleton/cap-zero loops,
+disconnected components, zero cycles, equal paths and uint64 distances. Separate
+async host calls exercise concurrent independent engine objects. Same-engine
+concurrent access is unsupported.
+
+Randomized switching uses mt19937 seed 0x4B12026, 72 graphs with 1–10 vertices,
+every source and 18 updates per nonempty graph/source. Families cycle through
+sparse/dense random graphs (probabilities 1/7 and 1/2), hub/fan-in and chains.
+Weights use full-range PRNG values or 0–31. Every fifth request keeps its weight;
+other values use uint64 modulo old_weight+1. Configured policies cycle, no-effect
+modes alternate, all six existing delta values are used, and selected trials
+request four workers (otherwise two). Most calls use a cycling forced strategy;
+every fourth uses the configured policy. These deterministic correctness traces
+are not claimed to represent production traffic or measured scaling.
+
+The new isolated failure executable has an OpenMP-safe injector: workers access
+only atomic mode/trigger flags; host allocation counters and fixed-size traces are
+accessed only outside parallel regions by the initiating host thread. It does not
+activate the existing sequential global injector on workers. Successful host
+allocation traces are replayed with a failure at every observed position for all
+three strategies with/without metrics. The first three full-strategy allocations
+are verified as CSR staging. Delta's new result vector and optional per-thread
+metric vector are faulted after team exit. Scalar result validation/aggregation
+and commit swap do not allocate; no fabricated allocation-failure case is claimed
+there. Repair failures observe tentative writes to authoritative distances and
+must roll them back. Separate one-shot atomic triggers fail first parallel-region
+allocation and a 16-byte Entry-buffer append after CAS, retaining the standalone
+delta test's inspected allocation-size contract. Every injected failure preserves
+all graph arrays, distances and sentinel metrics, retries on the same engine, then
+switches successfully to a different strategy. Initialization and allocation-free
+shared bypasses are also checked. This covers ordinary C++ allocations, not every
+aligned/runtime/OS failure; process-fatal OpenMP failures remain outside rollback.
+
+Useful commands (exact results in research-log.md):
+
+```sh
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --verbose
+ctest --test-dir build/release -R '^adaptive_(sssp|failure)$' --verbose
+ctest --test-dir build/debug -R '^adaptive_(sssp|failure)$' --repeat until-fail:20 --output-on-failure
+```
+
+For future evaluation, report forced baselines under the same shared_fast_path
+configuration. Equal requests never execute a backend; strict no-effect bypasses
+must not be counted as predicted strategy wins. execute_selected is a separately
+labeled ablation: full strategies recompute, repair retains its intrinsic check.
+Include graph copy, result scan, allocation, vector adoption, cleanup and future
+selection costs in public-call latency. Every strategy must remain ready for the
+next update. Kernel-only times are diagnostic, not service-level comparisons.
+The current engine has no timings, heuristic, calibrated model, trace orchestration
+or speedup claim. Hosted CI for new changes is distinct from local verification.
 
 ## Implemented Phase 2B validation and future measurements
 

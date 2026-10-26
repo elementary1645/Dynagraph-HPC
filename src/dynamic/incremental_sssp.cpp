@@ -82,15 +82,21 @@ IncrementalSSSPState IncrementalSSSPState::from_result_checked(CSRGraph graph, S
     return IncrementalSSSPState(std::move(graph), std::move(result));
 }
 
-template <bool Instrumented>
-DecreaseResult IncrementalSSSPState::decrease_impl(std::uint64_t u, std::uint64_t v,
-                                                   std::int64_t new_weight, RepairMetrics* metrics) {
+IncrementalSSSPState::PreparedDecrease IncrementalSSSPState::prepare_decrease(
+    std::uint64_t u, std::uint64_t v, std::int64_t new_weight) const {
     if (new_weight < 0 || static_cast<std::uint64_t>(new_weight) > CSRGraph::max_edge_weight) {
         throw std::invalid_argument("new weight outside uint32 range");
     }
     const auto replacement = static_cast<EdgeWeight>(new_weight);
     const auto previous = graph_.weight(u, v); // Validates both endpoints and existence.
     if (replacement > previous) { throw std::invalid_argument("weight increase is not supported"); }
+    return {static_cast<VertexId>(u), static_cast<VertexId>(v), previous, replacement,
+            checked_add(distances_[static_cast<std::size_t>(u)], replacement, cap_)};
+}
+
+template <bool Instrumented>
+DecreaseResult IncrementalSSSPState::repair_impl(const PreparedDecrease& request, RepairMetrics* metrics) {
+    const auto [u, v, previous, replacement, seed] = request;
 
     RepairMetrics pending;
     if (replacement == previous) {
@@ -118,7 +124,7 @@ DecreaseResult IncrementalSSSPState::decrease_impl(std::uint64_t u, std::uint64_
     };
 
     if constexpr (Instrumented) { increment(pending.relaxation_attempts, pending.counters_saturated); }
-    improve(static_cast<VertexId>(v), checked_add(distances_[static_cast<std::size_t>(u)], replacement, cap_));
+    improve(v, seed);
     while (!queue.empty()) {
         const auto [label, vertex] = queue.top();
         queue.pop();
@@ -149,7 +155,7 @@ DecreaseResult IncrementalSSSPState::decrease_impl(std::uint64_t u, std::uint64_
 
     // CSRGraph validates/locates before its scalar write, and cannot throw after
     // that write. Everything below is nonthrowing, including journal/queue cleanup.
-    graph_.replace_weight(u, v, new_weight);
+    graph_.replace_weight(u, v, replacement);
     journal.commit();
     if constexpr (Instrumented) { *metrics = pending; }
     return result;
@@ -157,10 +163,14 @@ DecreaseResult IncrementalSSSPState::decrease_impl(std::uint64_t u, std::uint64_
 
 DecreaseResult IncrementalSSSPState::decrease(std::uint64_t source_vertex, std::uint64_t destination_vertex,
                                              std::int64_t new_weight, RepairMetrics* metrics) {
+    return repair_prepared(prepare_decrease(source_vertex, destination_vertex, new_weight), metrics);
+}
+
+DecreaseResult IncrementalSSSPState::repair_prepared(const PreparedDecrease& request, RepairMetrics* metrics) {
     if (metrics != nullptr) {
-        return decrease_impl<true>(source_vertex, destination_vertex, new_weight, metrics);
+        return repair_impl<true>(request, metrics);
     }
-    return decrease_impl<false>(source_vertex, destination_vertex, new_weight, nullptr);
+    return repair_impl<false>(request, nullptr);
 }
 
 } // namespace dynagraph

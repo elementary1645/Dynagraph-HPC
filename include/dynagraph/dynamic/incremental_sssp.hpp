@@ -61,10 +61,21 @@ public:
                                           RepairMetrics* metrics = nullptr);
 
 private:
+    friend class AdaptiveSSSPEngine;
+    // Call-local only: never exposed publicly or retained across updates.
+    struct PreparedDecrease {
+        VertexId u;
+        VertexId v;
+        EdgeWeight previous;
+        EdgeWeight replacement;
+        Distance seed;
+    };
+    [[nodiscard]] PreparedDecrease prepare_decrease(std::uint64_t u, std::uint64_t v,
+                                                   std::int64_t new_weight) const;
+    DecreaseResult repair_prepared(const PreparedDecrease& request, RepairMetrics* metrics);
     IncrementalSSSPState(CSRGraph&& graph, SSSPResult&& result);
     template <bool Instrumented>
-    DecreaseResult decrease_impl(std::uint64_t u, std::uint64_t v,
-                                 std::int64_t new_weight, RepairMetrics* metrics);
+    DecreaseResult repair_impl(const PreparedDecrease& request, RepairMetrics* metrics);
 
     CSRGraph graph_;
     const VertexId source_;
