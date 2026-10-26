@@ -1,5 +1,181 @@
 # Research log
 
+## 2026-10-26 — Phase 5B-2 correctness-checked benchmark replay
+
+### Authorization and implementation
+
+The attached Phase 5B-2 request explicitly authorized this work beyond the old
+AGENTS.md gate. Initial branch was `feature/benchmark-runner`, HEAD `4e51c31`,
+with a clean working tree. Inspected engineering guidance, README, architecture,
+protocol, artifact contract, research records, public/internal engine and graph
+interfaces, generator/serializer/verifier and existing tests/build/CI. `rg` was
+unavailable; used find/sed and direct reads. No dependencies installed, sub-agents
+delegated, commits or pushes. No production shortest-path/storage/selector code
+or generator/golden artifacts changed.
+
+Implemented `dynagraph_bench verify`, a separate executable linked against the
+existing library. CLI parsing lives in apps; replay/parsing/oracles in a separate
+src/benchmark module with its declarations under include/dynagraph/benchmark.
+All four policies call the same owning engine initialize/decrease APIs. Existing
+shared/equal fast paths, execute_selected behavior and default heuristic thresholds
+remain intact. No override, alternate backend path, timing, tuning, calibrated
+selection, statistics or Phase 5B-3 work was introduced.
+
+Strict bounded canonical graph/trace parsing matches v1, with checked integer
+conversion, exact header/version/count/order/spacing/LF rules and Python's byte
+and count quotas. Every trace transition validates endpoints, edge existence,
+expected ledger weight and nonincrease. Reference records own independent weights;
+every update constructs a separate graph and recomputes fresh Dijkstra, comparing
+all graph arrays and all distances. Independent synchronous Bellman–Ford runs on
+V<=128/E<=4096. Returned old/new weights, outcomes, improved counts and relevant
+decision metadata are checked. Only full verification is implemented; bounded
+mode is explicitly deferred. Empty traces are verified at initialization.
+
+JSON schema 1 records configuration, input paths, unverified declared graph digest,
+explicit external integrity prerequisite, completed execution/verification/oracle
+counts, final flags and independently checked final weights/distances. Failures
+exit 2, include stable category/index where applicable, omit final arrays and never
+claim success. Stdout can be redirected; no output file is opened by the runner.
+See benchmark-replay.md for the complete contract and failure categories.
+
+SHA-256, manifest counts/source/seeds, final hash and provenance/regeneration
+remain the existing Python verifier's responsibility. C++ does not attest that
+this prerequisite ran and deliberately labels the digest as unverified metadata.
+Tests explicitly exercise this boundary, including a false but well-formed digest
+accepted as unverified by C++ and rejected by Python. Inputs must remain unchanged
+between Python verification and C++ execution.
+
+### Exact verification commands and outcomes
+
+Toolchain: Python 3.14.2, GCC 13.3.0, CMake 3.28.3, existing OpenMP setup.
+Executed from repository root:
+
+```sh
+python3 tests/test_benchmark_replay.py build/debug/dynagraph_bench
+python3 tests/test_workloads.py
+python3 tests/test_workload_loader.py build/debug/dynagraph_cli
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --preset debug --output-on-failure
+cmake --preset release
+cmake --build --preset release --parallel 2
+ctest --preset release --output-on-failure
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --build build/sanitize --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure
+ctest --test-dir build/debug -R '^benchmark_replay$' --repeat until-fail:2 --output-on-failure
+python3 benchmarks/python/generate.py generate --spec benchmarks/configs/chain-v1.json --output /tmp/dynagraph-5b2-4e51c31
+python3 benchmarks/python/generate.py verify --manifest /tmp/dynagraph-5b2-4e51c31/manifest.json
+git diff --check
+git diff --exit-code -- src/adaptive src/algorithms src/dynamic src/graph include/dynagraph/adaptive include/dynagraph/algorithms include/dynagraph/dynamic include/dynagraph/graph apps/dynagraph_cli.cpp benchmarks/python .github
+git status --short
+git diff --stat
+```
+
+Standalone Python workload tests: 22/22 passed, with unchanged goldens. Existing
+loader integration: 1/1 passed (30 C++ invocations). New runner integration:
+9/9 passed standalone and in CTest. Debug and Release: warning-free builds under
+all existing warning flags and Werror, 19/19 CTest entries passed in each.
+Two additional consecutive benchmark_replay CTest repetitions passed (9 Python
+tests each), and each success matrix case also checks byte-identical repeated
+JSON output.
+
+ASan/UBSan compiled warning-free. First full instrumented CTest inside the sandbox
+returned 8: 17/19 entries failed with LeakSanitizer process-inspection/ptrace
+restrictions (workload_artifacts and cli_invalid_argument passed). The identical
+command was rerun outside the sandbox with escalation approval: 19/19 passed with
+leak detection enabled, no sanitizer findings. No tests were disabled or weakened.
+Hosted CI was not run; its existing CTest invocations include the new entry.
+
+New integration matrix covers all five generated families, all three weight
+families, every policy and both no-effect modes, Python-verifier acceptance,
+independent final weights and Bellman–Ford distances, repetitions and input
+immutability. Additional fixtures cover repeated edges, equal requests, strict
+no-effect decreases, zero cycles/self-loops, unreachable components, a source
+with no outgoing edges, empty traces, edgeless graphs and V=128/129 oracle
+eligibility. Rejections cover malformed integers, limits (including byte quotas),
+wrong versions, malformed headers, truncation, counts/trailing data, noncanonical
+ordering/spacing, missing edges, invalid endpoints/source/configuration, old-weight
+mismatch, increases, duplicate/unknown/missing options and nonexistent files.
+A semantic failure at update 1 confirms exactly one executed/verified update and
+false final flags. Identity failures are checked at the external Python boundary.
+
+### Cross-language chain evidence
+
+Generated the checked-in chain specification with the commands above. Python
+verified V=8, E=7, source=0, updates=12 and final SHA-256
+`be98fdabd7e08cd2e88046fbc4269a9c95cd2481040279c981ffac19d57af927`.
+The following exact additional command replayed all policies, checked final graph
+bytes against Python replay/manifest and repeated each invocation:
+
+```sh
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 - <<'CHECK'
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+sys.path.insert(0, 'benchmarks/python')
+from workloads import Graph, graph_bytes, parse_graph, parse_trace, replay
+bundle = Path('/tmp/dynagraph-5b2-4e51c31')
+manifest = json.loads((bundle / 'manifest.json').read_bytes())
+expected = replay(parse_graph((bundle / 'graph.txt').read_bytes()), parse_trace((bundle / 'trace.txt').read_bytes()))
+for policy in ('dijkstra', 'delta-stepping', 'incremental', 'heuristic'):
+    command = ['build/debug/dynagraph_bench', 'verify', '--graph', str(bundle / 'graph.txt'), '--trace', str(bundle / 'trace.txt'), '--source', '0', '--policy', policy, '--delta', '16', '--threads', '2', '--no-effect', 'shared_fast_path', '--verification', 'full']
+    result = subprocess.run(command, capture_output=True, check=True)
+    record = json.loads(result.stdout)
+    assert record['success'] and record['updates_verified'] == 12
+    assert record['reference_recomputations'] == record['bellman_ford_checks'] == 13
+    final = Graph(expected.vertices, tuple((u,v,w) for (u,v,_),w in zip(expected.edges, record['final_weights'])))
+    digest = hashlib.sha256(graph_bytes(final)).hexdigest()
+    assert final == expected and digest == manifest['final_graph_sha256']
+    assert subprocess.run(command, capture_output=True, check=True).stdout == result.stdout
+    print(json.dumps({'policy': policy, 'updates_verified': record['updates_verified'], 'reference_recomputations':record['reference_recomputations'], 'bellman_ford_checks':record['bellman_ford_checks'], 'python_verified_final_sha256':digest}))
+CHECK
+```
+
+All four policies reported 12 verified updates, 13 fresh Dijkstra evaluations,
+13 Bellman–Ford evaluations; reconstructed final hashes equaled the manifest.
+The runner itself reported no hash verification. New automated tests additionally
+exercise the actual generation and verification CLIs on a layered workload.
+
+### Changed files, limitations and review gate
+
+Created:
+- apps/dynagraph_bench.cpp
+- include/dynagraph/benchmark/replay.hpp
+- src/benchmark/replay.cpp
+- tests/test_benchmark_replay.py
+- docs/benchmark-replay.md
+
+Modified:
+- AGENTS.md
+- CMakeLists.txt
+- tests/CMakeLists.txt
+- README.md
+- docs/architecture.md
+- docs/experimental-protocol.md
+- docs/workload-artifacts.md
+- docs/research-log.md
+
+Inspected the complete tracked diff and new source/test/header/docs. Whitespace
+checks passed. Production algorithm/storage/adaptive code and generator/CLI/CI
+unchanged checks passed. There are no unexpected production-code modifications.
+
+Known limits: full mode only; no cryptographic verification or manifest loading
+inside C++; runtime default workers can exceed the explicit request quota;
+maximum-quota successful executions and peak memory were not tested; full oracle
+work can be expensive. Only this Linux/GCC/Python environment was run. No new
+race-detector or hosted CI result is claimed. Output/OS/process-fatal failures may
+leave incomplete stdout; consumers must require exit 0 and complete success JSON.
+Inputs are assumed stable; hashes are not signatures. No observed unresolved
+functional/build/sanitizer failures remain after the approved outside-sandbox run.
+
+Phase 5B-2 is ready for review. Stop here. Proposed next phase, only after explicit
+approval: define Phase 5B-3 timing boundaries and experimental metadata/repetition
+contracts before implementing controlled performance execution. No such work has
+started and no performance conclusions are supplied.
+
 ## 2026-10-26 — Phase 5B-1 interrupted Codespace recovery
 
 ### Inspection and requirement audit

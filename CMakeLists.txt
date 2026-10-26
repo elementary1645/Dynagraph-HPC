@@ -39,6 +39,10 @@ add_executable(dynagraph_cli apps/dynagraph_cli.cpp)
 target_link_libraries(dynagraph_cli PRIVATE DynaGraph::dynagraph)
 dynagraph_set_warnings(dynagraph_cli)
 
+add_executable(dynagraph_bench apps/dynagraph_bench.cpp src/benchmark/replay.cpp)
+target_link_libraries(dynagraph_bench PRIVATE DynaGraph::dynagraph)
+dynagraph_set_warnings(dynagraph_bench)
+
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

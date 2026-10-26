@@ -2,11 +2,11 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5B-1 deterministic graph/trace generation,
-  canonical artifacts/manifests, integrity/replay checks, tests and documentation.
-  The user explicitly approved this phase after the read-only Phase 5A review.
-- Stop after Phase 5B-1 verification; obtain approval before Phase 5B-2.
-  Timing/benchmark execution, calibrated/learned selection, batch/increase/parallel repair,
+- Current authorized scope: Phase 5B-2 correctness-checked C++ workload replay,
+  independent ledger/oracles, strict parsing, tests and documentation, explicitly
+  authorized by the attached Phase 5B-2 request after Phase 5B-1 merged.
+- Stop after Phase 5B-2 verification; obtain approval before Phase 5B-3.
+  Timing/performance measurement, calibrated/learned selection, batch/increase/parallel repair,
   automatic delta tuning, topology changes and concurrent mutation remain deferred.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.

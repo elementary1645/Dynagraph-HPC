@@ -247,9 +247,20 @@ used; actual interpreter/platform verification is recorded in research-log.md.
 Byte reproducibility is a v1 format guarantee for conforming supported Python
 platforms; no unexecuted cross-platform test is claimed.
 
-Deferred: hub/dense/zero-cycle/road-like families, oracle-targeted broad/localized
-updates, timed engine replay, hardware metadata, repetitions/statistics/plots,
+Phase 5B-2 now consumes these exact graph/trace formats in the correctness-only
+`dynagraph_bench` executable. See [benchmark-replay.md](benchmark-replay.md) for
+the CLI, JSON schema, independent ledger/oracles, quotas and failure categories.
+The existing Python verifier remains a required separate integrity/provenance
+step; C++ checks canonical syntax and semantic transitions but does not check
+SHA-256, manifest consistency or recipe regeneration. A syntactically valid false
+digest is unverified metadata in C++ output, never a verified identity.
+Keep input bytes stable from Python verification through C++ replay. Cross-language
+tests compare all C++ final weights to Python replay and reconstruct the final
+graph hash independently in Python. Generator versions and goldens are unchanged.
+
+Deferred: hub/dense/zero-cycle/road-like generator families, oracle-targeted broad/localized
+updates, timed engine replay, hardware metadata, performance repetitions/statistics/plots,
 cost calibration and learned policies. Resource quotas bound work/data, not peak
 RSS or wall time. Artifact inputs are assumed stable during verification; no
 concurrent writer or cryptographic authentication protocol is implemented.
-Stop after Phase 5B-1 review; Phase 5B-2 needs separate approval.
+Stop after Phase 5B-2 review; Phase 5B-3 needs separate approval.

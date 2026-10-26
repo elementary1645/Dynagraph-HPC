@@ -57,3 +57,8 @@ add_test(NAME workload_loader COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_workload_loader.py $<TARGET_FILE:dynagraph_cli>)
 set_tests_properties(workload_artifacts workload_loader PROPERTIES TIMEOUT 60
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
+
+add_test(NAME benchmark_replay COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_replay.py $<TARGET_FILE:dynagraph_bench>)
+set_tests_properties(benchmark_replay PROPERTIES TIMEOUT 120 PROCESSORS 2
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")

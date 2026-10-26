@@ -6,15 +6,17 @@ Correctness, measured performance, and reproducibility guide development.
 
 ## Current status
 
-Phase 5B-1 adds deterministic graph/update-trace artifacts with SHA-256 integrity
-and independent Python replay. It adds no timing or benchmark execution.
+Phase 5B-2 adds `dynagraph_bench`, a correctness-only adaptive-engine replay
+runner over Phase 5B-1 deterministic graph/update-trace artifacts. It checks an
+independent weight ledger, fresh Dijkstra and small-graph Bellman–Ford.
+There are no timing or performance measurements.
 Phase 4B-2 provides deterministic heuristic selection over sequential Dijkstra, OpenMP
 delta-stepping, and transactional incremental repair. One owning incremental
 state remains current across strategy switches. Failed updates preserve graph,
 distances, and caller metrics. Shared no-effect fast paths apply to every policy.
 Tests compare all three with independent Bellman–Ford and exercise allocation
 failures. Calibrated/learned selection, batch/parallel repair,
-automatic delta tuning, and benchmarks remain planned work.
+automatic delta tuning, and timed benchmarks remain planned work.
 There are no performance results or speedup claims.
 
 The approved initial graph scope is directed, fixed topology with nonnegative
@@ -76,8 +78,8 @@ Hosted CI execution is separate from local verification and requires the workflo
 
 See [architecture](docs/architecture.md), [experimental protocol](docs/experimental-protocol.md),
 [research log](docs/research-log.md), and [engineering standards](AGENTS.md).
-Each implementation phase requires approval before work begins. Phase 5B-1 is
-implemented; Phase 5B-2 requires explicit approval.
+Each implementation phase requires approval before work begins. Stop at the
+Phase 5B-2 review gate; Phase 5B-3 requires explicit approval.
 
 ## Deterministic workload artifacts
 
@@ -96,6 +98,24 @@ metadata; regeneration is byte-identical for the same versioned configuration.
 Existing output is never overwritten. Invalid inputs, exhaustion or integrity
 failures exit nonzero. Generation never consults adaptive decisions or times SSSP.
 See [formats, configuration, quotas and reproducibility rules](docs/workload-artifacts.md).
+
+Replay a verified bundle through any of `dijkstra`, `delta-stepping`,
+`incremental`, or `heuristic` (the same engine update API for every policy):
+
+```sh
+python3 benchmarks/python/generate.py verify --manifest data/generated/chain-v1/manifest.json
+./build/debug/dynagraph_bench verify --graph data/generated/chain-v1/graph.txt --trace data/generated/chain-v1/trace.txt --source 0 --policy incremental --delta 16 --threads 2 --no-effect shared_fast_path --verification full
+./build/debug/dynagraph_bench --help
+```
+
+The Python verification command is a prerequisite: C++ does **not** check SHA-256,
+manifests or provenance. Keep inputs unchanged between verification and replay.
+Full mode checks initialization and every update, including final weights and
+all distances; bounded mode is deferred. JSON schema 1 is written to stdout
+(redirect to save it); failures exit 2 and emit `success:false`, a category and
+the failing update index where applicable. Success exits 0. No clocks, speedups,
+timings or performance claims are included. See the [runner contract](docs/benchmark-replay.md)
+for options, output fields, integrity boundary, quotas and failure semantics.
 
 ## Graph API and semantics
 
