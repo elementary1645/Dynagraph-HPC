@@ -2,6 +2,16 @@
 
 ## Status
 
+Phase 5C-1 adds approved test-only [correctness/failure-resilience validation](validation-correctness.md)
+on the merged 5B-4B baseline. Shared deterministic traces compare complete graph
+states and distance vectors against independent record-based Bellman–Ford after
+every operation. History-dependent allocation failures validate rollback, retry
+and different-update recovery. Default fast validation runs in the existing
+Debug/Release/ASan+UBSan matrix; stress and extended profiles are opt-in. Actual
+commands/results are recorded in the research log. No algorithms, timing,
+heuristic configuration in benchmarks or scientific evidence are changed.
+Stop after 5C-1 implementation/testing for independent review; 5C-2 is deferred.
+
 Phase 5B-4B now implements a separate [descriptive analysis contract](benchmark-analysis.md)
 over complete 5B-3B evidence, under the explicit recovery/continuation request.
 Earlier phase gates below describe historical scope. Stop after 5B-4B testing for

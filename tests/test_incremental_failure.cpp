@@ -1,5 +1,6 @@
 #include "dynagraph/dynamic/incremental_sssp.hpp"
 #include "test_support.hpp"
+#include "system_validation_support.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -178,6 +179,49 @@ void no_op_allocations() {
             weight_only.outcome == DecreaseOutcome::weight_only && state.graph().weight(1, 2) == 9,
             "Unaffected requests allocate no journal or heap storage");
 }
+
+void history_failures() {
+    namespace sv = dynagraph::test::system;
+    const auto c = sv::history_case();
+    const auto graph = CSRGraph::from_edges(c.vertices, c.edges);
+    const sv::Update target{0, 1, 80, 0}, next{0, 95, 400, 0};
+    const RepairMetrics marker{81, 82, 83, 84, 85, 86, 87, 88, 89, 90, true};
+    for (const bool measured : {false, true}) {
+        const auto prepare = [&](auto& state, auto& ledger) {
+            sv::history_prefix(state, ledger, [&](const auto& u) { return state.decrease(u.u, u.v, u.weight); });
+        };
+        std::size_t positions = 0;
+        {
+            auto state = IncrementalSSSPState::initialize(graph, 0);
+            auto ledger = c.edges; prepare(state, ledger);
+            const auto before = state.distances(); RepairMetrics metrics;
+            FaultScope fault(0, &state.distances(), &before);
+            (void)state.decrease(target.u, target.v, target.weight, measured ? &metrics : nullptr);
+            positions = injection.count;
+        }
+        require(positions > 8 && positions < injection.trace.size(), "history allocation coverage");
+        std::size_t partial = 0;
+        for (std::size_t position = 1; position <= positions; ++position) {
+            auto state = IncrementalSSSPState::initialize(graph, 0);
+            auto ledger = c.edges; prepare(state, ledger);
+            const auto before = state.distances(); auto metrics = marker; bool failed = false;
+            {
+                FaultScope fault(position, &state.distances(), &before);
+                try { (void)state.decrease(target.u, target.v, target.weight, measured ? &metrics : nullptr); }
+                catch (const std::bad_alloc&) { failed = true; }
+            }
+            require(failed && injection.count == position, "history fault position " + std::to_string(position));
+            partial += injection.trace[position - 1].changed != 0 ? 1U : 0U;
+            sv::checkpoint(state.graph(), state.distances(), c.vertices, ledger, 0);
+            require(state.distances() == before && metric_values(metrics) == metric_values(marker), "history exact rollback");
+            const auto call = [&](const auto& u) { return state.decrease(u.u, u.v, u.weight, measured ? &metrics : nullptr); };
+            sv::history_step(state, ledger, target, call); sv::history_step(state, ledger, next, call);
+            sv::graph_equal(graph, c.vertices, c.edges);
+        }
+        require(partial > 5, "history failures after tentative distance changes");
+        std::cout << "History repair metrics=" << measured << " faults=" << positions << " partial=" << partial << '\n';
+    }
+}
 } // namespace
 
 void* operator new(std::size_t bytes) { return allocate(bytes); }
@@ -192,5 +236,6 @@ int main() {
     failures += test::run("sequential initialization and checked-adoption allocation failure sweeps", initialization_failures);
     failures += test::run("sequential journal/heap failures, partial repair rollback and recovery", repair_failures);
     failures += test::run("unchanged and weight-only updates allocate no propagation storage", no_op_allocations);
+    failures += test::run("history-dependent repair rollback with independent Bellman-Ford", history_failures);
     return failures == 0 ? 0 : 1;
 }

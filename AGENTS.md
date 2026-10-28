@@ -2,13 +2,13 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5B-3B reproducible timing infrastructure,
-  independently checked final state, metadata, orchestration, tests and docs,
-  explicitly approved by the attached implementation request after 5B-3A design.
-- Stop after Phase 5B-3B verification and review; obtain approval before Phase 5B-4.
-  Statistical analysis, speedup calculations, performance claims, heuristic tuning,
-  calibrated/learned selection, batch/increase/parallel repair, automatic delta tuning,
-  topology changes and concurrent mutation remain deferred.
+- Current authorized scope: Phase 5C-1 correctness and failure-resilience validation,
+  explicitly approved after design review. Extend tests, registration and docs only;
+  preserve production algorithms, graph semantics, APIs, heuristic and timing.
+- Stop after Phase 5C-1 implementation/testing for independent review. Phase 5C-2,
+  inferential statistics, performance claims, heuristic tuning, calibrated/learned
+  selection, batch/increase/parallel repair, automatic delta tuning, topology changes
+  and concurrent mutation remain deferred. Phase 5B-4B descriptive analysis is merged.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.
 

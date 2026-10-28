@@ -1,5 +1,6 @@
 #include "dynagraph/adaptive/adaptive_sssp.hpp"
 #include "test_support.hpp"
+#include "system_validation_support.hpp"
 
 #include <omp.h>
 
@@ -267,6 +268,90 @@ void initialization_and_bypass() {
     }
     std::cout << "Engine initialization faults=" << positions << "; parallel-region faults=4\n";
 }
+
+void history_failures() {
+    namespace sv = dynagraph::test::system;
+    const auto c = sv::history_case();
+    const auto graph = CSRGraph::from_edges(c.vertices, c.edges);
+    const sv::Update target{0, 1, 80, 0}, next{0, 95, 400, 0};
+    for (const auto strategy : sv::strategies) {
+        auto automatic_config = config; automatic_config.kind = PolicyKind::heuristic;
+        automatic_config.heuristic = strategy == Strategy::dijkstra ? HeuristicConfig{graph.edge_count(), 0, graph.edge_count() + 1} :
+            (strategy == Strategy::delta_stepping ? HeuristicConfig{0, 0, 1} : HeuristicConfig{0, graph.degree(1), 1});
+        for (const bool automatic : {false, true}) {
+            for (const bool measured : {false, true}) {
+                const auto forced = automatic ? std::optional<Strategy>{} : std::optional<Strategy>{strategy};
+                const auto prepare = [&](auto& engine, auto& ledger) {
+                    std::size_t step = 0;
+                    sv::history_prefix(engine, ledger, [&](const auto& u) {
+                        return engine.decrease(u.u, u.v, u.weight, nullptr, sv::history_strategies[step++]).update;
+                    });
+                };
+                std::size_t positions = 0;
+                {
+                    auto engine = AdaptiveSSSPEngine::initialize(graph, 0, automatic_config);
+                    auto ledger = c.edges; prepare(engine, ledger);
+                    const auto before = engine.distances(); AdaptiveMetrics metrics;
+                    FaultScope fault(Mode::outside, 0, &engine.distances(), &before);
+                    (void)engine.decrease(target.u, target.v, target.weight, measured ? &metrics : nullptr, forced);
+                    positions = injection.count;
+                }
+                require(positions > 4 && positions < injection.trace.size(), "history host allocation coverage");
+                std::size_t partial = 0, after_team = 0;
+                for (std::size_t position = 1; position <= positions; ++position) {
+                    auto engine = AdaptiveSSSPEngine::initialize(graph, 0, automatic_config);
+                    auto ledger = c.edges; prepare(engine, ledger);
+                    const auto before = engine.distances(); auto metrics = sentinel(); bool failed = false;
+                    {
+                        FaultScope fault(Mode::outside, position, &engine.distances(), &before);
+                        try { (void)engine.decrease(target.u, target.v, target.weight, measured ? &metrics : nullptr, forced); }
+                        catch (const std::bad_alloc&) { failed = true; }
+                    }
+                    require(failed && injection.count == position, "history engine fault position " + std::to_string(position));
+                    partial += injection.trace[position - 1].changed != 0 ? 1U : 0U;
+                    after_team += injection.trace[position - 1].after_team ? 1U : 0U;
+                    sv::checkpoint(engine.graph(), engine.distances(), c.vertices, ledger, 0);
+                    require(engine.distances() == before && metric_values(metrics) == metric_values(sentinel()), "history state/metrics rollback");
+                    sv::history_step(engine, ledger, target, [&](const auto& u) {
+                        const auto result = engine.decrease(u.u, u.v, u.weight, measured ? &metrics : nullptr, forced);
+                        require(result.decision.selected == strategy, "history retry actual backend"); return result.update;
+                    });
+                    sv::history_step(engine, ledger, next, [&](const auto& u) {
+                        return engine.decrease(u.u, u.v, u.weight, measured ? &metrics : nullptr,
+                            strategy == Strategy::incremental ? Strategy::dijkstra : Strategy::incremental).update;
+                    });
+                    sv::graph_equal(graph, c.vertices, c.edges);
+                }
+                require(strategy == Strategy::incremental ? partial > 5 : partial == 0, "history tentative vs staged writes");
+                if (strategy == Strategy::delta_stepping) { require(after_team == (measured ? 2U : 1U), "history post-team result/metrics allocations"); }
+                std::cout << "History engine strategy=" << static_cast<int>(strategy) << " automatic=" << automatic << " metrics=" << measured
+                          << " faults=" << positions << " partial=" << partial << " after_team=" << after_team << '\n';
+            }
+        }
+    }
+    // Target both coordinated region failures after the same committed mixed history.
+    for (const auto mode : {Mode::inside_first, Mode::publication}) {
+        for (const bool measured : {false, true}) {
+            auto engine = AdaptiveSSSPEngine::initialize(graph, 0, config);
+            auto ledger = c.edges; std::size_t step = 0;
+            sv::history_prefix(engine, ledger, [&](const auto& u) {
+                return engine.decrease(u.u, u.v, u.weight, nullptr, sv::history_strategies[step++]).update;
+            });
+            auto metrics = sentinel(); bool failed = false;
+            {
+                FaultScope fault(mode, 0);
+                try { (void)engine.decrease(target.u, target.v, target.weight, measured ? &metrics : nullptr, Strategy::delta_stepping); }
+                catch (const std::bad_alloc&) { failed = true; }
+            }
+            require(failed && injection.worker_triggered.load(), "history region/publication stage must trigger");
+            sv::checkpoint(engine.graph(), engine.distances(), c.vertices, ledger, 0);
+            require(metric_values(metrics) == metric_values(sentinel()), "history worker fault metrics rollback");
+            sv::history_step(engine, ledger, target, [&](const auto& u) { return engine.decrease(u.u, u.v, u.weight, nullptr, Strategy::delta_stepping).update; });
+            sv::history_step(engine, ledger, next, [&](const auto& u) { return engine.decrease(u.u, u.v, u.weight, nullptr, Strategy::incremental).update; });
+        }
+    }
+    std::cout << "History engine parallel stages=4\n";
+}
 } // namespace
 
 void* operator new(std::size_t bytes) { return allocate(bytes); }
@@ -286,5 +371,6 @@ int main() {
     });
     failures += test::run("OpenMP-safe coordinator and post-CAS publication failures", parallel_failures);
     failures += test::run("engine initialization sweep and allocation-free shared bypasses", initialization_and_bypass);
+    failures += test::run("mixed history rollback, independent oracle, retry and different-backend recovery", history_failures);
     return failures == 0 ? 0 : 1;
 }
