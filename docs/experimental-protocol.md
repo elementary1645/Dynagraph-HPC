@@ -431,10 +431,25 @@ multicore hardware before claiming scaling. Preserve actual/requested team sizes
 delta, source, seed, revision/dirty state, build flags, OpenMP runtime, affinity,
 CPU/memory topology, input checksums, update traces, and raw observations.
 
-ASan/UBSan CI now runs the entire suite. LeakSanitizer needs process-inspection
-support and can fail under the local sandbox. GCC ThreadSanitizer was investigated
-but failed before test execution with an unexpected-memory-mapping error, including
-outside the sandbox. No clean race-detector result is claimed. ASan/UBSan and
+Phase 5C-2B adds test-only concurrency validation; see
+[validation-concurrency.md](validation-concurrency.md). Its direct fast/stress/
+extended counts are exactly 288/5760/57600, using eight workload families and
+explicitly defined extended variants. Default CTest includes fast only. Runtime
+subprocesses distinguish worker requests from measured actual teams; unmeasured
+teams and unsupported adaptive per-thread work remain unavailable. Independent
+clients share only immutable graph data or own separate engines. Every access to
+one shared adaptive engine, including inspection, is protected by one mutex.
+No concurrent graph mutation, scheduling change or production fault hook is added.
+
+ASan/UBSan CI runs the entire default suite. LeakSanitizer needs process-inspection
+support and can fail under the local sandbox. Phase 5C-2A freshly rebuilt GCC
+ThreadSanitizer reproduced a work_ warning and also flagged correctly synchronized
+OpenMP barrier controls. Intentional-race/atomic controls, an additional address
+layout and complete warning stacks supported LIKELY TOOL/RUNTIME LIMITATION for
+that specific warning. Many startup mapping failures persisted outside the sandbox.
+Later warnings are retained; no clean race-detector result is claimed, and its
+acceptance gate remains unmet. Clang/libomp/Archer was unavailable; installed
+Helgrind also failed negative-control calibration. ASan/UBSan and
 stress tests do not prove race freedom; barrier/ownership review remains required.
 Compatible OpenMP-aware race tooling should be evaluated on suitable hardware.
 
@@ -445,3 +460,14 @@ filtering and repeated scans. Record successful CAS and retries and per-thread
 work imbalance. Match instrumentation modes; the parallel CLI currently enables
 metrics to report actual team size, so use the library without metrics for
 uninstrumented comparisons. Do not equate summed thread waiting with wall time.
+
+Phase 5C-2C adds isolated repeated coordinator/publication/merge failure profiles
+and bounded subprocess recovery checks; see [validation-parallel-failure.md](validation-parallel-failure.md).
+These checks do not satisfy the outstanding race-detector acceptance gate.
+
+The 5C-2C verification gate repair restored four analysis registrations lost to a
+stale interpreter cache. With the exact pinned project-local .venv-analysis,
+Debug, Release and ASan+UBSan each passed the complete 31-test default suite in
+sequential runs. Historical 27-test results and the original sanitizer timeout
+remain retained; see validation-parallel-failure.md and research-log.md for exact
+commands, outcomes and limitations. Race-detector acceptance remains unmet.

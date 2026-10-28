@@ -2,11 +2,15 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5C-1 correctness and failure-resilience validation,
-  explicitly approved after design review. Extend tests, registration and docs only;
+- Current authorized scope: Phase 5C-2B parallel and concurrency stress validation,
+  explicitly approved after Phase 5C-2A investigation. Extend tests, registration and docs only;
   preserve production algorithms, graph semantics, APIs, heuristic and timing.
-- Stop after Phase 5C-1 implementation/testing for independent review. Phase 5C-2,
-  inferential statistics, performance claims, heuristic tuning, calibrated/learned
+- Stop after Phase 5C-2B implementation/testing for independent source review.
+  The race-detector acceptance gate remains unmet: the specific work_ TSan report
+  was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
+  Preserve tests/tsan_controls and ignored results/validation/phase5c2a* evidence;
+  intentional-race controls must stay outside ordinary CTest and CI.
+  Inferential statistics, performance claims, heuristic tuning, calibrated/learned
   selection, batch/increase/parallel repair, automatic delta tuning, topology changes
   and concurrent mutation remain deferred. Phase 5B-4B descriptive analysis is merged.
 - Do not install dependencies, commit, or push without explicit user permission.
@@ -23,6 +27,9 @@
 - Sequential Dijkstra is the reference. Validate it before implementing parallel
   delta-stepping. Validate individual algorithms before adaptive selection.
 - Graph updates occur between completed queries; concurrent mutation is deferred.
+- Independent callers may query one immutable graph or own separate engines.
+  All access to one shared adaptive engine, including inspection, requires external
+  serialization. Record observed OpenMP teams separately from worker requests.
 
 ## Engineering standards
 
