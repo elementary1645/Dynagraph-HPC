@@ -13,11 +13,12 @@
 namespace {
 using namespace dynagraph;
 using test::require;
-enum class Mode { disabled, outside, inside_first, publication };
+enum class Mode { disabled, outside, inside_first, publication, merge };
 struct Allocation { std::size_t bytes = 0; std::size_t changed = 0; bool after_team = false; };
 struct Injection {
     std::atomic<Mode> mode{Mode::disabled};
     std::atomic<bool> saw_parallel{false};
+    std::atomic<bool> publication_seen{false};
     std::atomic<bool> worker_triggered{false};
     std::atomic<int> worker_thread{-1};
     // Only the initiating host thread accesses these fields, never workers.
@@ -39,6 +40,7 @@ public:
         injection.before = before == nullptr ? nullptr : before->data();
         injection.vertices = current == nullptr ? 0 : current->size();
         injection.saw_parallel.store(false);
+        injection.publication_seen.store(false);
         injection.worker_triggered.store(false);
         injection.worker_thread.store(-1);
         injection.mode.store(mode, std::memory_order_release);
@@ -57,7 +59,9 @@ void* allocate(std::size_t bytes) {
             // is an Entry buffer append after CAS. Work chunks and membership
             // allocations have different sizes (same targeted contract as the
             // standalone delta regression test). Only one thread injects.
-            if ((mode == Mode::inside_first || (mode == Mode::publication && bytes == 16)) &&
+            const bool merge_hit = mode == Mode::merge && injection.publication_seen.load();
+            if (mode == Mode::merge && bytes == 16) { injection.publication_seen.store(true); }
+            if ((merge_hit || mode == Mode::inside_first || (mode == Mode::publication && bytes == 16)) &&
                 !injection.worker_triggered.exchange(true)) {
                 injection.worker_thread.store(omp_get_thread_num());
                 throw std::bad_alloc();

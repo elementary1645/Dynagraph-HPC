@@ -107,6 +107,29 @@ if(DYNAGRAPH_ANALYSIS_SUPPORTED EQUAL 0)
     endif()
 endif()
 
+# Phase 5C-2B: test-only validation. Deliberate-race controls are never registered.
+add_executable(test_parallel_concurrency test_parallel_concurrency.cpp)
+target_link_libraries(test_parallel_concurrency PRIVATE DynaGraph::dynagraph Threads::Threads)
+dynagraph_set_warnings(test_parallel_concurrency)
+add_test(NAME parallel_concurrency COMMAND test_parallel_concurrency)
+add_test(NAME concurrency_runtime COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_concurrency_runtime.py $<TARGET_FILE:test_parallel_concurrency>)
+set_tests_properties(parallel_concurrency concurrency_runtime PROPERTIES
+    TIMEOUT 120 PROCESSORS 2 LABELS "concurrency-fast"
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE;OMP_MAX_ACTIVE_LEVELS=1")
+option(DYNAGRAPH_ENABLE_CONCURRENCY_STRESS "Register bounded parallel concurrency stress" OFF)
+option(DYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED "Register manual extended concurrency validation" OFF)
+if(DYNAGRAPH_ENABLE_CONCURRENCY_STRESS)
+    add_test(NAME concurrency_stress COMMAND test_parallel_concurrency --suite direct --profile stress)
+    set_tests_properties(concurrency_stress PROPERTIES TIMEOUT 180 PROCESSORS 2 LABELS "concurrency-stress"
+        ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE;OMP_MAX_ACTIVE_LEVELS=1")
+endif()
+if(DYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED)
+    add_test(NAME concurrency_extended COMMAND test_parallel_concurrency --suite direct --profile extended)
+    set_tests_properties(concurrency_extended PROPERTIES TIMEOUT 900 PROCESSORS 2 LABELS "concurrency-extended"
+        ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE;OMP_MAX_ACTIVE_LEVELS=1")
+endif()
+
 # Phase 5C-1: no production instrumentation or additional dependencies.
 foreach(validation_target IN ITEMS system_correctness system_adversarial)
     add_executable(test_${validation_target} test_${validation_target}.cpp)
@@ -132,3 +155,20 @@ if(DYNAGRAPH_ENABLE_VALIDATION_EXTENDED)
     set_tests_properties(system_extended PROPERTIES TIMEOUT 900 PROCESSORS 2 LABELS "validation-extended"
         ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
 endif()
+
+# Phase 5C-2C: isolated repeated failure injection, never linked into production.
+add_executable(test_parallel_failure test_parallel_failure.cpp)
+target_link_libraries(test_parallel_failure PRIVATE DynaGraph::dynagraph)
+dynagraph_set_warnings(test_parallel_failure)
+foreach(failure_profile IN ITEMS fast stress extended)
+    if(failure_profile STREQUAL "fast" OR
+       (failure_profile STREQUAL "stress" AND DYNAGRAPH_ENABLE_CONCURRENCY_STRESS) OR
+       (failure_profile STREQUAL "extended" AND DYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED))
+        add_test(NAME parallel_failure_${failure_profile} COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test_parallel_failure_runtime.py
+            $<TARGET_FILE:test_parallel_failure> ${failure_profile})
+        set_tests_properties(parallel_failure_${failure_profile} PROPERTIES
+            TIMEOUT 330 PROCESSORS 2 LABELS "failure-${failure_profile}"
+            ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
+    endif()
+endforeach()

@@ -1,5 +1,181 @@
 # Research log
 
+## 2026-10-28 — Phase 5C-2B bounded parallel and concurrency validation
+
+Explicit implementation authorization followed the Phase 5C-2A investigation.
+Initial branch feature/validation-concurrency, HEAD
+d840469bafda76ebb601dad9faf809259658584a; the only untracked files were the eight
+tests/tsan_controls fixtures/driver/docs. Verified all 938 hashes in the preserved
+5C-2A source/evidence manifest before editing. No dependency installation,
+delegation, commit, push, PR or production change occurred. Existing benchmark
+integration tests ran; no controlled performance experiment was conducted.
+
+Added concurrency_validation_support.hpp, test_parallel_concurrency.cpp,
+test_concurrency_runtime.py, adversarial_test_support.hpp under tests/, and
+docs/validation-concurrency.md. Changed tests/CMakeLists.txt, the adversarial
+executable's fixture wrapper, AGENTS.md, experimental-protocol.md and this log.
+The extracted fixture body (apart from inline/name) and complete old main are
+byte-for-byte equal to HEAD. Phase 5C-1 case/update/checkpoint semantics and all
+existing allocation injectors remain unchanged. CI needs no workflow change.
+
+Version concurrency-validation-v1 reuses the independent record-based synchronous
+Bellman–Ford, canonical graph checks, Phase 5C-1 seeded generator and FNV helpers.
+The eight static families are dense zero, hub degrees 255/256/257, competing fan-in,
+repeated light closure/heavy work, stale hub/chain and disconnected max-weight paths.
+Extended cases 8..15 explicitly reverse vertex IDs/source, preserve zero/max
+weights and scale other positive weights to 2w+1. Inputs are deterministic;
+execution schedules and CAS counts are not. Static fixtures ignore the root seed;
+seeded dynamic/client cases use it. Full expected vectors are precomputed outside
+static repetitions and for all seeded trace checkpoints.
+
+Exact direct counts: fast 8×3×3×2×2=288, stress 8×6×3×2×20=5760,
+extended 16×6×3×2×100=57600. Fast deltas are 1,16,UINT64_MAX; the six-value profiles
+reuse 1,2,3,16,UINT32_MAX,UINT64_MAX. Requests are 1/2/4 with both metrics modes in
+the matrix. Stress/extended registration defaults OFF with independent options.
+Two default CTest entries have 120-second bounds; optional tiers use 180/900 s.
+
+Default C++ extras: six reduced runtime probes; eight immutable shared-graph
+queries across two independent host callers; two independent engines with 32
+updates plus two initial states; one externally serialized engine with eight
+strict decreases plus initialization. The client total is 51 state comparisons.
+One mutex covers every shared-engine access, including all inspection, and its
+authoritative ledger. Per-client results, snapshots, metrics and exception slots
+are independent. A start gate permits concurrency; clients join before diagnostics.
+
+Four existing seeded cases 0/7/14/31, source 0 and requests 2/4 produce eight
+16-update traces: 128 updates and 544 complete state comparisons through forced
+delta, heuristic, rotating public overrides and standalone delta. Every accepted
+update checks complete expected distances and authoritative weights. Default C++
+distance comparisons total 889, separately from the 288 direct matrix queries.
+
+Measured direct calls record actual teams and per-thread work, successes and CAS
+retries. Adaptive calls expose only available aggregate telemetry/actual teams for
+executed measured delta. Other fields remain null. Work participation means
+positive observed edge work, not simultaneous execution. Rejected proposals before
+CAS are not mislabeled as failed CAS. Neither CAS retries nor full team work
+participation is required positive. Source/worker/metrics/repetition selectors,
+versioned fingerprints and shell-quoted context/environment reproduce inputs;
+interleavings remain unprescribed. Failure handlers also cover setup before a
+context exists without inventing vectors or teams.
+
+### Verification record and initial failures
+
+Raw command arrays, exit codes, durations, stdout/stderr SHA-256 and full logs are
+preserved under ignored results/validation/phase5c2b/. The initial state receipt
+and the Phase 5C-2A evidence remain separate. Durations are validation wall times,
+not algorithm performance evidence; some builds/initial suites overlapped.
+
+Initial focused CTest passed 3/3 (0.721121 s); Debug full passed 30/30
+(82.553604 s). The first Release full run passed 29/30 (79.703647 s), failing the
+existing deterministic analysis figure/provenance test while AGENTS.md became
+modified during its two renders. The analyzer records literal Git status in the
+manifest; the changed working-tree inventory is consistent with that mismatch.
+No analysis code was changed. Final verification freezes source/inventory during
+rendering and repeats the full suite, retaining the initial failure.
+
+Initial sandbox ASan/UBSan CTest passed only 5/30 (83.220051 s), exit 8: LSan
+reported fatal process-inspection/ptrace errors, not a passing sanitizer check.
+The unchanged suite outside the sandbox then passed 30/30 (89.428929 s), with
+detect_leaks=1 and halt-on-error still enabled; no sanitizer finding. A final
+rebuild also covers the added setup diagnostic and measured closure/stale witnesses.
+No test timeout is retried or reported as passing.
+
+The standalone optional Python run passed all 9 tests (3.356714 s command wall),
+including actual four-worker teams and active nested inner teams of two within
+an outer team of two. Default methods explicitly skip these two optional checks.
+Serial-limit probes observe one worker; dynamic TRUE is accepted at its measured
+team size. No aggregate host-caller team cap is inferred from THREAD_LIMIT.
+
+### Final verification and observed evidence
+
+The final source adds setup-failure diagnostics, explicit measured light-closure/
+stale-record witnesses, complete committed shared-client transaction prefixes,
+and preserved Python child observations/timeout context. Rebuilt all three
+configurations afterward. Six test/build source SHA-256 hashes were frozen before
+final verification and checked unchanged afterward. Only documentation/results
+were completed after the final suites. All builds were warning-clean with
+-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror; Release retains NDEBUG and
+all require-based checks remain active. Environment: GCC 13.3.0, CMake 3.28.3,
+Python 3.14.2, nproc=2, libgomp.so.1. No new dependency was installed.
+
+| Final command (from repository root) | Exit | Result | Command wall seconds |
+|---|---:|---|---:|
+| `cmake --build --preset debug --parallel 2` | 0 | full build | 8.629723 |
+| `cmake --build --preset release --parallel 2` | 0 | full build | 11.440220 |
+| `cmake --build build/sanitize --parallel 2` | 0 | full build | 12.217579 |
+| `ctest --preset debug` | 0 | 30/30 | 103.894120 |
+| `ctest --preset release` | 0 | 30/30 | 49.497688 |
+| `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure` (outside sandbox) | 0 | 30/30, no findings | 145.191154 |
+| `ctest --test-dir build/debug -L concurrency-fast --output-on-failure` | 0 | 2/2 | 0.523265 |
+| `PYTHONDONTWRITEBYTECODE=1 python3 tests/test_concurrency_runtime.py build/debug/tests/test_parallel_concurrency --optional` | 0 | 9/9, no skips | 1.629962 |
+| `ctest --test-dir build/release -L '^concurrency-(stress\|extended)$' --output-on-failure` | 0 | 2/2; 5760 + 57600 direct queries | 41.046475 |
+
+The table's times are recorder wall times; CTest reported final totals 103.82,
+49.46 and 145.15 seconds for Debug/Release/sanitizer. The optional tier entries
+reported stress 3.71 s and extended 37.07 s. Final focused entries were 0.14 s C++
+and 0.33 s Python. Default Python runs nine methods with seven passes and two
+explicit optional skips; standalone --optional passed all nine. Overlapping
+configurations/stress increased some times; the full sanitizer suite exceeded
+the two-minute target, while all finite entry bounds passed. No coverage was cut
+and these numbers are not algorithm performance measurements.
+
+All full suites include existing Phase 5C-1 correctness/adversarial/reproduction
+and all three isolated allocation-failure executables. Final Debug output confirms
+48 cases, 96 traces, 1536 updates, 1632 checkpoints and 13056 comparisons; the
+adversarial executable confirms 28 traces, 230 updates and 258 checkpoints.
+Existing reproduction passed both Python methods. Default registration remains
+30 entries locally (including the already available optional analysis renderer);
+all four system/concurrency stress/extended entries and all race controls are
+absent with options OFF. CI configuration is unchanged; hosted CI was not run.
+
+The final optional logs were inspected for distinct matrix keys: exactly 5760
+(720 per base case) and 57600 (3600 per extended case), with no duplicates or
+omissions. Fast logged exactly 288 direct queries and its original fingerprints;
+clients report 8 immutable queries, 32 separate-engine updates and 8 serialized
+updates, 51 comparisons; seeded traces report 128 updates and 544 comparisons.
+Every comparison passed the independent oracle and complete graph checks.
+
+Observed final runtime probes: flat FALSE/limit2 returned actual teams 2, flat
+FALSE/limit1 returned 1, dynamic TRUE/limit2 returned 1, and request 0 was exercised.
+Nested inactive outer team 2 returned inner teams 1; active nesting with limit4/
+max-levels2 observed outer 2 and inner 2. Explicit request4/limit4 achieved actual
+4 in both reduced probes. The limited main matrix observed 1 or 2; unmeasured
+queries stay null. Recorded per-thread work can be uneven; neither participation
+by every thread nor a positive retry counter is assumed. Shared-engine failure
+prefixes now retain both clients' committed updates under the mutex.
+
+Commands enabling/disabling optional registration were actually executed:
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 2 --target test_parallel_concurrency test_system_adversarial
+cmake --preset release
+cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+cmake --preset release -DDYNAGRAPH_ENABLE_CONCURRENCY_STRESS=ON -DDYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED=ON
+cmake --preset release -DDYNAGRAPH_ENABLE_CONCURRENCY_STRESS=OFF -DDYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED=OFF
+```
+
+The first two pre-recorder commands exited 0; their wall times were not retained.
+The complete command ledger, including intermediate successful verification,
+initial failures, exact parent environments and durations, is in ignored
+results/validation/phase5c2b/commands.md with raw JSON/stdout/stderr receipts.
+One extended-tier recorder invocation placed its timeout option after a remainder
+argument and failed before launching CTest; its not-launched receipt is retained.
+Corrected invocations executed the complete tier, including the final 57600 queries.
+No timeout occurred or was retried. Final full suites were repeated because
+test diagnostics/witnesses changed, not to discard failed trials.
+
+Production preservation diff and git diff --check pass. The initial 938 Phase
+5C-2A source/evidence hashes still match. Stress/extended options are restored OFF.
+No known correctness failure remains; the earlier environment/provenance failures
+are retained above. Ready for independent source audit, with the unresolved
+detector gate explicitly carried forward. No packages, commits or pushes.
+
+The race-detector gate remains unmet: 5C-2A's specific work_ warning is LIKELY
+TOOL/RUNTIME LIMITATION, not proof of race freedom. No fresh clean TSan claim,
+ASan/UBSan race-detection claim, scalability or publication claim is made.
+Stop after verification for independent source audit.
+
 ## 2026-10-28 — Phase 5C-1 correctness and failure-resilience validation
 
 ### Authorization, state and architecture
@@ -1828,3 +2004,171 @@ Phase 0 implementation is complete. Await approval before Phase 1. Recommended
 next scope: settle graph type/range and input semantics, implement simple CSR
 with fixed topology and mutable nonnegative weights, and validate storage
 invariants and deterministic fixtures. Dijkstra remains a subsequent gated step.
+
+## 2026-10-28 — Phase 5C-2C implementation and verification
+
+User authorization supersedes the older 5C-2B scope gate in AGENTS.md: 5C-2B
+was independently audited/approved; only missing 5C-2C test/docs work is authorized.
+Initial working tree already contained modified AGENTS.md, experimental-protocol,
+research-log, tests/CMakeLists.txt and test_system_adversarial.cpp, plus untracked
+5C-2B concurrency support/tests/docs and tsan_controls. These were preserved.
+Inspection found existing one-shot preparation/publication failure checks, host
+allocation sweeps and mixed-history rollback/recovery; no 4/20/100 epoch failure
+profiles or deterministic merge-stage target existed. No 5C-2B implementation
+was redone. See validation-parallel-failure.md for coverage and limitations.
+
+This phase changes tests/test_adaptive_failure.cpp only to extend its isolated
+injector with merge observation; adds tests/test_parallel_failure.cpp and
+tests/test_parallel_failure_runtime.py; appends test registration to
+tests/CMakeLists.txt and documentation to experimental-protocol.md, this log and
+new validation-parallel-failure.md. All existing test bodies remain. Production,
+public headers, benchmarks, CI and Phase 5C-2A evidence are untouched. No installs,
+commits, pushes or PRs. Fixed corpus has no random seed or generated dataset.
+Raw evidence: ignored results/validation/phase5c2c, metadata.json records GCC
+13.3.0, CMake 3.28.3, Linux x86_64 and revision d840469bafda76ebb601dad9faf809259658584a.
+
+Commands and final outcomes (all builds warnings-as-errors):
+
+- `cmake --preset debug`; `cmake --build --preset debug --parallel 2`;
+  `ctest --preset debug`: final **27/27 passed**, exit 0, 146.44 s
+  (debug-final-ctest.log). An earlier complete Debug run also passed 27/27.
+- `cmake --preset release`; `cmake --build --preset release --parallel 2`;
+  `ctest --preset release`: final **27/27 passed**, exit 0, 151.26 s
+  (release-final-ctest.log). An earlier run failed only the new receipt check
+  while source/receipt and built executable differed during addition of standalone
+  coverage; final rebuilt results supersede it, raw log retained.
+- Sanitizer configure: `cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++
+  -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON
+  '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
+  -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined`; build with
+  `cmake --build build/sanitize --parallel 2` (exit 0).
+- `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+  ctest --test-dir build/sanitize --output-on-failure` inside sandbox finished **2/27 passed, 25 failed**, exit 8,
+  because LeakSanitizer reports fatal ptrace incompatibility, including trivial
+  project_info/openmp tests; this is not a clean sanitizer result. Raw
+  sanitize-ctest.log retained. The same full command outside sandbox finished
+  **26/27 passed**, exit 8, 257.60 s: existing dijkstra exceeded its unchanged
+  10-second timeout (10.06 s). All other tests, including old failure/concurrency
+  tests and new parallel_failure_fast, passed. No sanitizer finding was reported
+  in that outside-sandbox run. Concurrent verification runs imposed variable load;
+  no definitive cause of the timeout is established.
+- Outside sandbox with identical sanitizer options,
+  `ctest --test-dir build/sanitize -R '^dijkstra$' --output-on-failure`:
+  **1/1 passed**, exit 0, 2.80 s. This isolated pass does not rewrite the full-run
+  timeout as a fully passing suite.
+- For each build directory debug/release/sanitize,
+  `python3 tests/test_parallel_failure_runtime.py build/<dir>/tests/test_parallel_failure
+  <profile>` for fast/stress/extended: **all nine invocations exit 0**. Sanitizer
+  commands use the same ASAN/UBSAN options outside sandbox. Each receipt records
+  4/20/100 epochs per mandatory stage and metrics mode, with 72/360/1800 faulted
+  calls respectively. Healthy probe observed 2 workers, requested 2. Failed-call
+  actual teams remain unavailable; no inference from the probe is asserted.
+- Registration verification: `cmake --preset release
+  -DDYNAGRAPH_ENABLE_CONCURRENCY_STRESS=ON
+  -DDYNAGRAPH_ENABLE_CONCURRENCY_EXTENDED=ON`; `ctest --test-dir build/release
+  -R '^parallel_failure_' --output-on-failure`: **3/3 passed**, exit 0, 18.55 s.
+  Both options restored OFF using the same configure command with OFF values.
+- `git diff --check`: exit 0. No dependencies installed. Existing tests/tsan_controls
+  and ignored phase5c2a evidence preserved; no intentional-race control registered.
+
+Uncovered: simultaneous worker failures, every later preparation/publication/merge
+allocation, arbitrary ABI/layouts and all possible schedules/runtime allocation
+paths. Targeting is fixture-specific and source-derived; mandatory stage misses
+fail rather than silently skip. Existing history/sweep checks remain complementary.
+Collective barrier and exception exits returned within bounds for all new profiles;
+this does not prove general deadlock freedom or race freedom. The race-detector
+acceptance gate remains unmet. ASan+UBSan full-run timeout remains a verification
+limitation despite the isolated pass. Next action is independent review of 5C-2C
+implementation/evidence and acceptance of these limitations; stop here pending
+user direction, with no later production or performance phase authorized.
+
+## 2026-10-28 — Phase 5C-2C verification gate repair
+
+User explicitly authorized a project-local .venv-analysis and installation of
+exact requirements-analysis.txt pins. No Phase 5C-2C implementation was redone.
+The previous cached analysis interpreter /tmp/dynagraph-analysis-venv/bin/python
+no longer existed. Its failed configure probe omitted analysis_import,
+analysis_stats, analysis_integration and analysis_figures: 30 previous default
+entries minus four plus the new parallel_failure_fast yielded 27. Those historical
+runs were incomplete coverage. Their raw logs remain in phase5c2c unchanged.
+
+Environment restoration commands:
+
+```sh
+/usr/bin/python3 -m venv .venv-analysis
+/home/codespace/.python/current/bin/python3 -m venv .venv-analysis
+.venv-analysis/bin/python -m pip install -r benchmarks/requirements-analysis.txt
+.venv-analysis/bin/python -m pip check
+```
+
+The first command failed because system Python 3.12 lacked ensurepip. A subsequent
+--copies attempt with Python 3.14 failed against the partial environment's
+system-interpreter symlink (read-only target). Only new partial environment
+symlinks were removed, then Python 3.14.2 created the environment successfully.
+No existing build directory or retained evidence was deleted. The initial pip
+attempt failed DNS inside the sandbox; its outside-sandbox retry succeeded,
+exit 0. No pinned package incompatibility or version substitution. No system
+package install/upgrade; pip was not upgraded. Added /.venv-analysis/ to .gitignore.
+
+Verified interpreter: /workspaces/Dynagraph-HPC/.venv-analysis/bin/python,
+Python 3.14.2, GCC 13.3.0. Exact metadata checks through pinned_versions() matched
+matplotlib 3.10.8, numpy 2.4.1, contourpy 1.3.3, cycler 0.12.1,
+fonttools 4.61.1, kiwisolver 1.4.9, packaging 25.0, pillow 12.1.0,
+pyparsing 3.3.2, python-dateutil 2.9.0.post0, six 1.17.0.
+Matplotlib Agg initialized and rendered a 17291-byte PNG in memory; pip check
+reported no broken requirements. Exact environment JSON and install output:
+results/validation/phase5c2c-repair/ (ignored, separate from original evidence).
+
+Reconfigured Debug/Release using their presets with explicit
+-DDYNAGRAPH_ANALYSIS_PYTHON=/workspaces/Dynagraph-HPC/.venv-analysis/bin/python.
+Sanitizer used the existing explicit CMake configuration with GCC Debug,
+-fsanitize=address,undefined -fno-omit-frame-pointer and matching linker flags.
+All four stress/extended options were OFF for defaults. Each generated list
+was compared against retained phase5c2b/<build>-final-CTestTestfile.cmake plus
+parallel_failure_fast: exactly 31 names, missing=[], extra=[], all three builds.
+No tracked CMake infrastructure modification was needed.
+
+Exact configure/build/test argv, environments, exit codes and wall times are in
+phase5c2c-repair/commands.json; verify.py preserves the sequential orchestration.
+Each build used `cmake --build build/<build> --parallel 2`, then
+`ctest --test-dir build/<build> --output-on-failure --parallel 1`.
+No verification jobs overlapped. Debug, then Release, then ASan+UBSan ran outside
+the sandbox. Common environment PYTHONDONTWRITEBYTECODE=1, PYTHONHASHSEED=0;
+sanitizer additionally ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1.
+
+| Configuration | Registered | Passed | Failed | Exit | CTest wall time |
+|---|---:|---:|---:|---:|---:|
+| Debug | 31 | 31 | 0 | 0 | 47.56 s |
+| Release | 31 | 31 | 0 | 0 | 42.53 s |
+| ASan+UBSan | 31 | 31 | 0 | 0 | 81.37 s |
+
+Process wall times including launch overhead were 47.570330, 42.546398 and
+81.401338 seconds. Dijkstra passed in 0.96, 0.05 and 3.00 seconds respectively;
+its 10-second timeout is unchanged. No failures required retries. Historical
+outside-sandbox sanitizer 26/27, Dijkstra timeout at 10.06 s, and isolated
+Dijkstra pass at 2.80 s remain accurately recorded above. The new full pass does
+not retroactively alter them or establish the original timeout's root cause.
+
+After all full suites ended, enabled both concurrency optional tiers on Release
+and confirmed 35 registrations including concurrency_stress/concurrency_extended
+and all three parallel_failure profiles. Re-ran only parallel_failure_fast and
+parallel_failure_stress: 2/2 passed, exit 0, 0.14 s; restored both options OFF
+and confirmed 31 default registrations again. Exact commands/optional lists are
+in optional-commands.json and optional-registration.json. Existing unchanged-source
+extended receipts retain 1800 faulted calls; no extended rerun was necessary.
+Fast/stress counts remain 72/360. Retained Phase 5C-2B source hashes match for
+concurrency tests/support and adversarial extraction; corpus receipts preserve
+288/5760/57600 queries. All eight TSan controls match their retained hashes.
+
+Repair tracked changes: .gitignore, docs/validation-parallel-failure.md,
+docs/research-log.md and docs/experimental-protocol.md. Existing untracked test,
+support, documentation and tsan_controls files retained. Final git diff --check
+passed; comparison against d840469 for src/include/apps/benchmarks/cmake,
+root CMake files and .github is empty. No production/API/benchmark timing,
+heuristic, dependency specification or CI changes. No commit/push/PR.
+
+Ready for independent re-audit of restored verification evidence. TSan acceptance
+remains unmet; this sanitizer pass does not prove race freedom, exhaustive
+schedule coverage or general deadlock freedom. Stop here.
