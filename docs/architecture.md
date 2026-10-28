@@ -1,6 +1,14 @@
 # Architecture
 
-## Current implementation: Phase 5B-3B
+## Current implementation: Phase 5B-4B (awaiting independent review)
+
+The separate read-only Python analysis layer imports complete 5B-3B evidence,
+classifies scientific eligibility, computes exact paired descriptive comparisons
+and per-trial latency summaries, and renders deterministic table-derived figures.
+See [benchmark analysis](benchmark-analysis.md). Production algorithms, graph
+storage, replay and timing semantics are unchanged. No inference or policy tuning
+is implemented. The recovery request authorizes this scope beyond the older gates
+below; no separate 5B-4A document was recoverable from this checkout.
 
 Phase 5B-1 adds standard-library Python graph/trace generation and independent
 replay validation, specified in [workload artifacts](workload-artifacts.md).

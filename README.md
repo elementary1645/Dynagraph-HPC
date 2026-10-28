@@ -1,5 +1,19 @@
 # DynaGraph-HPC
 
+Phase 5B-4B adds read-only descriptive analysis of complete timing evidence:
+
+```sh
+python3 benchmarks/python/analyze.py --plan benchmarks/configs/analysis-example-v1.json --output results/analysis/chain-smoke
+```
+
+Use Python 3.11+; requested SVG/PDF figures require the pinned optional rendering
+environment in `benchmarks/requirements-analysis.txt`. Installation requires
+approval. Set `figures: []` in a new plan for standard-library-only analysis.
+See [analysis configuration, pairing, eligibility and output contract](docs/benchmark-analysis.md).
+Codespaces observations remain harness evidence; no inferential intervals,
+significance tests, calibration or performance claims are supplied. Implementation
+and testing stop for independent review before any further phase.
+
 DynaGraph-HPC is a research project toward adaptive shortest-path computation on
 dynamic graphs using C++17, OpenMP, CMake, and Python benchmark orchestration.
 Correctness, measured performance, and reproducibility guide development.

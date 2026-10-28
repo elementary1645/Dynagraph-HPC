@@ -1,5 +1,154 @@
 # Research log
 
+## 2026-10-28 — Phase 5B-4B recovery, completion and verification
+
+### Recovery audit
+
+Recovered feature/benchmark-analysis at e705df6976054903f4ee313b1d1c56fe1d473013.
+Initial status was exactly ten untracked analysis implementation/configuration/test
+files and modified tests/CMakeLists.txt. Inspected every file, engineering guidance,
+architecture, timing/replay/workload contracts, experimental protocol and existing
+research records. Preserved a pre-edit copy of all eleven files at
+`/tmp/dynagraph-recovery-snapshot`; no original implementation was discarded.
+`rg` was absent, so inspection used find/grep/sed. No separate Phase 5B-4A design
+or requirements document was present in the checkout or local document inventory.
+The explicit continuation request authorizes 5B-4B beyond the stale AGENTS.md gate;
+conformance to the absent 4A document remains an independent-review limitation.
+
+Recovered import/statistics/figures/CLI were substantially complete. Import reused
+the public complete-dataset validator with no pending override and executed no
+staged binaries. Exact rational tick conversion, same-run/block pairing,
+conservative zero handling, descriptive per-trial quantiles, weighted complete
+panels, adaptive comparisons and explicit absent telemetry were already present.
+There were no inferential confidence intervals, significance tests, bootstrap
+calculations, fabricated backend selections or performance claims. Main gaps were
+documentation, actual-run CLI integration and broader rejection/zero coverage.
+
+Tightened duplicate rejection to cover reused run IDs even with different bytes,
+rejected symlink input directories before path resolution, checked all pairing
+identities explicitly and reset renderer style defaults. Added actual orchestrator
+to CLI integration, tampering/exclusion/public-validator tests and hand-computed
+unequal block ratios with numerator/baseline/both-zero cases. Correct recovered
+CLI, fixtures, configuration, requirements and existing calculations were retained.
+
+Completed files: benchmarks/python/analysis_import.py, analysis_stats.py and
+analysis_figures.py; tests/test_analysis_import.py, test_analysis_stats.py and
+tests/CMakeLists.txt. New completion files: tests/test_analysis_integration.py,
+docs/benchmark-analysis.md. Updated README.md, docs/architecture.md,
+docs/experimental-protocol.md and this log. Retained unchanged recovered files:
+benchmarks/python/analyze.py, benchmarks/configs/analysis-example-v1.json,
+benchmarks/requirements-analysis.txt, tests/analysis_test_support.py and
+tests/test_analysis_figures.py.
+
+### Actual commands and outcomes
+
+Commands below were executed from the repository root. Python was 3.14.2.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test_analysis_import.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test_analysis_stats.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test_analysis_figures.py
+```
+
+Before edits: import 6/6 passed; statistics 5/5 passed. The figure test ran and
+failed (one error: matplotlib PackageNotFoundError), rather than being skipped.
+The user then explicitly approved pinned dependency installation. Created the
+local environment without modifying the repository's dependency files:
+
+```sh
+python3 -m venv /tmp/dynagraph-analysis-venv
+/tmp/dynagraph-analysis-venv/bin/python -m pip install -r benchmarks/requirements-analysis.txt
+```
+
+The sandbox installation failed package-index DNS access. Repeated the same pip
+command with approved network escalation; installation succeeded for all eleven
+pinned packages. No global installation or package upgrade was performed.
+
+An intermediate unittest discovery run executed 17 tests with one failure and
+one error: the new tampering test appended permissible JSON whitespace, and the
+new integration test lacked its runner under discovery. Corrected the tampering
+payload to invalid trailing data and supplied an explicit runner/discovery guard.
+The figure deterministic test itself passed in that run. Final standalone suite:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 MPLCONFIGDIR=/tmp/dynagraph-analysis-mpl DYNAGRAPH_BENCH=/workspaces/Dynagraph-HPC/build/release/dynagraph_bench OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE /tmp/dynagraph-analysis-venv/bin/python -m unittest discover -s tests -p 'test_analysis_*.py'
+cmake --preset debug -DDYNAGRAPH_ANALYSIS_PYTHON=/tmp/dynagraph-analysis-venv/bin/python
+cmake --preset release -DDYNAGRAPH_ANALYSIS_PYTHON=/tmp/dynagraph-analysis-venv/bin/python
+cmake --build --preset debug --parallel 2
+cmake --build --preset release --parallel 2
+ctest --preset debug
+ctest --preset release
+```
+
+Final standalone suite: 17 tests, all passed, no skips (12.813 s). Both CMake
+configures and warning-clean builds exited 0. Debug CTest: 25/25 passed, zero
+failures (75.37 s). Release CTest: 25/25 passed, zero failures (69.74 s). Both
+registered and executed all four analysis entries: import (9 tests), statistics
+(6), integration (1), figures (1). Existing production, timing, replay, artifact
+and experiment tests also passed. CTest durations are test diagnostics only.
+
+### Retained end-to-end artifacts and regeneration
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 MPLCONFIGDIR=/tmp/dynagraph-analysis-mpl OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE DYNAGRAPH_ANALYSIS_SMOKE_ROOT=results/analysis/phase5b4b-smoke /tmp/dynagraph-analysis-venv/bin/python tests/test_analysis_integration.py build/release/dynagraph_bench
+```
+
+One integration test passed (14.100 s). It generated a small verified test-spec
+bundle and two actual Release experiments, four blocks/all policies/16 trials
+each. There are 16 full-trace rows and 144 per-update rows (9 ordered updates per
+trial); no latency sum is used as trace time. Both complete validators succeeded.
+The analysis CLI ran twice with figures disabled; output inventories were exactly
+equal and raw evidence inventories unchanged. There are 16 paired comparison rows
+(4 blocks x 4 prespecified comparisons). Every numerator/baseline trial ID maps
+to its recorded same block. A plan executable-identity mismatch exited 2 and
+produced a failed manifest; existing-output reuse also exited 2. Evidence remained
+unchanged. The integration's hardware/session labels are explicit test-plan labels,
+not measured hardware identity or claims of independent replication.
+
+Prepared `figure-plan.json` by reading the retained analysis-plan.json with the
+strict JSON loader, setting figures to `list(analysis_import.FIGURES)` and writing
+canonical JSON. Executed:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 MPLCONFIGDIR=/tmp/dynagraph-analysis-mpl /tmp/dynagraph-analysis-venv/bin/python benchmarks/python/analyze.py --plan results/analysis/phase5b4b-smoke/figure-plan.json --output results/analysis/phase5b4b-smoke/figures-one
+PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 MPLCONFIGDIR=/tmp/dynagraph-analysis-mpl /tmp/dynagraph-analysis-venv/bin/python benchmarks/python/analyze.py --plan results/analysis/phase5b4b-smoke/figure-plan.json --output results/analysis/phase5b4b-smoke/figures-two
+```
+
+Both exited 0 with exactly
+`{"accepted_inputs":"2","figures":"14","schema_version":1,"status":"complete"}`.
+Using analysis_import.inventory, asserted equality of both directories (25 files
+each), and verified all 24 manifest-listed output hashes. Each contains seven SVG
+and seven PDF products plus tables, report, acceptance and manifest. This compares
+regeneration from the same raw evidence, not repeated measured runtimes. Synthetic
+figure tests separately check prominent fixture labels and unchanged evidence.
+Both actual-run inputs classify valid_harness_only with declared_harness_only;
+no Codespaces performance eligibility is asserted. All generated artifacts are
+under ignored results/analysis/phase5b4b-smoke; none rewrites preexisting evidence.
+
+Additional final checks:
+
+```sh
+git diff --check
+git diff --exit-code e705df6 -- apps include src cmake CMakeLists.txt CMakePresets.json benchmarks/python/run.py benchmarks/python/experiment_records.py benchmarks/python/artifacts.py benchmarks/python/workloads.py benchmarks/python/deterministic.py
+```
+
+Both exited 0. Production algorithms, graph code, public APIs, executable sources,
+timing implementation, clock boundaries, orchestration and complete validator are
+unchanged relative to the base commit. No commits, pushes, branch switches, merges,
+resets, deletes or delegation occurred.
+
+### Limits and review gate
+
+No outstanding observed test failures. Phase 5B-4A's absent architecture/approval
+record requires review against the external original if available. Hardware and
+instrumentation declarations remain user statements, not attestation. Hashes do
+not authenticate producers or defeat hostile concurrent writers. Maximum-size
+datasets, peak memory, alternate Python/platform/font stacks, sanitizer/race suites
+and hosted CI were not executed in this continuation. No inference, publication
+performance evidence, calibration, selector telemetry or speedup claim is supplied.
+Same-environment SVG/PDF determinism passed; cross-platform identity is unverified.
+Stop here for independent Phase 5B-4B review; no further phase is authorized.
+
 ## 2026-10-26 — Phase 5B-3B reproducible timing infrastructure
 
 ### Authorization and implementation

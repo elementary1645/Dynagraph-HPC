@@ -76,3 +76,33 @@ add_test(NAME benchmark_experiment COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_experiment.py $<TARGET_FILE:dynagraph_bench>)
 set_tests_properties(benchmark_experiment PROPERTIES TIMEOUT 120 PROCESSORS 2
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+
+# Analysis uses Python 3.11+; existing artifact tooling retains its Python 3.8 minimum.
+# No installation is performed by CMake. An approved pinned venv is optional.
+set(DYNAGRAPH_ANALYSIS_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH "Python for descriptive analysis tests")
+execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -c
+    "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)"
+    RESULT_VARIABLE DYNAGRAPH_ANALYSIS_SUPPORTED)
+if(DYNAGRAPH_ANALYSIS_SUPPORTED EQUAL 0)
+    foreach(analysis_test IN ITEMS import stats)
+        add_test(NAME analysis_${analysis_test} COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test_analysis_${analysis_test}.py")
+        set_tests_properties(analysis_${analysis_test} PROPERTIES TIMEOUT 60
+            ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
+    endforeach()
+    add_test(NAME analysis_integration COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_analysis_integration.py" $<TARGET_FILE:dynagraph_bench>)
+    set_tests_properties(analysis_integration PROPERTIES TIMEOUT 120 PROCESSORS 2
+        ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+    execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -c
+        "import sys; sys.path.insert(0, '${PROJECT_SOURCE_DIR}/benchmarks/python'); from analysis_figures import pinned_versions; pinned_versions()"
+        RESULT_VARIABLE DYNAGRAPH_RENDERING_SUPPORTED OUTPUT_QUIET ERROR_QUIET)
+    if(DYNAGRAPH_RENDERING_SUPPORTED EQUAL 0)
+        add_test(NAME analysis_figures COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test_analysis_figures.py")
+        set_tests_properties(analysis_figures PROPERTIES TIMEOUT 120
+            ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;MPLCONFIGDIR=${CMAKE_CURRENT_BINARY_DIR}/analysis-mpl-cache")
+    else()
+        message(STATUS "Pinned analysis renderer unavailable; analysis_figures is not registered")
+    endif()
+endif()

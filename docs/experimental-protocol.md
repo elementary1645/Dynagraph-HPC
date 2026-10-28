@@ -2,6 +2,27 @@
 
 ## Status
 
+Phase 5B-4B now implements a separate [descriptive analysis contract](benchmark-analysis.md)
+over complete 5B-3B evidence, under the explicit recovery/continuation request.
+Earlier phase gates below describe historical scope. Stop after 5B-4B testing for
+independent review. The checkout contains no separate 5B-4A design document.
+
+The analysis plan prespecifies workload identities/weights, compatibility groups,
+session/hardware declarations, comparisons, exclusions, evidence classes and
+figures. Pair full traces within the same run/block, using exact ticks and
+rational periods. The primary ratio is incremental / dijkstra; adaptive ratios
+compare heuristic with each fixed policy. Retain zero durations and withhold
+affected geometric aggregates. Report per-update distributions within trials,
+never treating ordered positions as independent replication. No bootstrap,
+inferential confidence intervals or significance tests are implemented.
+
+Complete evidence validation is mandatory and independent of scientific
+eligibility. Synthetic/instrumented/harness evidence stays explicitly labeled;
+Codespaces is never automatically performance eligible. Controlled-hardware and
+uninstrumented-build declarations are hashed user statements, not attestation.
+No selected adaptive backends, isolated selector overhead or actual teams are
+inferred from unavailable telemetry. Raw evidence is read-only and unchanged.
+
 This is a prospective measurement protocol. Phases 1B, 2B, and 3B provide
 sequential/parallel recomputation and transactional single-decrease repair
 baselines. Phase 4B-1 adds forced-strategy switching with a shared fast path and
