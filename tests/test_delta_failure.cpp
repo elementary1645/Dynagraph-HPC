@@ -1,5 +1,6 @@
 #include "dynagraph/algorithms/delta_stepping.hpp"
 #include "test_support.hpp"
+#include "system_validation_support.hpp"
 
 #include <omp.h>
 
@@ -30,6 +31,48 @@ void* allocate(std::size_t bytes) {
     if (void* pointer = std::malloc(bytes == 0 ? 1 : bytes)) { return pointer; }
     throw std::bad_alloc();
 }
+
+void history_failures() {
+    using namespace dynagraph;
+    namespace sv = dynagraph::test::system;
+    const auto c = sv::history_case();
+    unsigned triggered = 0, untriggered = 0;
+    for (const bool measured : {false, true}) {
+        for (const unsigned position : {0U, 1U, 2U, 3U, 4U, 8U, 16U}) {
+            auto ledger = c.edges;
+            auto graph = CSRGraph::from_edges(c.vertices, ledger);
+            for (const auto& u : c.updates) {
+                graph.replace_weight(u.u, u.v, u.weight); sv::apply(ledger, u);
+                sv::checkpoint(graph, delta_stepping(graph, 0, {16, 2}).distances, c.vertices, ledger, 0);
+            }
+            const sv::Update target{0, 1, 80, 0};
+            graph.replace_weight(target.u, target.v, target.weight); sv::apply(ledger, target);
+            const auto expected = sv::oracle(c.vertices, ledger, 0);
+            DeltaSteppingMetrics metrics;
+            target_thread.store(-1); failure_position.store(position); epoch.fetch_add(1); enabled.store(true);
+            bool failed = false;
+            try {
+                const auto result = delta_stepping(graph, 0, {16, 2}, measured ? &metrics : nullptr);
+                enabled.store(false);
+                test::require(result.distances == expected, "history non-triggered query complete");
+            } catch (const std::bad_alloc&) { enabled.store(false); failed = true; }
+            catch (...) { enabled.store(false); throw; }
+            // Standalone delta owns no mutable query state and promises no metric rollback.
+            sv::graph_equal(graph, c.vertices, ledger);
+            if (position <= 1) { test::require(failed, "history first/post-CAS allocations must trigger"); }
+            if (failed) { ++triggered; } else {
+                ++untriggered;
+                std::cout << "Uncovered history delta metrics=" << measured << " thread-local allocation position=" << position << '\n';
+            }
+            sv::checkpoint(graph, delta_stepping(graph, 0, {16, 2}).distances, c.vertices, ledger, 0);
+            const sv::Update next{0, 95, 400, 0};
+            graph.replace_weight(next.u, next.v, next.weight); sv::apply(ledger, next);
+            sv::checkpoint(graph, delta_stepping(graph, 0, {16, 2}).distances, c.vertices, ledger, 0);
+        }
+    }
+    std::cout << "History standalone delta fault attempts=14 triggered=" << triggered << " untriggered=" << untriggered
+              << " (higher thread-local positions are schedule dependent)\n";
+}
 } // namespace
 
 void* operator new(std::size_t bytes) { return allocate(bytes); }
@@ -40,7 +83,7 @@ void operator delete(void* pointer, std::size_t) noexcept { std::free(pointer); 
 void operator delete[](void* pointer, std::size_t) noexcept { std::free(pointer); }
 
 int main() {
-    return dynagraph::test::run("coordinated allocation failure and recovery", [] {
+    int failures = dynagraph::test::run("coordinated allocation failure and recovery", [] {
         using namespace dynagraph;
         std::vector<InputEdge> edges;
         for (VertexId v = 1; v < 700; ++v) {
@@ -94,4 +137,6 @@ int main() {
         test::require(exceptions > 20, "Fault sweep must exercise allocations in both team threads");
         std::cout << "Injected bad_alloc exceptions: " << exceptions << '\n';
     });
+    failures += dynagraph::test::run("immutable delta queries after committed update history", history_failures);
+    return failures == 0 ? 0 : 1;
 }

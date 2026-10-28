@@ -118,6 +118,34 @@ class ReplayTests(unittest.TestCase):
         self.success(graph_bytes(graph), trace_bytes(trace))
         self.success(graph_bytes(graph), trace_bytes(replace(trace, source=6)), 6)
 
+    def test_every_trace_prefix_against_python_oracle(self):
+        # Independent Python integers/None sentinel, original endpoint records and
+        # synchronous Bellman-Ford. Every prefix is a fresh public verify call.
+        initial = Graph(8, ((0, 1, 30), (0, 2, 3), (1, 2, 0), (1, 3, 4294967295),
+                            (2, 1, 0), (3, 0, 0), (4, 5, 9), (5, 4, 0), (6, 6, 10)))
+        updates = ((0, 0, 1, 30, 29), (1, 0, 1, 29, 29), (2, 4, 5, 9, 0),
+                   (3, 0, 1, 29, 2), (4, 1, 3, 4294967295, 0), (5, 0, 1, 2, 0))
+        graph_data = graph_bytes(initial)
+        for source in (0, 7):
+            ledger = {(u, v): weight for u, v, weight in initial.edges}
+            for length in range(len(updates) + 1):
+                if length:
+                    _, u, v, old, new = updates[length - 1]
+                    self.assertEqual(ledger[u, v], old); ledger[u, v] = new
+                expected = Graph(initial.vertices, tuple((u, v, weight) for (u, v), weight in sorted(ledger.items())))
+                trace = Trace(sha256(graph_data), ('0',) * 4, source, updates[:length])
+                self.write(graph_data, trace_bytes(trace))
+                for policy in POLICIES:
+                    for mode in MODES:
+                        with self.subTest(source=source, prefix=length, policy=policy, mode=mode):
+                            process = self.invoke(self.arguments(source, policy, mode))
+                            self.assertEqual((process.returncode, process.stderr), (0, b''))
+                            result = json.loads(process.stdout)
+                            self.assertEqual(result['final_weights'], list(ledger.values()))
+                            self.assertEqual(result['final_distances'], bellman_ford(expected, source))
+                            self.assertEqual(result['updates_verified'], length)
+                            self.assertEqual(result['bellman_ford_checks'], length + 1)
+
     def test_empty_trace_edgeless_and_bellman_ford_boundary(self):
         for vertices in (1, 128, 129):
             graph = Graph(vertices, ())

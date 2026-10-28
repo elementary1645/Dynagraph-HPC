@@ -1,5 +1,206 @@
 # Research log
 
+## 2026-10-28 — Phase 5C-1 correctness and failure-resilience validation
+
+### Authorization, state and architecture
+
+The implementation request explicitly approved the reviewed 5C-1 design and its
+refinements. Confirmed clean feature/validation-correctness at
+45e850f5dd6cda1e2515ff27d1e05b99d17ee2a5 before editing. Reinspected engineering
+guidance, actual public APIs, individual correctness/fault tests, harness/oracles,
+CMake/CI/presets, architecture/protocol and research history. No delegation,
+dependency installation, commit, push, branch switch or PR creation occurred.
+
+Added tests/system_validation_support.hpp, tests/test_system_correctness.cpp,
+tests/test_system_adversarial.cpp, tests/test_system_reproduction.py and
+docs/validation-correctness.md. Extended the three existing allocation-failure
+executables, tests/test_benchmark_replay.py and tests/CMakeLists.txt. Updated
+AGENTS.md, docs/experimental-protocol.md and this log. All earlier tests remain.
+The existing GitHub Actions Debug/Release/ASan+UBSan matrix already runs default
+CTest; inspection showed no workflow edit was needed. Stress/extended registration
+is opt-in; stress was restored OFF after verification.
+
+The new test-only system-validation-v1 framework generates independent case-local
+graphs/traces, keeps an endpoint/weight ledger, and compares standalone incremental
+state, four engine policies, rotating overrides and fresh Dijkstra/delta results.
+Every checkpoint checks all distances and graph arrays; every update checks
+outcomes/improvement counts and reachability invariance. Bellman–Ford reads input
+records synchronously without production SSSP or CSR traversal. Hand results
+additionally validate zero-region, disconnected and wide-chain fixtures. Caller
+record values/order and caller graphs are explicitly checked for immutability.
+
+Fast: 48 graphs, 96 source traces, 1536 updates, 1632 checkpoints, 13056 complete
+state comparisons. Stress: 96 graphs, 192 traces, 9216 updates, 9408 checkpoints,
+75264 comparisons. Adversarial: 14 fixtures in both no-effect modes, 28 traces,
+230 updates, 258 checkpoints, 2064 comparisons. Optional extended implements
+384 graphs with exactly two sources per graph, thus 768 traces, 98304 updates,
+99072 checkpoints and 792576 comparisons; its full corpus was NOT executed.
+Selected extended case 383 is exercised by the reproduction test.
+
+### Failure resilience and coverage
+
+New fault histories contain effective repair, a committed weight-only decrease,
+an equal request and another effective update. Adaptive history actually executes
+incremental, Dijkstra and delta before the fault target. Each target reconstructs
+identical history. Independent Bellman–Ford validates each history operation,
+rollback, identical retry and a different subsequent update. Original failure
+sweeps and initialization/adoption/bypass tests are preserved.
+
+Final Debug and Release detailed logs recorded the following additional history
+coverage (the sanitizer runs also passed these groups):
+
+| Target | Plain | With metrics | Additional coverage |
+| --- | ---: | ---: | --- |
+| Standalone incremental | 16 faults | 16 faults | 14 after tentative writes per mode |
+| Adaptive Dijkstra, each forced/automatic | 12 | 12 | Staged authoritative state unchanged |
+| Adaptive delta, each forced/automatic | 9 | 10 | 1/2 post-team allocations |
+| Adaptive incremental, each forced/automatic | 16 | 16 | 14 after tentative writes per mode |
+| Adaptive region/publication | 2 | 2 | All four mandatory targets triggered |
+| Standalone delta history | 7 | 7 | All 14 attempts triggered in these runs |
+
+That is 200 new injected failures per observed suite, in addition to the existing
+sweeps. All mandatory targets triggered. Higher standalone delta thread-local
+positions remain schedule-dependent in general; untriggered positions are printed
+and counted as uncovered rather than treated as injection successes. No production
+fault hook was needed. Standalone delta checks input immutability and retry, not
+owning-state or caller-metric rollback that its API does not promise. Existing
+post-CAS targeting retains its documented 16-byte Entry/layout assumption.
+
+Python replay now adds 112 bounded prefix invocations: seven prefixes, two sources,
+four policies and two no-effect modes. A separate endpoint dictionary and Python
+integer Bellman–Ford compare all final weights/distances at every prefix. Existing
+C++ replay additionally verifies each intermediate state within each invocation.
+
+### Executed verification and timing context
+
+Toolchain: GCC 13.3.0, CMake 3.28.3, Python 3.14.2. Parallel CTest entries explicitly
+set worker/thread-limit/dynamic settings; new tests use 2/2/FALSE. The visible
+cgroup CPU limit read `max 100000`; no physical-core/isolation claim is inferred.
+All runtimes below are validation wall times, not algorithm performance evidence.
+Several builds/suites overlapped, so compare no throughput or speedup from them.
+
+Generated logs and JSON command receipts are retained in ignored
+results/validation/phase5c1/. Each receipt records the exact argument array,
+exit code, subprocess wall time and parent sanitizer/OpenMP environment; CTest
+entry-specific environments remain in tests/CMakeLists.txt and detailed logs.
+
+| Final verification | Exit | Result | Wall seconds |
+| --- | ---: | --- | ---: |
+| Debug full CTest, reviewed source | 0 | 28/28 | 85.060 |
+| Release full CTest, reviewed source | 0 | 28/28 | 82.097 |
+| ASan/UBSan full CTest, reviewed source | 0 | 28/28, no findings | 82.691 |
+| Registered bounded stress, reviewed source | 0 | 1/1, all 9408 checkpoints | 3.359 |
+| Standalone Python benchmark replay | 0 | 10/10 | 29.009 |
+| Full fast Debug, workers 1 | 0 | 96 traces/1632 checkpoints | 0.348 |
+| Full fast Debug, workers 2, first/repeat | 0/0 | Same complete corpus both times | 0.409/0.426 |
+| Full fast Release, workers 2 | 0 | Same complete corpus | 0.177 |
+
+Final CTest-reported totals were Debug 85.05 s, Release 82.06 s, sanitizer 82.67 s;
+stress entry 3.29 s. The first full suites also passed 28/28: Debug 126.389 s,
+Release 118.693 s, sanitizer 169.084 s. Debug exceeded the two-minute target during
+three overlapping configurations; benchmark replay dominated (54.735 s for its
+ten Debug tests). No coverage was reduced. The final default suites fit the target.
+The initial bounded stress also passed (12.540 s) while other validation ran.
+
+Repetition was justified by final helper changes: checking caller record order
+directly and capturing returned distance vectors before outcome-metadata assertions.
+These changed no production behavior or generator mapping. The final full suites
+and bounded stress were rerun afterward. Each final suite includes reproduction
+(2 Python tests), all 14 adversarial fixtures, and every prior registered entry,
+including the optional renderer already available in the existing local environment.
+Hosted CI was not executed; no packages were installed for this phase.
+
+### Executed command ledger
+
+All commands below were actually executed from the repository root through a
+receipt/logging wrapper. Times are measured subprocess wall seconds; CTest counts
+are entries, not individual assertions. Missing parent ASAN/UBSAN options mean
+uninstrumented execution; CTest still supplies its entry-specific OpenMP settings.
+Detailed logs and matching JSON receipts use the IDs in the first column.
+
+| Receipt ID | Exact command/environment | Exit | Passed/total | Seconds |
+| --- | --- | ---: | --- | ---: |
+| bounded-stress-reviewed | `ctest --test-dir build/release -L validation-stress --output-on-failure` | 0 | 1/1 entries | 3.359 |
+| bounded-stress | `ctest --test-dir build/release -L validation-stress --output-on-failure` | 0 | 1/1 entries | 12.54 |
+| debug-fast-workers1 | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE build/debug/tests/test_system_correctness --workers 1` | 0 | 1/1 corpus; 1632 checkpoints | 0.348 |
+| debug-fast-workers2-a | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE build/debug/tests/test_system_correctness --workers 2` | 0 | 1/1 corpus; 1632 checkpoints | 0.409 |
+| debug-fast-workers2-b | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE build/debug/tests/test_system_correctness --workers 2` | 0 | 1/1 corpus; 1632 checkpoints | 0.426 |
+| debug-full-reviewed | `ctest --preset debug` | 0 | 28/28 entries | 85.06 |
+| debug-full | `ctest --preset debug` | 0 | 28/28 entries | 126.389 |
+| debug-new-and-failure | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE ctest --test-dir build/debug -R '^(system_.*\|incremental_failure\|adaptive_failure\|delta_failure)$' --output-on-failure` | 8 | 5/6 entries | 2.006 |
+| debug-new-initial | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE ctest --test-dir build/debug -R '^system_' --output-on-failure` | 0 | 2/2 entries | 0.822 |
+| debug-targeted-final | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE ctest --test-dir build/debug -R '^(system_.*\|incremental_failure\|adaptive_failure\|delta_failure)$' --output-on-failure` | 0 | 6/6 entries | 14.869 |
+| python-replay | `PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE python3 tests/test_benchmark_replay.py build/debug/dynagraph_bench` | 0 | 10/10 Python tests | 29.009 |
+| release-fast-workers2 | `OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE build/release/tests/test_system_correctness --workers 2` | 0 | 1/1 corpus; 1632 checkpoints | 0.177 |
+| release-full-reviewed | `ctest --preset release` | 0 | 28/28 entries | 82.097 |
+| release-full | `ctest --preset release` | 0 | 28/28 entries | 118.693 |
+| sanitize-full-reviewed | `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure` | 0 | 28/28 entries | 82.691 |
+| sanitize-full | `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir build/sanitize --output-on-failure` | 0 | 28/28 entries | 169.084 |
+
+### Reproducibility
+
+For complete fast corpora, Debug workers 1, Debug workers 2 twice, Release workers
+2 and final full suites all reported generation fingerprint 6064859197570865871
+and state fingerprint 8157398655181721149. Direct delta observations were actual
+1 or actual 2 as requested. Heuristic parallel/fallback decisions legitimately
+changed with requested budget; authoritative states did not. Selected case tests
+also request 4 with limit 2, without claiming an actual four-worker run.
+
+Pinned example (also asserted by the reproduction test):
+
+```sh
+OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=2 OMP_DYNAMIC=FALSE build/debug/tests/test_system_correctness --profile fast --seed 4294967295 --case 31 --source 0 --workers 1
+```
+
+Exit 0, 17 checkpoints; generation fingerprint 6423381795917974648 and state
+fingerprint 618799244384374341. Its initial standalone execution took 0.151 s by
+the command tool (not the later receipt timer). CLI rejection tests cover missing,
+duplicate/unknown options, malformed/overflowed numbers, profile/case bounds,
+worker bounds and unsupported source combinations. Randomized failures print
+complete reproduction context and attempted trace prefix. Fingerprints are test
+markers, not SHA-256 evidence authentication.
+
+### Intermediate failures and limitations
+
+An intermediate Debug build exited 2 because the new standalone incremental
+history test referenced a nonexistent sentinel helper; replaced it with an
+explicit local marker. Its full build runtime was not captured. A prematurely
+started targeted CTest then used some stale binaries: 5/6 passed, reproduction
+failed because the old binary returned 1 rather than CLI exit 2 for an invalid
+source. That run took 2.006 s and is retained as debug-new-and-failure, not counted
+as final verification. Fresh build/rejection handling corrected it; subsequent
+targeted 6/6, all final suites and reproduction tests passed. Initial new-system
+CTest before the history additions passed 2/2 in 0.822 s.
+
+Sanitizer runs used ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1, outside the sandbox with approval
+because the repository documents LeakSanitizer process-inspection restrictions.
+Neither sanitizer run had an environmental startup failure or finding. No race
+freedom claim follows from ASan/UBSan or repeated correctness runs. Full extended,
+other toolchains/platforms, maximum production graphs, exhaustive interleavings,
+process-fatal failures and Phase 5C-2 race tooling were not executed.
+
+No unreachable activation or tiny near-UINT64_MAX case was fabricated. Finite
+fixed-topology decreases preserve reachability; arithmetic tests exercise wide
+distances, cap rejection and sentinel separation within supported bounds. Automatic
+small-graph Dijkstra uses separate immutable configurations; varying destination
+degree exercises automatic incremental/delta transitions without heuristic tuning.
+
+Final `git diff --check` exited 0 with no output. The following production/scope
+check also exited 0 with no output:
+
+```sh
+git diff --exit-code 45e850f -- src include apps benchmarks cmake CMakeLists.txt CMakePresets.json .github
+```
+
+The final inventory is eight modified tracked files and five new files, confined
+to tests, tests/CMakeLists.txt, AGENTS.md and documentation. Ready for independent
+review with the explicit unexecuted/portability limits above; no production or
+timing changes and no unresolved observed correctness or sanitizer failures.
+
+Stop for independent Phase 5C-1 review. No further phase, publication work,
+algorithm modification or performance claim is authorized.
+
 ## 2026-10-28 — Phase 5B-4B recovery, completion and verification
 
 ### Recovery audit

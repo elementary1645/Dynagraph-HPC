@@ -106,3 +106,29 @@ if(DYNAGRAPH_ANALYSIS_SUPPORTED EQUAL 0)
         message(STATUS "Pinned analysis renderer unavailable; analysis_figures is not registered")
     endif()
 endif()
+
+# Phase 5C-1: no production instrumentation or additional dependencies.
+foreach(validation_target IN ITEMS system_correctness system_adversarial)
+    add_executable(test_${validation_target} test_${validation_target}.cpp)
+    target_link_libraries(test_${validation_target} PRIVATE DynaGraph::dynagraph)
+    dynagraph_set_warnings(test_${validation_target})
+    add_test(NAME ${validation_target} COMMAND test_${validation_target})
+    set_tests_properties(${validation_target} PROPERTIES TIMEOUT 120 PROCESSORS 2 LABELS "validation-fast"
+        ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+endforeach()
+option(DYNAGRAPH_ENABLE_VALIDATION_STRESS "Register bounded system validation stress" OFF)
+option(DYNAGRAPH_ENABLE_VALIDATION_EXTENDED "Register manual extended system validation" OFF)
+if(DYNAGRAPH_ENABLE_VALIDATION_STRESS)
+    add_test(NAME system_stress COMMAND test_system_correctness --profile stress)
+    set_tests_properties(system_stress PROPERTIES TIMEOUT 180 PROCESSORS 2 LABELS "validation-stress"
+        ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+endif()
+add_test(NAME system_reproduction COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_system_reproduction.py $<TARGET_FILE:test_system_correctness>)
+set_tests_properties(system_reproduction PROPERTIES TIMEOUT 120 PROCESSORS 2 LABELS "validation-fast"
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+if(DYNAGRAPH_ENABLE_VALIDATION_EXTENDED)
+    add_test(NAME system_extended COMMAND test_system_correctness --profile extended)
+    set_tests_properties(system_extended PROPERTIES TIMEOUT 900 PROCESSORS 2 LABELS "validation-extended"
+        ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
+endif()
