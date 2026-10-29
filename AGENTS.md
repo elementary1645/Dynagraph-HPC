@@ -2,8 +2,10 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-1 campaign contracts, deterministic planning
-  and read-only hardware provenance/admission, with tests and documentation.
+- Current authorized scope: Phase 6B-1R remediation of cgroup ancestry, runtime
+  provenance, complete topology/NUMA and Unicode-path findings, with adversarial
+  tests, fresh validation and a local commit on the existing feature branch.
+  Preserve Phase 6B-1 campaign planning and read-only admission scope.
   The explicit Phase 6B-1 request supersedes the earlier Phase 6 deferral only
   for this foundation. Commit the validated work on its dedicated feature branch;
   do not push, merge or create a PR. No performance experiments are authorized.
@@ -13,7 +15,7 @@
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-1 implementation/local verification and the authorized commit;
+- Stop after Phase 6B-1R implementation/local verification and the authorized commit;
   later Phase 6 execution/inference remains deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report

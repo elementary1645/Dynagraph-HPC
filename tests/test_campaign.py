@@ -16,7 +16,8 @@ sys.path.insert(0, str(ROOT/'benchmarks/python'))
 from artifacts import generate
 from campaign_contract import EVIDENCE, expand, load_bytes, plan_hash, validate_plan
 from campaign_hardware import (admit, cgroup_ancestry, cpu_list, inspect, mapped_runtime,
-                               observation, summarize_cgroups)
+                               observation, reconcile_cgroups)
+from campaign_provenance import validate_runtime, validate_cgroups, topology_ids
 from experiment_records import POLICIES
 from workloads import canonical_json
 
@@ -46,24 +47,41 @@ def fixture():
         comparisons=[dict(kind='worker-scaling',numerator='two',baseline='one')])
 
 
+def runtime_fixture():
+    numbers=[0]*49
+    numbers[0]=1;numbers[1]=123;numbers[2]=123;numbers[18]=100000
+    return dict(path='/usr/lib/libgomp.so.1.0.0',sha256='c'*64,soname='libgomp.so.1',
+        linkage='observed-process-mapping',executable_sha256='a'*64,pid=123,
+        process_stat='123 (synthetic worker) S '+' '.join(map(str,numbers)),process_start_ticks=100000,
+        mappings=['7f000000-7f001000 r-xp 00000000 08:01 7 /usr/lib/libgomp.so.1.0.0'],
+        file_identity=dict(device_major=8,device_minor=1,inode=7,size=8192,mtime_ns=1793284000000000000))
+
+
+def cgroup_fixture():
+    data={'/proc/self/cgroup':'0::/leaf','/proc/self/mountinfo':'1 0 0:1 / /cg rw - cgroup2 cgroup rw'}
+    for path in ('/cg/leaf','/cg'):
+        data.update({path+'/cpu.max':'200000 100000' if path.endswith('leaf') else 'max 100000',
+                     path+'/cpuset.cpus.effective':'0-3',path+'/memory.max':'16384' if path.endswith('leaf') else 'max',
+                     path+'/memory.current':'1024'})
+    return cgroup_ancestry(data.get)
+
+
 def hardware():
     report = {k:observation(None, 'synthetic unavailable') for k in
               ('cpu_model logical_cpus topology numa affinity cgroups available_memory_bytes os kernel '
                'virtualization compiler openmp executable_sha256 placement frequency').split()}
-    report.update(schema='dynagraph-hardware',schema_version=1,limitations=['SYNTHETIC'])
+    report.update(schema='dynagraph-hardware',schema_version=2,limitations=['SYNTHETIC'])
     values = dict(cpu_model='synthetic CPU',logical_cpus=4,
         topology=[dict(cpu=i,package=0,core=i//2,siblings=[i//2*2,i//2*2+1]) for i in range(4)],
         numa=[dict(node=0,cpus=[0,1,2,3])],affinity=[0,2],
-        cgroups=summarize_cgroups([{'path':'/cg/leaf','cpu.max':'200000 100000','cpuset.cpus.effective':'0-3',
-                                    'memory.max':'16384','memory.current':'1024'},
-                                  {'path':'/cg','cpu.max':'max 100000','cpuset.cpus.effective':'0-3',
-                                    'memory.max':'max','memory.current':'1024'}]),
+        cgroups=cgroup_fixture(),
         available_memory_bytes=8192,os='fixture',kernel='fixture',
         virtualization=dict(hypervisor=False,container=False,product='fixture'),
-        compiler=dict(sha256='b'*64),
-        openmp=dict(sha256='c'*64,linkage='observed-process-mapping',executable_sha256='a'*64),
+        compiler=dict(path='/usr/bin/g++',version='g++ synthetic 13.3.0',sha256='b'*64),
+        openmp=runtime_fixture(),
         executable_sha256='a'*64,placement=dict(taskset='/usr/bin/taskset'),
-        frequency=[dict(cpu=i,governor='performance') for i in (0,2)])
+        frequency=[dict(cpu=i,governor='performance',driver='synthetic',current_khz='2000000',
+                        min_khz='1000000',max_khz='3000000') for i in (0,2)])
     for k,v in values.items(): report[k]=observation(v,'SYNTHETIC fixture')
     return report
 
@@ -185,13 +203,13 @@ class CampaignTests(unittest.TestCase):
     def test_affinity_and_cpuset_rejection(self):
         r=hardware();r['affinity']['value']=[0,1,2]
         self.assertFalse(admit(self.p,r)['admitted'])
-        r=hardware();r['cgroups']['value']['ancestors'][0]['cpuset.cpus.effective']='0-1'
-        r['cgroups']['value']=summarize_cgroups(r['cgroups']['value']['ancestors'])
+        r=hardware();r['cgroups']['value']['views'][0]['ancestors'][0]['cpuset.cpus.effective']='0-1'
+        r['cgroups']['value']=reconcile_cgroups(r['cgroups']['value'])
         self.assertIn('allocation outside effective cgroup cpuset',admit(self.p,r)['failures'])
 
     def test_ancestor_quota_and_memory(self):
-        r=hardware();r['cgroups']['value']['ancestors'][1]['cpu.max']='100000 100000'
-        r['cgroups']['value']=summarize_cgroups(r['cgroups']['value']['ancestors'])
+        r=hardware();r['cgroups']['value']['views'][0]['ancestors'][1]['cpu.max']='100000 100000'
+        r['cgroups']['value']=reconcile_cgroups(r['cgroups']['value'])
         self.assertIn('ancestor CPU quota below requested workers',admit(self.p,r)['failures'])
         r=hardware();r['available_memory_bytes']['value']=1024
         self.assertFalse(admit(self.p,r)['admitted'])
@@ -200,7 +218,7 @@ class CampaignTests(unittest.TestCase):
         r=hardware();r['topology']['value'][0]['siblings']=[0]
         self.assertIn('missing or contradictory physical topology',admit(self.p,r)['failures'])
         r=hardware();r['cgroups']['value']['quota_pairs']=[]
-        self.assertIn('contradictory cgroup summaries',admit(self.p,r)['failures'])
+        self.assertIn('missing or malformed cgroup ancestry',admit(self.p,r)['failures'])
         r=hardware();r['affinity']['origin']='unavailable'
         with self.assertRaisesRegex(ValueError,'contradictory'): admit(self.p,r)
 
@@ -215,7 +233,8 @@ class CampaignTests(unittest.TestCase):
         self.assertFalse(admit(self.p,r)['admitted'])
 
     def test_unresolved_runtime_rejected(self):
-        r=hardware();r['openmp']['value']['linkage']='DT_NEEDED candidate'
+        r=hardware();r['openmp']['value']={k:v for k,v in r['openmp']['value'].items() if k in ('path','sha256','soname')}
+        r['openmp']['value']['linkage']='candidate-library'
         self.assertIn('actual linked OpenMP runtime resolution is unverified',admit(self.p,r)['failures'])
         r=hardware();r['openmp']['value']['sha256']='e'*64
         self.assertIn('missing or mismatched openmp identity',admit(self.p,r)['failures'])
@@ -249,7 +268,7 @@ class CampaignTests(unittest.TestCase):
 
     def test_cgroup_mount_root_and_ancestors(self):
         result=cgroup_ancestry(self.cgroup_files().get)
-        self.assertEqual([r['path'] for r in result['ancestors']],['/cg/job','/cg'])
+        self.assertEqual([r['path'] for r in result['views'][0]['ancestors']],['/cg/job','/cg'])
         self.assertEqual(result['quota_pairs'],[[150000,100000]])
         self.assertEqual(result['memory_headroom_bytes'],7168)
 
@@ -334,17 +353,17 @@ class CampaignTests(unittest.TestCase):
 
     def test_mapped_runtime_observed_and_changed(self):
         # No process is launched: synthetic /proc maps and file digests.
-        maps='1-2 r-xp 0 00:00 1 /lib/libgomp.so.1.0.0'
-        stat='1 (fixture name) '+' '.join(['0']*30)
-        def read(path): return maps if path.endswith('/maps') else stat
-        info=SimpleNamespace(st_dev=os.makedev(0,0),st_ino=1,st_size=100,st_mtime_ns=1)
-        with patch('campaign_hardware.file_hash',return_value='a'*64), patch('pathlib.Path.stat',return_value=info):
-            value=mapped_runtime(1,'fixture',read)
+        sample=runtime_fixture();maps='\n'.join(sample['mappings']);stat=sample['process_stat']
+        def read(path):return maps if path.endswith('/maps') else stat
+        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=8192,st_mtime_ns=1793284000000000000)
+        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
+            value=mapped_runtime(123,'fixture',read)
             self.assertEqual(value['linkage'],'observed-process-mapping')
-        with patch('campaign_hardware.file_hash',return_value='a'*64), patch('pathlib.Path.stat',return_value=SimpleNamespace(st_dev=0,st_ino=2)):
-            self.assertIsNone(mapped_runtime(1,'fixture',read))
+        bad=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=8,st_size=8192,st_mtime_ns=1793284000000000000)
+        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=bad):
+            self.assertIsNone(mapped_runtime(123,'fixture',read))
         with patch('campaign_hardware.file_hash',side_effect=['a'*64,'b'*64]):
-            self.assertIsNone(mapped_runtime(1,'fixture',read))
+            self.assertIsNone(mapped_runtime(123,'fixture',read))
 
     def test_cli_admission_exit_and_no_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -359,6 +378,232 @@ class CampaignTests(unittest.TestCase):
             plan.write_bytes(canonical_json(self.p));result=subprocess.run(cmd,capture_output=True)
             self.assertEqual(result.returncode,0)
             self.assertFalse(json.loads(result.stdout)['scientific_performance_allowed'])
+
+    def audit_mounts(self):
+        d={'/proc/self/cgroup':'0::/tenant/job', '/proc/self/mountinfo':
+           '1 0 0:1 / /full rw - cgroup2 cgroup rw\n2 0 0:1 /tenant /sub rw - cgroup2 cgroup rw'}
+        for path in ('/full','/full/tenant','/full/tenant/job','/sub','/sub/job'):
+            d.update({path+'/cpu.max':'100000 100000' if path=='/full' else 'max 100000',
+                      path+'/cpuset.cpus.effective':'0-3',path+'/memory.max':'max',path+'/memory.current':'0'})
+        return d
+
+    def admission_cli(self, report, plan=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)/'plan.json';r=Path(tmp)/'hardware.json'
+            p.write_bytes(canonical_json(self.p if plan is None else plan));r.write_bytes(canonical_json(report))
+            return subprocess.run([sys.executable,'-B',str(ROOT/'benchmarks/python/campaign.py'),'admit',
+                                   '--plan',str(p),'--hardware',str(r)],capture_output=True,text=True)
+
+    def test_audit_f1_overlapping_mounts_api(self):
+        r=hardware();r['cgroups']=observation(cgroup_ancestry(self.audit_mounts().get),'synthetic overlap')
+        self.assertFalse(admit(self.p,r)['scientific_performance_allowed'])
+
+    def test_audit_f1_overlapping_mounts_cli(self):
+        r=hardware();r['cgroups']=observation(cgroup_ancestry(self.audit_mounts().get),'synthetic overlap')
+        self.assertNotEqual(self.admission_cli(r).returncode,0)
+
+    def test_audit_f2_runtime_api(self):
+        r=hardware();r['openmp']['value'].update(pid=-1,path=False,soname='libwrong.so',process_stat='')
+        try: result=admit(self.p,r)
+        except ValueError: return
+        self.assertFalse(result['scientific_performance_allowed'])
+
+    def test_audit_f2_runtime_cli(self):
+        r=hardware();r['openmp']['value'].update(pid=-1,path=False,soname='libwrong.so',process_stat='')
+        result=self.admission_cli(r);self.assertNotEqual(result.returncode,0)
+        self.assertNotIn('Traceback',result.stderr)
+
+    def test_audit_f3_nonallocated_sibling_api(self):
+        r=hardware();r['topology']['value'][1]['siblings']=[1]
+        try: result=admit(self.p,r)
+        except ValueError: return
+        self.assertFalse(result['scientific_performance_allowed'])
+
+    def test_audit_f3_nonallocated_sibling_cli(self):
+        r=hardware();r['topology']['value'][1]['siblings']=[1]
+        self.assertNotEqual(self.admission_cli(r).returncode,0)
+
+    def test_audit_f4_unicode_api(self):
+        p=copy.deepcopy(self.p);p['build']['executable']='bin/'+chr(0xd800)
+        with self.assertRaises(ValueError): validate_plan(p)
+
+    def test_audit_f4_unicode_cli(self):
+        p=copy.deepcopy(self.p);p['build']['executable']='bin/'+chr(0xd800)
+        result=self.admission_cli(hardware(),p)
+        self.assertNotEqual(result.returncode,0);self.assertNotIn('Traceback',result.stderr)
+
+    def assert_not_scientific(self, report, cli=False):
+        try:self.assertFalse(admit(self.p,report)['scientific_performance_allowed'])
+        except ValueError:pass
+        if cli:
+            result=self.admission_cli(report)
+            self.assertNotEqual(result.returncode,0)
+            self.assertNotIn('Traceback',result.stderr)
+
+    def test_f1_anchored_truncation_and_metadata(self):
+        for mutate in (
+            lambda g:g['views'][0]['ancestors'].pop(),
+            lambda g:g['views'][0]['ancestors'].pop(0),
+            lambda g:g['views'][0].update(endpoint='/other'),
+            lambda g:g['views'][0].update(root='/other'),
+            lambda g:g['views'][0].update(mount_id=True),
+            lambda g:g['views'][0]['ancestors'][0].update(cgroup_path='/wrong'),
+            lambda g:g.update(membership='0::/other'),
+            lambda g:g.update(mountinfo=g['mountinfo']+'\n2 0 0:1 / /alias rw - cgroup2 cgroup rw'),
+        ):
+            r=hardware();mutate(r['cgroups']['value']);self.assert_not_scientific(r,cli=True)
+
+    def test_f1_missing_or_ambiguous_mounts(self):
+        for change in (
+            lambda d:d.pop('/full/cpu.max'),
+            lambda d:d.update({'/proc/self/mountinfo':d['/proc/self/mountinfo']+'\n3 0 0:2 / /other rw - cgroup2 cgroup rw'}),
+            lambda d:d.update({'/proc/self/mountinfo':d['/proc/self/mountinfo']+'\n2 0 0:1 / /another rw - cgroup2 cgroup rw'}),
+            lambda d:d.update({'/sub/cpu.max':'200000 100000'}),
+            lambda d:d.update({'/sub/cpuset.cpus.effective':'0-1'}),
+        ):
+            d=self.audit_mounts();change(d)
+            with self.assertRaises(ValueError):cgroup_ancestry(d.get)
+
+    def test_f1_restrictive_parent_cpuset_memory(self):
+        d=self.audit_mounts();d['/full/cpuset.cpus.effective']='0-1'
+        r=hardware();r['cgroups']=observation(cgroup_ancestry(d.get),'fixture')
+        self.assert_not_scientific(r,cli=True)
+        self.assertEqual(r['cgroups']['value']['effective_cpuset'],[0,1])
+        d=self.audit_mounts();d['/full/memory.max']='2048'
+        r['cgroups']=observation(cgroup_ancestry(d.get),'fixture')
+        self.assertEqual(r['cgroups']['value']['memory_headroom_bytes'],2048)
+        self.assert_not_scientific(r,cli=True)
+
+    def test_f1_malformed_quota_and_memory(self):
+        for key,text in [('cpu.max','max 0'),('cpu.max','0 100000'),('cpu.max','1.5 100000'),
+                         ('cpu.max','100  100000'),('cpu.max','-1 100000'),('memory.max','unknown'),
+                         ('memory.current',True)]:
+            d=self.audit_mounts();d['/full/'+key]=text
+            with self.subTest(key=key,text=text),self.assertRaises(ValueError):cgroup_ancestry(d.get)
+
+    def test_f1_gauge_changes_and_determinism(self):
+        d=self.audit_mounts();d['/sub/memory.current']='64'
+        a=cgroup_ancestry(d.get);b=cgroup_ancestry(d.get)
+        self.assertEqual(a,b)
+        self.assertEqual([v['root'] for v in a['views']],['/','/tenant'])
+        self.assertIn([100000,100000],a['quota_pairs'])
+        with self.assertRaises(ValueError):validate_cgroups(dict(ancestors=[]))
+
+    def test_f2_missing_and_unknown_mapping_fields(self):
+        for key in runtime_fixture():
+            r=hardware();r['openmp']['value'].pop(key);self.assert_not_scientific(r,cli=True)
+        r=hardware();r['openmp']['value']['unexpected']=True;self.assert_not_scientific(r,cli=True)
+        r=hardware();r['compiler']['value']['unexpected']=True;self.assert_not_scientific(r,cli=True)
+
+    def test_f2_mapping_numeric_types_and_cross_checks(self):
+        changes=[lambda v:v.update(pid=True),lambda v:v.update(pid=0),
+                 lambda v:v.update(process_stat=''),lambda v:v.update(process_start_ticks=99999),
+                 lambda v:v.update(path='../libgomp.so.1'),lambda v:v.update(soname='libgomp.so.2'),
+                 lambda v:v.update(executable_sha256='d'*64),lambda v:v.update(sha256='d'*64),
+                 lambda v:v['file_identity'].update(inode=8),lambda v:v['file_identity'].update(device_minor=2),
+                 lambda v:v['file_identity'].update(size=0),lambda v:v['file_identity'].update(mtime_ns=True),
+                 lambda v:v.update(mappings=[]),lambda v:v['mappings'].append(v['mappings'][0]),
+                 lambda v:v.update(mappings=[v['mappings'][0].replace('08:01','08:02')]),
+                 lambda v:v.update(mappings=[v['mappings'][0].replace('r-xp','nope')]),
+                 lambda v:v.update(mappings=[v['mappings'][0].replace('7f001000','7f000000')])]
+        for change in changes:
+            r=hardware();change(r['openmp']['value']);self.assert_not_scientific(r,cli=True)
+
+    def test_f2_candidate_and_complete_positive_cli(self):
+        r=hardware();self.assertEqual(self.admission_cli(r).returncode,0)
+        candidate={k:v for k,v in r['openmp']['value'].items() if k in ('path','sha256','soname')}
+        candidate['linkage']='candidate-library';validate_runtime(candidate)
+        r['openmp']['value']=candidate;self.assert_not_scientific(r,cli=True)
+        candidate['pid']=123
+        with self.assertRaises(ValueError):validate_runtime(candidate)
+
+    def test_f3_complete_topology_and_numa(self):
+        changes=[lambda r:r['topology']['value'][3].update(siblings=[3]),
+                 lambda r:r['topology']['value'][1].update(core=5),
+                 lambda r:r['topology']['value'][1].update(siblings=[0,1,2]),
+                 lambda r:r['topology']['value'][1].update(cpu=0),
+                 lambda r:r['topology']['value'][1].update(siblings=[0,True]),
+                 lambda r:r['topology']['value'][1].update(extra=1),
+                 lambda r:r['numa'].update(value='bad'),
+                 lambda r:r['numa'].update(value=[dict(node=0,cpus=[0,1])]),
+                 lambda r:r['numa'].update(value=[dict(node=0,cpus=[0,1,2,3,4])]),
+                 lambda r:r['numa'].update(value=[dict(node=0,cpus=[0,1]),dict(node=0,cpus=[2,3])]),
+                 lambda r:r['numa'].update(value=[dict(node=0,cpus=[0,2]),dict(node=1,cpus=[1,3])]),
+                 lambda r:r['numa'].update(value=[dict(node=0,cpus=[0,1,2]),dict(node=1,cpus=[2,3])])]
+        for change in changes:
+            r=hardware();change(r);self.assert_not_scientific(r,cli=True)
+
+    def test_f3_optional_absent_and_valid_multinode(self):
+        r=hardware();r['numa']=observation(None,'genuinely unavailable')
+        self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+        r['numa']=observation([dict(node=0,cpus=[0,1]),dict(node=1,cpus=[2,3])],'synthetic two-node')
+        self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+        for key in ('virtualization','placement','frequency'):
+            r=hardware()
+            if key=='frequency':r[key]['value'][0]['unknown']=1
+            else:r[key]['value']['unknown']=1
+            self.assert_not_scientific(r)
+
+    def test_f4_unicode_encoding_and_legitimate_paths(self):
+        for path in ('bin/'+chr(0xd800),'bin/'+chr(0xdc80),'work/'+chr(0xdfff)):
+            for kind in ('build','workload'):
+                p=copy.deepcopy(self.p)
+                if kind=='build':p['build']['executable']=path
+                else:p['workloads'][0]['bundle']=path
+                with self.assertRaisesRegex(ValueError,'encoding'):validate_plan(p)
+                result=self.admission_cli(hardware(),p)
+                self.assertEqual(result.returncode,2);self.assertNotIn('Traceback',result.stderr)
+        hashes=[]
+        for path in ('bin/caf\u00e9','bin/cafe\u0301','bin/\u56fe worker'):
+            p=copy.deepcopy(self.p);p['build']['executable']=path
+            validate_plan(p);hashes.append(plan_hash(p))
+            self.assertEqual(self.admission_cli(hardware(),p).returncode,0)
+        self.assertEqual(len(set(hashes)),3)
+
+    def test_hardware_v1_not_silently_upgraded(self):
+        r=hardware();r['schema_version']=1
+        with self.assertRaisesRegex(ValueError,'unsupported hardware'):admit(self.p,r)
+        result=self.admission_cli(r);self.assertEqual(result.returncode,2)
+
+    def test_f2_process_and_mapping_nearby_cases(self):
+        for change in (lambda v:v.update(process_stat=v['process_stat'].replace('123 (','124 (',1)),
+                       lambda v:v.update(process_stat='123 (worker) S '+' '.join(['0']*19)),
+                       lambda v:v['file_identity'].update(inode=True),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('libgomp.so.1.0.0','libgomp.so.2')])):
+            r=hardware();change(r['openmp']['value']);self.assert_not_scientific(r,cli=True)
+        sample=runtime_fixture();maps='\n'.join(sample['mappings']);stat=sample['process_stat']
+        def read(path):
+            if path.endswith('/maps'):return maps
+            read.calls+=1
+            return stat if read.calls==1 else stat.replace('100000','100001')
+        read.calls=0
+        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=8192,st_mtime_ns=1793284000000000000)
+        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
+            self.assertIsNone(mapped_runtime(123,'fixture',read))
+
+    def test_f3_memory_only_numa_node(self):
+        r=hardware();r['numa']['value'].append(dict(node=1,cpus=[]))
+        self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+
+    def test_collector_missing_cgroup_is_explicit(self):
+        d=self.audit_mounts();d.pop('/full/cpu.max')
+        r=inspect(read=d.get,affinity=[0,2],binaries=False)
+        self.assertIsNone(r['cgroups']['value'])
+        self.assertEqual(r['cgroups']['origin'],'unavailable')
+        self.assertTrue(any('Cgroup evidence unavailable:' in v for v in r['limitations']))
+        self.assert_not_scientific(r)
+
+    def test_f4_validate_cli_and_filesystem_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=copy.deepcopy(self.p);p['build']['executable']='bin/'+chr(0xd800)
+            path=Path(tmp)/'plan.json';path.write_bytes(canonical_json(p))
+            result=subprocess.run([sys.executable,'-B',str(ROOT/'benchmarks/python/campaign.py'),
+                                   'validate','--plan',str(path)],capture_output=True,text=True)
+            self.assertEqual(result.returncode,2);self.assertIn('encoding',result.stderr)
+            self.assertNotIn('Traceback',result.stderr)
+            for name in ('caf\u00e9','cafe\u0301','\u56fe'):
+                target=Path(tmp)/name;target.write_text('legitimate Unicode',encoding='utf-8')
+                self.assertEqual(os.fsdecode(os.fsencode(str(target))),str(target))
 
     def test_cli_validate_and_error(self):
         with tempfile.TemporaryDirectory() as tmp:

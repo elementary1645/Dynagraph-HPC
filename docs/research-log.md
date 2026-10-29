@@ -3249,3 +3249,144 @@ merge or PR; no TSan execution/acceptance or race-freedom claim. This subphase s
 after the authorized local commit for review. Remaining work is a separately
 approved executor, resource enforcement, build/provenance linkage and freshness,
 actual-team evidence, controlled collection, statistical analysis and replication.
+
+## 2026-10-29 — Phase 6B-1R independent-audit remediation
+
+Started clean on feature/phase6b-campaign-foundation at audited commit
+95c515fc802f6a75ce59fdbd236f77be4469fb05. The user authorizes fixes for F1–F4,
+fresh local gates and a local commit on this branch, with no push, merge or PR.
+AGENTS.md now records that narrow remediation scope. Existing Phase 5/6B-1
+records are not rewritten. Their SHA-256 preservation inventory and the clean
+baseline are recorded under new ignored results/validation/phase6b1r/.
+
+Before implementation, added eight regressions: direct API and public CLI for
+each audited failure. Running python3 -B tests/test_campaign.py produced 46 tests,
+with the original 38 passing and exactly the eight new regressions failing.
+red-regressions.log and red-result.json preserve this actual before state.
+
+F1 root cause: choosing the most-specific cgroup mount hid visible parent limits;
+unanchored ancestor summaries could also be truncated. Hardware report v2 retains
+raw unified membership/mountinfo and every relevant anchored mount view. Pure
+validation reconstructs leaf/endpoint/hierarchy paths, enforces complete ancestry,
+reconciles overlapping policies and recomputes all quota/cpuset/memory constraints.
+Missing/ambiguous/contradictory evidence fails closed; unavailable collection has
+an explicit reason. Changing memory.current gauges are allowed with conservative
+headroom aggregation; hidden host restrictions remain unverified.
+
+F2 root cause: admission trusted a linkage label and two hashes without validating
+the mapping record. Closed candidate and observed forms now validate complete
+PID/stat/start, raw mappings, file device/inode/size/mtime, path, soname and digest
+identities. Unknown fields and contradictory records reject. Positive fixtures
+contain complete synthetic Linux records. File/process rechecks do not turn a
+non-atomic snapshot into host authentication or execution-time stability proof.
+
+F3 root cause: sibling consistency was checked only for allocated rows, while
+NUMA/nested facts were not fully validated. Every CPU's sibling group must now
+match its package/core equivalence class before allocation checks. Supplied NUMA
+must partition all online CPUs without overlaps or split SMT cores; memory-only
+nodes and genuinely unavailable optional NUMA remain supported. Other supplied
+optional facts have closed typed schemas. Ownership remains user-declared.
+
+F4 root cause: lexical path checks omitted encoding validation. Strict UTF-8 and
+filesystem encoding roundtrip now reject high/low unpaired surrogates before file
+access. Legitimate Unicode is preserved without NFC/NFD normalization; byte-distinct
+references retain distinct plan hashes. Future staging still needs alias checks.
+
+The first repaired run rejected all audit cases but exposed two legacy diagnostic
+expectations, preserved in first-green-attempt.log. Kept the original diagnostics
+for unsafe paths and logical-count contradictions; the complete 46-test suite
+then passed (green-46.log). Additional nearby API/CLI adversaries expanded coverage
+to 62 passing tests (expanded-tests-v2.log): overlapping/truncated mount evidence,
+restrictive quota/cpuset/memory parents, policy drift, malformed counters, missing
+runtime fields, wrong PID/start/inode/device/soname/hash, candidates denied science,
+all-row SMT/NUMA consistency, optional absence and Unicode API/CLI/file roundtrips.
+
+New pure campaign_provenance.py centralizes these validators without filesystem
+access or subprocesses. Campaign-plan/trial-manifest v1 is retained. Hardware and
+admission v2 deliberately reject incomplete hardware v1 rather than infer missing
+provenance. This is not a change to benchmark timing JSONL, v1 workloads, analysis
+or Phase 5C archive profiles. No production algorithm, API, heuristic, timing,
+dependency pin, CMake registration, CI workflow or existing timeout changes.
+
+Full validation commands/outcomes and remaining limitations are recorded below
+once executed. No performance collection, speedup, TSan acceptance or race-freedom
+claim is authorized by these infrastructure checks.
+
+### Phase 6B-1R completed local verification
+
+All commands below actually ran. focused-results.json retains exact argv/exit/log
+references for the first five; gate-results.json retains the three sandbox driver
+attempts and unsandboxed-result.json the approved separate sanitizer attempt.
+
+```sh
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b1r-repair
+.venv-analysis/bin/python -B tools/validation/check_environment.py
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r-sanitize
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r-sanitize-unsandboxed
+```
+
+Results: 62 campaign tests passed (including all eight initially red regressions),
+59 archive regressions passed, three diagnostic controls passed, 17 infrastructure
+regressions passed, and the existing exact dependency/Agg environment gate passed.
+No installation was performed. Additional source AST parsing and installed PyYAML
+loading plus bash -n of all six workflow command blocks passed; GitHub expressions
+were replaced with literal placeholders for shell syntax checking only. Workflow
+bytes and existing timeouts were unchanged; this is not hosted CI verification.
+
+Fresh Debug and Release each built and passed 31/31 required tests. Release also
+completed the existing tiny full-trace/per-update harness smoke, analysis and
+intended negative controls. These remain harness validation, not performance data.
+The fresh sandbox sanitizer command exited 1 after CTest exit 8, with explicit
+LeakSanitizer ptrace-incompatibility diagnostics. Its logs, failure marker and
+failed-run archive are preserved. The separately approved outside-sandbox command
+used a new directory, retained leak detection and halt-on-error settings unchanged,
+and passed 31/31 ASan+UBSan tests. No failed run was relabeled or overwritten.
+
+The full gates all captured source inventory
+98a95fdf4906903564064fb7c159c7471e1e1288b5d19c1050d3676596bd4b67.
+Every implementation/test byte matches implementation-sha256.json and the final
+working implementation: no implementation or test edits postdate the gate runs.
+Only this verification outcome text was appended afterward.
+
+Each driver created an archive and sidecar. Independently reopened all four with
+the repository verifier, then copied archive/sidecar pairs and a trusted standalone
+verifier kit under phase6b1r/. For each copy, sha256sum -c passed, followed by an
+isolated Python -I -S -B launcher using only the copied kit and --verify/--sidecar.
+All copied checks exited 0. The three success profiles returned verified/passed/31;
+the sandbox-failure archive returned integrity-verified/failed/command-failed,
+without a passed-count claim. offline-results.json records exact copied commands,
+results and archive hashes. Complete nested raw evidence is inside the archives;
+selected receipts/reports/logs are also preserved separately, without build trees.
+The kit is not loaded from archived untrusted source.
+
+Direct reproducer outcomes are saved in after-reproducers.json:
+
+| Finding | Before repair | After repair |
+| --- | --- | --- |
+| F1 overlapping mounts, one-CPU parent | CLI 0, scientific allowed | CLI 1, ancestor quota rejection |
+| F2 invalid PID/path/soname/stat | CLI 0, scientific allowed | CLI 1, contradictory mapping rejection |
+| F3 nonallocated sibling inconsistency | CLI 0, scientific allowed | CLI 1, topology rejection |
+| F4 unpaired surrogate path | CLI 0, accepted | CLI 2, controlled encoding diagnostic |
+
+The original development-plan hash and complete expanded manifest are unchanged
+(byte-for-byte comparison with preserved Phase 6B-1 CLI output), recorded in
+planning-compatibility.json. static-checks.json records unchanged production,
+public APIs, algorithms, heuristic/timing code, CMake registrations, workflow,
+existing schemas/workload goldens, analysis, dependency pins and archive tools
+against 95c515f. All 128 preserved Phase 6B-1 evidence-file hashes still match.
+Final git diff --check passed. No historical evidence was modified.
+
+Remaining limitations: supplied records/declarations are not host authentication;
+visible mounts do not establish absence of hidden restrictions; compiler/build
+linkage and exclusive reservation verification remain separate requirements.
+Snapshots and file/process rechecks do not establish execution-time stability.
+Unavailable optional NUMA does not establish a placement policy. Hardware v1
+requires recapture as complete v2, with no inferred upgrade. Later execution,
+resource enforcement, actual-team collection, inference and replication remain
+deferred. No performance campaign, tuning, TSan acceptance or race-freedom claim.
+Stop after the authorized local remediation commit; no push, merge or PR.

@@ -1,5 +1,11 @@
 # Phase 6B-1 campaign foundation
 
+Phase 6B-1R repairs the independent acceptance findings. Campaign-plan and trial
+manifest versions remain 1. Hardware reports and admission outputs now require
+version 2; incomplete version-1 hardware records are rejected, never silently
+upgraded. Historical v1 evidence remains preserved. See the remediation contract
+below and the research log for actual commands and results.
+
 Phase 6B-1 implements planning and read-only hardware qualification, not an
 experiment executor. The user's Phase 6B-1 authorization supersedes the older
 Phase 6 deferral for this subphase only. Phase 5C is merged at 8b05c2b; hosted
@@ -188,3 +194,95 @@ build-evidence linkage, observation freshness and reservation verification,
 actual-team telemetry, controlled collection, additional measurement levels,
 statistical inference and independent replication. No full experiment matrix,
 benchmark results, speedups, heuristic tuning or native batch repair is included.
+
+## Phase 6B-1R hardware-report v2 contract
+
+These corrections address the four independently reproduced false-success cases.
+The first eight regressions (API and CLI for each finding) were added against
+95c515f before repairs: all eight failed while the original 38 tests passed.
+The repaired suite retains the original acceptance cases with complete v2 fixtures
+and adds nearby adversaries. No Phase 5C archive, timing JSONL, workload recipe,
+analysis or public SSSP contract is modified.
+
+### Cgroup ancestry
+
+The `cgroups.value` object is closed and requires membership, mountinfo, views,
+effective_cpuset, quota_pairs, memory_headroom_bytes and visibility. Membership
+retains the unified `0::PATH` line. Mountinfo retains the complete observed text,
+not just a selected mount. Every relevant cgroup2 mount is derived again during
+admission, sorted by mount ID; ambiguity, duplicate IDs/points or inconsistent
+hierarchy devices reject. Mount roots/points and membership must be canonical
+absolute supported paths. Escaped mount paths and cgroup v1 remain unsupported.
+
+Each view contains mount_id, device, root, mountpoint, membership, leaf, endpoint
+and ancestors. The first seven fields must match the raw membership/mountinfo
+mapping exactly. Ancestors must cover every directory from leaf through endpoint,
+with neither missing nor extra entries. Each entry has path, cgroup_path,
+`cpu.max`, `cpuset.cpus.effective`, `memory.max` and `memory.current`. Hierarchy
+paths are reconstructed independently of filesystem aliases. All supplied views
+must be present; removing an ancestor/view or changing an endpoint cannot be
+hidden by merely refreshing summary fields.
+
+All quota constraints are checked, cpusets intersect across every ancestor/view,
+and memory headroom takes the minimum. Overlapping views of the same hierarchy
+path must agree on quota, cpuset and memory-limit policy. Changing memory.current
+is allowed because it is a gauge sampled at different times; the most restrictive
+observed headroom is retained. Contradictory policy observations reject rather
+than choosing a convenient view. Summary fields must equal recomputed values.
+
+Limits: at most 16 matching views, 64 ancestors per view, 256 ancestor entries in
+total, 4096 mountinfo records and 256 KiB UTF-8 mountinfo. Numeric controller values
+are bounded canonical ASCII strings; CPU lists retain their separate limits.
+If required controller evidence cannot be captured, the whole cgroup observation
+is explicitly unavailable with a reason, and scientific qualification fails.
+Full *declared visible* ancestry never proves absence of hidden host constraints;
+a fabricated or edited raw mountinfo document is not authenticated by this parser.
+
+### Runtime evidence
+
+The closed candidate-library form has exactly path, sha256, soname and
+linkage=`candidate-library`. Its path must be canonical absolute and its filename
+must agree with supported soname `libgomp.so.1`. It can explain a host observation
+but never satisfies scientific runtime-mapping admission.
+
+The closed observed-process-mapping form additionally requires executable_sha256,
+pid, process_stat, process_start_ticks, mappings and file_identity. A positive
+integer PID must agree with a structurally valid Linux stat record (including at
+least the 49 numeric fields after state); start ticks must agree with that record.
+File identity has exactly device_major, device_minor, inode, size and mtime_ns,
+with exact integer types and bounded ranges. Mapping lines must have valid address
+ranges/permissions/numeric fields and agree with the runtime path, device and inode.
+Duplicate/overlapping ranges, unknown fields, mismatched sonames, missing fields
+and malformed types reject. Digests must match the plan and executable observation.
+
+The collector validates the record it constructs, compares the mapped file's
+identity before/after hashing, and rechecks process start identity, maps and
+executable bytes. It never launches the supplied executable. Fixtures now contain
+realistic complete synthetic stat/map/file records, not just a linkage label.
+Runtime hashes and process records do not authenticate an untrusted host or make
+this non-atomic observation an execution-time stability guarantee.
+
+### Topology, optional facts and Unicode
+
+All CPU topology rows are validated before checking allocated CPUs. Each sibling
+array must exactly equal the complete package/core equivalence group, for every
+CPU, including unallocated siblings. IDs are typed, sorted/unique where arrays
+require it, and unknown nested fields reject. Supplied NUMA records must have
+unique node IDs, disjoint CPU sets covering the supplied online topology, and no
+SMT core split across nodes. Memory-only nodes may have empty CPU lists. Genuinely
+unavailable optional NUMA remains null/unavailable; no NUMA-placement guarantee
+is inferred from that absence. Valid multiple-node topology does not claim a
+single-node placement policy.
+
+Supplied compiler, virtualization, placement and frequency evidence is also
+validated against closed structures. Missing required facts and contradictions
+prevent scientific eligibility. User ownership declarations remain separate;
+structural consistency is not independent observation, attestation or reservation
+verification. No one-time result proves that the environment stays unchanged.
+
+All campaign path references require strict UTF-8 encoding and filesystem encoding
+roundtrip, including rejection of both high and low unpaired surrogates before
+any future file access. Legitimate Unicode is retained. No NFC/NFD normalization
+is performed: different code-point sequences are different hashed references on
+the supported POSIX platform. Future staging must still check symlinks/aliases;
+this policy does not certify normalization behavior of other filesystems.

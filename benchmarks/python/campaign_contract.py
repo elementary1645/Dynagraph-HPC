@@ -1,6 +1,7 @@
 """Campaign v1: strict, bounded planning only; never launches a benchmark."""
 import hashlib
 import json
+import os
 import re
 from pathlib import PurePosixPath
 
@@ -30,7 +31,23 @@ def digest(value):
         raise ValueError('invalid SHA-256 identity')
 
 
+def path_text(value):
+    """UTF-8 POSIX references; preserve code points, never normalize NFC/NFD."""
+    if type(value) is not str or not value or len(value) > 4096:
+        raise ValueError('unsafe path text')
+    try:
+        value.encode('utf-8', errors='strict')
+        if os.fsdecode(os.fsencode(value)) != value:
+            raise ValueError('filesystem path encoding does not roundtrip')
+    except UnicodeError as error:
+        raise ValueError('unsafe filesystem path encoding') from error
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError('unsafe control character in path')
+    return value
+
+
 def safe_path(value):
+    path_text(value)
     if (type(value) is not str or not value or len(value) > 512 or
             any(ord(c) < 32 or ord(c) == 127 for c in value) or
             '\\' in value or ':' in value or PurePosixPath(value).is_absolute() or
