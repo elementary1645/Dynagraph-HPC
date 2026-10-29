@@ -66,6 +66,8 @@ def programs(raw, h, size):
         row=dict(kind=kind, flags=flags, offset=offset, vaddr=vaddr,
                  filesz=filesz, memsz=memsz, align=align)
         if kind == 1:
+            if align > PAGE:
+                raise ValueError('unsupported ELF PT_LOAD alignment')
             if (filesz > memsz or flags not in (4, 5, 6) or
                     (align not in (0, 1) and (align & (align-1) or offset % align != vaddr % align)) or
                     offset % PAGE != vaddr % PAGE):
@@ -76,10 +78,11 @@ def programs(raw, h, size):
         raise ValueError('missing or unordered ELF load segments')
     if not any(r['flags']==5 and r['filesz'] for r in loads):
         raise ValueError('missing executable ELF PT_LOAD')
-    # Deliberately reject overlapping page images, rather than guess loader order.
-    spans=[(down(r['vaddr']),up(add(r['vaddr'],r['filesz']))) for r in loads if r['filesz']]
+    # Include zero-fill/BSS pages: anonymous loads can overwrite certified VMAs.
+    # Conservatively reject shared memory pages instead of emulating loader order.
+    spans=[(down(r['vaddr']),up(add(r['vaddr'],r['memsz']))) for r in loads if r['memsz']]
     if any(a[1]>b[0] for a,b in zip(spans,spans[1:])):
-        raise ValueError('unsupported overlapping ELF load pages')
+        raise ValueError('unsupported overlapping ELF load memory pages')
     if h['entry'] and not any(r['flags']==5 and r['vaddr']<=h['entry']<add(r['vaddr'],r['memsz']) for r in loads):
         raise ValueError('ELF entry outside executable segment')
     return rows
@@ -231,6 +234,11 @@ def reconcile_mappings(rows, elf, size, page_size):
         bias=first['lo']-down(segment['vaddr'])-delta
         if delta>=0 and 0<=bias<=U64 and bias%PAGE==0: biases.add(bias)
     def matches(bias):
+        # Check translated memory endpoints even for anonymous-only regions;
+        # their contents/VMAs need not be included in this file-backed record.
+        for segment in elf['segments']:
+            if segment['kind']==1 and segment['memsz']:
+                add(bias,up(add(segment['vaddr'],segment['memsz'])))
         coverage=[[] for _ in loads]
         relro=[(add(bias,down(s['vaddr'])),add(bias,down(add(s['vaddr'],s['memsz']))))
                for s in elf['segments'] if s['kind']==0x6474e552]

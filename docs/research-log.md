@@ -3513,3 +3513,132 @@ snapshots, hidden host restrictions, unverified symbol binding/active execution,
 reservation/build provenance and runtime stability. Later execution/inference
 remains deferred. Stop after the authorized local commit for independent re-audit;
 no push, merge or PR.
+
+## 2026-10-30 — Phase 6B-1R3 ELF layout hardening
+
+Started clean on feature/phase6b-campaign-foundation at audited commit
+8cd8bd10da5aa6031765461659ba47498d9b107d. The user authorizes narrow N3/N4
+implementation, fresh validation, and a local commit without push, merge or PR.
+Captured prior Phase 6B-1/R/R2 evidence hashes under the new ignored directory
+results/validation/phase6b1r3 before changes; historical evidence is not rewritten.
+Read the full independent audit, repository guidance, runtime collection/admission,
+ELF parser, plan contract, tests and campaign/research documentation.
+
+Before implementation, independently reran the audit matrix: the 2 MiB-alignment
+and overlapping anonymous-load cases both returned science=true and CLI 0
+(before-independent.log). Inspected the genuine local libgomp ELF first: all four
+PT_LOAD alignments were 4096 (genuine-runtime-layout.json). Chose the explicitly
+permitted conservative restriction p_align <= 4096 rather than adding larger-
+alignment loader emulation.
+
+Added regressions before changing production Python. The genuine library was
+copied, program headers were modified, and hashes/path/device/inode/size/mtime
+were refreshed from the actual files. A genuine observed baseline qualified first;
+both modified cases then incorrectly qualified through API and CLI. Synthetic N4
+also reproduced. The first red run recorded three failing subcases; its synthetic
+N3 fixture also changed a segment whose vaddr differed from offset, unintentionally
+violating existing congruence validation. Corrected that test mutation to change
+only the first congruent load, before implementation. The final 78-test red run
+has four failing subcases, all API true/CLI 0, with the original 75 tests passing
+(red-regressions-final.log). The first attempt is retained separately.
+
+N3 root cause: checking static p_align congruence while reconciling only kernel
+page alignment allowed unsupported larger-alignment origins. Every PT_LOAD now
+rejects p_align > PAGE; existing 0/1/power-of-two, congruence and page-bias checks
+cover the deliberately restricted accepted subset. N4 root cause: overlap checks
+used p_filesz and omitted zero-file-size loads, allowing anonymous zero-fill to
+clobber certified executable pages. Overlap analysis now uses checked page-rounded
+p_memsz intervals for all nonempty loads. Mapping reconciliation also checks
+translated memory endpoints for anonymous-only loads without requiring file VMAs
+for them. This avoids overflow outside the file-backed coverage loop.
+
+The first repaired 78-test run passed. Added nearby tests for supported/invalid/
+unsupported alignments (including an aligned but unsupported larger origin),
+congruence, RX/RW/partial-page overlap, nonoverlapping anonymous BSS, ordinary BSS,
+empty loads, adjacent and overlapping file-backed loads, memory-endpoint/page-
+rounding overflow, and anonymous relocation overflow. Exact rejection diagnostics
+are checked so unrelated fixture failures cannot satisfy the original regressions.
+No runtime v3 fields, dependency pins, algorithms or existing evidence contracts
+change. The full supported layout and trust limitations are in campaign-foundation.md.
+
+### Phase 6B-1R3 completed fresh validation
+
+All commands below actually executed; exact driver argv, controlled environments,
+command receipts, raw results and inventory bindings are retained in the fresh
+archives and results/validation/phase6b1r3/verification-summary.json. No dependencies
+were installed. The sanitizer command ran through the approved outside-sandbox
+path, retaining leak detection and halt-on-error settings.
+
+```sh
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b1r3-repair
+.venv-analysis/bin/python -B tools/validation/check_environment.py
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r3-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r3-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r3-sanitize-unsandboxed
+```
+
+Fresh outcomes: 85 campaign tests, 59 archive regressions, 3 diagnostic controls
+and 17 infrastructure regressions passed. The installed exact dependency/Agg gate
+passed without installation. The original F1–F4/N1–N2 protections remain covered.
+Fresh Debug and Release each built and passed 31/31 required CTest tests. Release
+also completed full-trace/per-update smoke, analysis, artifact checks and intended
+negative controls. Approved outside-sandbox ASan+UBSan built and passed 31/31,
+with ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 unchanged. No new sanitizer failure
+occurred. These are local validation executions, not performance experiments,
+hosted-CI verification, TSan acceptance or race-freedom/scalability evidence.
+
+Each driver created an archive and SHA-256 sidecar and independently reopened it.
+Copied all three pairs, then ran sha256sum -c and the copied trusted verifier
+through isolated Python -I -S -B with --verify/--sidecar. All six copied checks
+passed: debug-full-v1, release-smoke-v1 and sanitize-full-v1 each verified/passed/31;
+Release smoke=true. The kit is copied from trusted current repository files,
+never untrusted archived code. Nested raw evidence is retained without build trees.
+Historical Phase 6B-1 and 6B-1R failed sanitizer archives were also independently
+verified using that kit; both remain integrity-verified/failed/command-failed.
+Their raw diagnostics and all 911 captured prior evidence-file hashes are unchanged.
+
+All three fresh gates captured the same source inventory:
+abaf558a1f8c8b5228becdea2f4109ea426a9e9fcfceb243f9e893ba17f279d3.
+Final campaign_elf.py, test_campaign.py and campaign_runtime_support.py bytes match
+implementation-sha256.json and every gate's source inventory. No implementation
+or test edits followed those gates; only this verification outcome text was added.
+
+The independent audit matrix was repeated after remediation. Its original script
+assumed the mutated alignment record could be reparsed while constructing a bias;
+the new fail-closed parser now rejects at that point. Preserved that initial
+harness result separately, then derived the test bias from the valid baseline
+instead. The completed matrix retained its valid genuine-runtime baseline and
+rejected N3 and N4 through API/CLI (science=false, CLI 1), alongside N1/N2 nearby
+adversaries. Both original binary-backed audit fixtures still have file hashes
+matching their declared plans; admission now rejects them, and elf_file rejects
+with the exact unsupported-alignment/overlapping-memory diagnostic. Results are in
+after-actual-audit-files.json, after-independent.log and retained reproducer records.
+The self-contained regression tests also create fresh modified genuine files,
+refresh hashes and stat identities, and check the exact diagnostic through the
+parser/collector API after API/CLI rejection. No candidate ELF is executed or loaded.
+
+The representative manifest remains byte-identical to retained original Phase
+6B-1 output: 104 trials, plan SHA-256
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24,
+manifest SHA-256
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+Development mode still admits incomplete scientific evidence only with science
+false. Runtime v3 fields, collection/admission callers, plan contract and manifest
+code remain unchanged. Protected-path comparisons confirm unchanged production
+algorithms/APIs, timing, heuristics, workloads/goldens, analysis, dependency pins,
+CMake registration, workflow, Phase 5C archive tools/contracts and TSan controls.
+Python AST checks (50 files), installed PyYAML loading, bash -n of all six workflow
+command blocks and Git diff checks passed. GitHub expressions were replaced only
+for local shell syntax checks; no hosted workflow run is claimed.
+
+The six changed files are campaign_elf.py, test_campaign.py,
+campaign_runtime_support.py, AGENTS.md, campaign-foundation.md and this research
+log. Remaining limitations are the documented restricted platform and layout,
+unauthenticated supplied excerpts, non-atomic snapshots, uncertified anonymous
+contents, unverified symbol binding/active execution, ownership/build provenance
+and execution-time stability. Later execution/inference remains deferred. Stop
+after the authorized local commit for independent review; no push, merge or PR.

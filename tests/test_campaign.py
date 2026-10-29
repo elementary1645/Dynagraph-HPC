@@ -20,7 +20,8 @@ from campaign_hardware import (admit, cgroup_ancestry, cpu_list, inspect, mapped
 from campaign_provenance import validate_runtime, validate_cgroups, topology_ids
 from experiment_records import POLICIES
 from workloads import canonical_json
-from campaign_runtime_support import elf_bytes, elf_evidence, patch_hex
+from campaign_runtime_support import (elf_bytes, elf_evidence, patch_hex,
+                                      harden_case, modified_runtime_file, add_load)
 from campaign_elf import collect_elf, parse_elf, add
 
 
@@ -773,6 +774,107 @@ class CampaignTests(unittest.TestCase):
                     self.assertIsNone(mapped_runtime(child.pid,exe,missing))
                 finally:
                     child.communicate(b'x',timeout=5)
+
+    def assert_r3_rejected(self, report, plan=None, reason=None):
+        p=self.p if plan is None else plan
+        result=admit(p,report);cli=self.admission_cli(report,p)
+        self.assertFalse(result['scientific_performance_allowed'],f'API allowed; CLI exit={cli.returncode}')
+        self.assertEqual(cli.returncode,1,cli.stderr)
+        self.assertNotIn('Traceback',cli.stderr)
+        if reason is not None:
+            with self.assertRaisesRegex(ValueError,reason):validate_runtime(report['openmp']['value'])
+
+    def test_r3_n3_synthetic_alignment_api_cli(self):
+        r=hardware();harden_case(r['openmp']['value']['elf'],'alignment')
+        self.assert_r3_rejected(r,reason='unsupported ELF PT_LOAD alignment')
+
+    def test_r3_n4_synthetic_zero_fill_api_cli(self):
+        r=hardware();harden_case(r['openmp']['value']['elf'],'zero-fill')
+        self.assert_r3_rejected(r,reason='overlapping ELF load memory pages')
+
+    def test_r3_actual_modified_genuine_elf_api_cli(self):
+        import select
+        from campaign_hardware import elf_file
+        source='#include <omp.h>\n#include <unistd.h>\nint main(){if(omp_get_max_threads()<1)return 1;char c=1;if(write(1,&c,1)!=1)return 2;return read(0,&c,1)==1?0:3;}\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            cpp=Path(tmp)/'idle.cpp';exe=Path(tmp)/'idle';cpp.write_text(source)
+            subprocess.run(['g++','-fopenmp',str(cpp),'-o',str(exe)],check=True,capture_output=True,timeout=30)
+            with subprocess.Popen([str(exe)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE) as child:
+                try:
+                    self.assertTrue(select.select([child.stdout],[],[],5)[0]);self.assertEqual(child.stdout.read(1),b'\1')
+                    value=mapped_runtime(child.pid,exe);self.assertIsNotNone(value)
+                    # The genuine baseline must qualify before either mutation.
+                    p=copy.deepcopy(self.p);p['build'].update(executable_sha256=value['executable_sha256'],openmp_sha256=value['sha256'])
+                    r=hardware();r['openmp']['value']=value;r['executable_sha256']['value']=value['executable_sha256']
+                    self.assertTrue(admit(p,r)['scientific_performance_allowed'])
+                    self.assertEqual(self.admission_cli(r,p).returncode,0)
+                    for case in ('alignment','zero-fill'):
+                        with self.subTest(case=case):
+                            folder=Path(tmp)/case;folder.mkdir()
+                            mutated,path=modified_runtime_file(value,case,folder)
+                            pp=copy.deepcopy(p);pp['build']['openmp_sha256']=mutated['sha256']
+                            rr=copy.deepcopy(r);rr['openmp']['value']=mutated
+                            self.assertEqual(mutated['sha256'],hashlib.sha256(path.read_bytes()).hexdigest())
+                            self.assertEqual(mutated['file_identity']['inode'],path.stat().st_ino)
+                            reason='unsupported ELF PT_LOAD alignment' if case=='alignment' else 'overlapping ELF load memory pages'
+                            self.assert_r3_rejected(rr,pp,reason)
+                            with self.assertRaisesRegex(ValueError,reason):elf_file(path)
+                finally:child.communicate(b'x',timeout=5)
+
+    def test_r3_supported_alignment_values(self):
+        for align in (0,1,2,8,2048,4096):
+            with self.subTest(align=align):
+                r=hardware()
+                for index in (0,1):patch_hex(r['openmp']['value']['elf'],'program_headers',index*56+48,'<Q',align)
+                validate_runtime(r['openmp']['value'])
+                self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+                self.assertEqual(self.admission_cli(r).returncode,0)
+
+    def test_r3_unsupported_and_invalid_alignment(self):
+        for align in (3,24,4095,8192,1<<63):
+            r=hardware();patch_hex(r['openmp']['value']['elf'],'program_headers',48,'<Q',align)
+            with self.subTest(align=align):self.assert_r3_rejected(r)
+        r=hardware();harden_case(r['openmp']['value']['elf'],'alignment')
+        # Larger alignment remains deliberately unsupported even at a 2 MiB bias.
+        r['openmp']['value']['mappings']=[line.replace('7f00','8000') for line in r['openmp']['value']['mappings']]
+        self.assert_r3_rejected(r,reason='unsupported ELF PT_LOAD alignment')
+        r=hardware();patch_hex(r['openmp']['value']['elf'],'program_headers',56+8,'<Q',0x1001)
+        self.assert_r3_rejected(r,reason='invalid or unsupported ELF PT_LOAD')
+
+    def test_r3_zero_fill_writable_and_padding_overlap(self):
+        for address,offset in ((0x6000,0),(0x7800,0x800)):
+            r=hardware();add_load(r['openmp']['value']['elf'],address,0x1000,offset=offset)
+            with self.subTest(address=address):self.assert_r3_rejected(r,reason='overlapping ELF load memory pages')
+
+    def test_r3_nonoverlapping_anonymous_and_empty_loads(self):
+        for address,size in ((0x8000,0x1000),(0x1000,0)):
+            r=hardware();add_load(r['openmp']['value']['elf'],address,size)
+            # No file-backed VMA is added for anonymous or empty loads.
+            validate_runtime(r['openmp']['value'])
+            self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+            self.assertEqual(self.admission_cli(r).returncode,0)
+        # The unchanged ordinary RW PT_LOAD includes a BSS tail and final-page padding.
+        value=runtime_fixture();loads=[s for s in parse_elf(value['elf'])['segments'] if s['kind']==1]
+        self.assertGreater(loads[1]['memsz'],loads[1]['filesz']);validate_runtime(value)
+
+    def test_r3_file_load_overlap_and_adjacency(self):
+        r=hardware();add_load(r['openmp']['value']['elf'],0x1000,0x1000,filesz=0x1000,offset=0x1000,flags=4)
+        self.assert_r3_rejected(r,reason='overlapping ELF load memory pages')
+        r=hardware();add_load(r['openmp']['value']['elf'],0x2000,0x1000,filesz=0x1000,flags=4)
+        r['openmp']['value']['mappings'].insert(1,'7f002000-7f003000 r--p 00000000 08:01 7 /usr/lib/libgomp.so.1.0.0')
+        validate_runtime(r['openmp']['value'])
+        self.assertTrue(admit(self.p,r)['scientific_performance_allowed'])
+        self.assertEqual(self.admission_cli(r).returncode,0)
+
+    def test_r3_memory_endpoint_and_page_rounding_overflow(self):
+        for address,size in ((0x8000,(1<<64)-1),((1<<64)-4096,4096),((1<<64)-4096,4095)):
+            r=hardware();add_load(r['openmp']['value']['elf'],address,size)
+            with self.subTest(address=address,size=size):self.assert_r3_rejected(r,reason='overflow')
+
+    def test_r3_anonymous_relocation_overflow(self):
+        r=hardware();add_load(r['openmp']['value']['elf'],(1<<64)-8192,4096)
+        parse_elf(r['openmp']['value']['elf']) # Unrelocated endpoints fit uint64.
+        self.assert_r3_rejected(r,reason='overflow')
 
     def test_cli_validate_and_error(self):
         with tempfile.TemporaryDirectory() as tmp:

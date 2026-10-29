@@ -377,3 +377,43 @@ a real positive procfs fixture. It only queries the runtime's configured maximum
 and waits on stdin; it executes no graph query, parallel region or performance
 campaign. The collector never starts an inspected executable. Validation commands,
 actual outcomes and preserved failures are recorded in the research log.
+
+## Phase 6B-1R3 ELF layout restrictions
+
+Runtime evidence v3 and the other schema versions are unchanged. N3/N4 hardening
+narrows the supported ELF layout within the existing Linux/x86-64/glibc/4096-byte
+page subset. It does not broaden scientific qualification or add execution.
+
+Every PT_LOAD p_align must be 0, 1, or a power of two no greater than 4096. Zero
+and one specify no additional ELF alignment, but supported file-backed loading
+still requires offset/vaddr congruence modulo the 4096-byte kernel page size.
+All other supported alignments must also satisfy ELF offset/vaddr congruence.
+The permitted maximum load alignment is thus at most the kernel page size, and
+the already-required page-aligned relocation bias preserves every accepted load's
+alignment. Larger ELF alignments are explicitly unsupported, even if a supplied
+bias happens to satisfy them; records with these alignments must not qualify.
+The locally available genuine libgomp was inspected before this choice: all four
+PT_LOAD alignments were 4096. This observation is recorded, not assumed universal.
+A future larger-alignment implementation needs separate origin/alignment tests.
+
+The supported memory layout consists of disjoint page-rounded intervals
+[floor_page(p_vaddr), ceil_page(p_vaddr + p_memsz)) for **every nonempty PT_LOAD**.
+This includes zero-file-size loads and ordinary BSS tails. Adjacent intervals may
+meet at an endpoint. Sharing a page between different nonempty load images is
+unsupported even when their byte intervals are adjacent or nonoverlapping; the
+validator does not emulate loader overwrite order. Empty memory spans occupy no
+pages. Existing file-size <= memory-size and bounded file-offset rules remain.
+
+Page rounding and both unrelocated and relocated memory endpoints use checked
+uint64 arithmetic. Relocation checks include anonymous-only loads. Nonoverlapping
+zero-fill/BSS regions do not require file-backed procfs VMAs; their contents and
+anonymous VMAs are not certified. File-backed pages still require complete
+coverage, consistent permissions, offsets and identity at one bias. Final file
+page padding, BSS tails within a load, split VMAs, and RELRO remain supported.
+
+Both the main executable and library receive these structural ELF checks. An
+unsupported load layout fails scientific admission without upgrading old evidence
+or changing development-only semantics. This remains provenance consistency on
+supplied evidence: excerpts and declarations are unauthenticated, collection is
+non-atomic, and no result proves active OpenMP execution, symbol binding, team
+size, reservation ownership, build provenance or execution-time stability.
