@@ -2,14 +2,20 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5C-3B-3R archive acceptance repair: mandatory evidence
+- Current authorized scope: Phase 6B-1 campaign contracts, deterministic planning
+  and read-only hardware provenance/admission, with tests and documentation.
+  The explicit Phase 6B-1 request supersedes the earlier Phase 6 deferral only
+  for this foundation. Commit the validated work on its dedicated feature branch;
+  do not push, merge or create a PR. No performance experiments are authorized.
+- Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 5C-3B-3R implementation/local verification for independent review;
-  Phase 6 remains deferred. Do not claim hosted CI passed from local checks.
+- Stop after Phase 6B-1 implementation/local verification and the authorized commit;
+  later Phase 6 execution/inference remains deferred. Preserve historical Phase 5
+  evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
   Preserve tests/tsan_controls and ignored results/validation/phase5c2a* evidence;

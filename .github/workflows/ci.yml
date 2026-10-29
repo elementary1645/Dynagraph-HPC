@@ -35,6 +35,7 @@ jobs:
         run: python -B tools/validation/test_repair.py --output "$RUNNER_TEMP/focused-${{ matrix.preset }}"
       - name: Archive and diagnostic regressions
         run: |
+          python -B tests/test_campaign.py
           python -B tools/validation/test_negative_diagnostics.py
           python -B tools/validation/test_archive.py
       - name: Full suite and Release smoke pipeline

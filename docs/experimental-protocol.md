@@ -2,6 +2,12 @@
 
 ## Status
 
+Current scope is Phase 6B-1 [campaign foundation](campaign-foundation.md): strict
+plans, deterministic trial manifests and hardware qualification only, following
+the Phase 6A design audit and explicit implementation authorization. Earlier Phase 6
+deferrals below are historical and are superseded only for this subphase. No
+performance experiment, inference, tuning or timing-boundary change is authorized.
+
 Current authorized infrastructure scope is Phase 5C-3B-3R: intended-diagnostic
 controls, portable evidence archives and independent offline verification. The
 [reproducibility runbook](reproducibility-validation.md#phase-5c-3b-2-ci-contract-and-bounded-pipeline)

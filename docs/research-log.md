@@ -3146,3 +3146,106 @@ independent re-audit; independent approval and hosted CI remain pending, and the
 TSan acceptance gate remains unmet. Archive integrity does not authenticate the
 producer or certify source-to-binary correspondence. No dependencies installed,
 commit, push, PR or Phase 6 work. Stop here for independent review.
+# 2026-10-29 — Phase 6B-1 campaign contracts and hardware admission
+
+The explicit Phase 6B-1 request authorizes implementation and a local feature-branch
+commit, superseding the older Phase 6 deferral only for this foundation. AGENTS.md
+and the protocol status now state that scope explicitly. Phase 5 evidence below
+is historical and unchanged. Started from clean main at
+8b05c2b2dc1212176eb70cf24559b0bf1ccd53bd (merged Phase 5C, PR #10). The user reports
+hosted validation complete; this work does not claim a new hosted run. Created
+feature/phase6b-campaign-foundation. The first git switch failed because sandbox
+Git metadata is read-only; the approved filesystem escalation created the branch.
+
+Implemented separate standard-library campaign contract, planning CLI and Linux
+hardware collector/admission modules; a development-only example; synthetic tests;
+and docs/campaign-foundation.md. Canonical hashes bind plans, explicit trial
+coordinates and admission reports. Planning never launches a benchmark. Existing
+engine update measurement levels only; no full matrix, executor, new algorithm,
+heuristic tuning, inference, native batching or timing change. All four existing
+policies and unchanged thresholds are explicit. Unknown/missing fields, unsafe
+references, duplicate identities, malformed JSON, excessive expansion, incompatible
+worker/delta comparisons and conflicting declarations reject deterministically.
+
+Hardware evidence separates observed/unavailable facts and user declarations.
+Visible unified cgroup ancestry is resolved against mount roots and reconciled
+for cpusets, quotas and memory headroom. Affinity/topology/SMT and worker budgets
+are checked. Scientific qualification requires matching binary/compiler/runtime
+evidence and reservation declarations. A compiler candidate library or DT_NEEDED
+entry cannot establish loaded runtime identity; optional existing-process maps
+must match executable bytes and mapped file device/inode. No target executable
+is launched. Development admission remains explicitly unsuitable for scientific
+collection/scaling, retaining failed scientific checks. Reports are not authenticated
+host attestation, build certification or proof of exclusive ownership.
+
+One narrowly justified CI addition invokes python -B tests/test_campaign.py in
+the existing Debug/Release standalone regression step. It continuously checks
+this new contract without changing any CTest registration or the 31-test profiles.
+Sanitizer workflow, existing timeouts, CMake, pins and production code are unchanged.
+
+Validation records are retained under ignored results/validation/phase6b1/.
+focused-results.json, gate-results.json, unsandboxed-result.json, archive-results.json
+and cli-final/commands.json record actual commands/outcomes. Core commands:
+
+```sh
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b1-repair
+.venv-analysis/bin/python -B tools/validation/check_environment.py
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1-sanitize
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1-sanitize-unsandboxed
+git diff --check
+```
+
+Final campaign regression run: 38 tests passed (campaign-final-v3.log), including
+hash-randomization independence, all missing top-level fields, malformed shapes,
+schedule balance/coverage, bounds, cross-configuration rejection, cgroup mount
+and ancestor fixtures, SMT/affinity/memory contradictions, scientific positive
+and negative synthetic reports, runtime inode mismatch and development behavior.
+Earlier 30-test exploratory runs passed. The first expanded 37-test run had one
+test-authoring failure: it wrongly expected an explicitly empty comparison list
+to reject; empty comparisons are valid. Corrected the test and reran successfully.
+The final code also binds admission to canonical plan/hardware hashes and rejects
+nested boolean/integer aliases and nonstring governor evidence in hardware reports.
+
+Existing archive regressions: 59/59 passed; diagnostic controls: 3/3 passed;
+infrastructure repair regressions: 17/17 passed; exact pinned environment/Agg
+check passed, with no installation. Fresh Debug and Release gates each built and
+passed 31/31 mandatory tests. Release smoke, complete dataset/analysis validation
+and intended negative controls passed. The first ASan+UBSan gate failed (driver
+exit 1, CTest exit 8): LeakSanitizer explicitly reported ptrace incompatibility.
+Preserved that attempt, raw logs and its integrity-verified failed-run archive.
+The approved outside-sandbox attempt used a new directory and passed 31/31 with
+unchanged leak/halt-on-error settings; it is a separate success, never a relabeling.
+
+All three successful fresh archives and sidecars independently reopened as
+verified/passed/31; failed evidence reopened as integrity-verified/failed, without
+a passed-count claim. Also reopened the three retained downloaded Phase 5 hosted
+archive/sidecar pairs under /tmp/dynagraph-hosted-ci-32; all passed their profiles.
+An initial ad-hoc archive import used the wrong sys.path and raised ModuleNotFoundError;
+corrected the tools/validation import path and successfully reopened the archive.
+No repository implementation defect or evidence rewrite was involved.
+
+The full C++ gates captured source inventory
+894942b6bfd970dae34f5811c24e493914b782f153e5ac468ef75dbb36fb9c8a.
+Afterward, final review tightened only the new campaign core-count/runtime inode
+checks, typed hardware observations and admission hash binding, added the standalone CI invocation and updated
+documentation. Final campaign tests exercise those final changes; existing C++,
+runner, record, workload, analysis and verifier bytes remain unchanged from the
+successful gates. No unnecessary second C++ suite run was made for these isolated
+Python guards/documentation changes. Final CLI records show deterministic planning,
+development-only admission and scientific rejection on the current SMT VM, even
+when binary/compiler/candidate-runtime digests are matched. No performance result
+is inferred from validation smoke timings or CTest wall times.
+
+Final git diff --check passed. unchanged-scope.json records comparison against the
+main baseline for production APIs/algorithms, timing, existing schemas/goldens,
+analysis, dependency pins, CMake and archive tools. New raw evidence, archive pairs
+and prior failed attempts remain outside Git. No dependencies installed, no push,
+merge or PR; no TSan execution/acceptance or race-freedom claim. This subphase stops
+after the authorized local commit for review. Remaining work is a separately
+approved executor, resource enforcement, build/provenance linkage and freshness,
+actual-team evidence, controlled collection, statistical analysis and replication.
