@@ -2,6 +2,21 @@
 
 ## Status
 
+Current authorized infrastructure scope is Phase 5C-3B-3R: intended-diagnostic
+controls, portable evidence archives and independent offline verification. The
+[reproducibility runbook](reproducibility-validation.md#phase-5c-3b-2-ci-contract-and-bounded-pipeline)
+defines exact registration/execution gates and reproduction commands. Historical
+phase statements below retain their original context. Stop after implementation
+and local verification; Phase 6 is deferred. Hosted CI parity requires actual
+hosted job logs and is not established by local workflow or driver checks.
+
+The smoke uses the existing generation, independent verification, compiled replay,
+both timing modes, complete dataset import, descriptive analysis and rendering
+entry points on one tiny fixed-seed chain. All outputs remain harness-only,
+regardless of build type. No algorithm, heuristic, timing boundary, workload format,
+pin or scientific measurement definition changes. Artifact digests document
+integrity, not producer authentication. TSan acceptance remains unmet.
+
 Phase 5C-1 adds approved test-only [correctness/failure-resilience validation](validation-correctness.md)
 on the merged 5B-4B baseline. Shared deterministic traces compare complete graph
 states and distance vectors against independent record-based Bellman–Ford after

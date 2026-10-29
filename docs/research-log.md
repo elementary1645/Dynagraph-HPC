@@ -2172,3 +2172,977 @@ heuristic, dependency specification or CI changes. No commit/push/PR.
 Ready for independent re-audit of restored verification evidence. TSan acceptance
 remains unmet; this sanitizer pass does not prove race freedom, exhaustive
 schedule coverage or general deadlock freedom. Stop here.
+
+## 2026-10-28 — Phase 5C-3B-1 full-validation and fresh-build verification
+
+Explicit user scope authorizes only the opt-in full-validation gate, exact test
+registration checker, environment runbook, negative cases and isolated sequential
+verification. Initial state was clean main at a6c6266 (PR #9 merge). Created
+feature/reproducibility-validation before edits. No dependency installation,
+commit, push, PR, CI edit or production behavior change.
+
+Changes: root CMakeLists.txt adds DYNAGRAPH_FULL_VALIDATION (default OFF) and
+rejects its combination with BUILD_TESTING=OFF; tests/CMakeLists.txt adds a
+full-mode interpreter/pin/Agg probe and exact configure-time name gate. Existing
+registration bodies/options are unchanged. New tools/validation/check_environment.py
+requires Python >=3.11, compares all eleven pins and renders in memory using Agg.
+check_registration.py consumes CTest JSON (or configure-time names), checks the
+reviewed default-tests.json set and detects missing/extra/duplicate names.
+Optional names are explicit additions, not a blanket allowance for unknown tests.
+The 31-name manifest matches retained Phase 5C-2B's thirty plus parallel_failure_fast.
+New test_gate.py and clean_checkout.py provide isolated failure fixtures and
+sequential build verification. README links docs/reproducibility-validation.md.
+No new CTest entry is added; the approved default remains exactly 31 in full mode.
+
+The existing approved /workspaces/Dynagraph-HPC/.venv-analysis/bin/python was used:
+Python 3.14.2, all eleven exact pins matched, Agg initialization and rendering
+passed. GCC 13.3.0, CMake 3.28.3, Linux x86_64/glibc 2.39; CMake found OpenMP 4.5
+with -fopenmp. This is a demonstrated environment, not certification of other
+compiler/platform versions. No package was installed/upgraded in this phase.
+
+Exact top-level commands (output directories were new):
+
+```sh
+python3 -B tools/validation/test_gate.py --python "$PWD/.venv-analysis/bin/python" --output results/validation/phase5c3b1/negative
+python3 -B tools/validation/test_gate.py --python "$PWD/.venv-analysis/bin/python" --output results/validation/phase5c3b1/negative-v2
+python3 -B tools/validation/clean_checkout.py --revision a6c6266 --include-working-tree --python "$PWD/.venv-analysis/bin/python" --output "$PWD/results/validation/phase5c3b1/isolated"
+```
+
+The first negative harness run exited 1 because it expected an unwrapped substring
+in CMake's correctly emitted missing-package diagnostic. Adjusted only whitespace
+normalization of expected diagnostics and made the old-version mock witness
+specific (3.10.0 mock). Retained that initial output. The corrected harness exited
+0: nonexistent interpreter, unsupported Python, missing package, mismatched pin,
+Agg initialization failure and absent analysis_stats all caused actual CMake
+configuration failure with the expected specific diagnostic. Interpreter wrappers
+and a disposable source fixture avoid modifying the real environment or checkout.
+Missing/extra/duplicate comparator checks also passed.
+
+The isolated driver was launched through approved outside-sandbox execution for
+LeakSanitizer compatibility. It cloned the local repository without hardlinks,
+checked out a6c6266262dff4a59f99fa9d6fd2381f38f3748a detached and verified clean
+Git state. Because commits are prohibited in this task, it then applied the
+explicit tracked patch and copied new nonignored files. This is honestly a clean
+base checkout plus identified uncommitted overlay, not a clean committed revision
+of the new implementation. source-identity.json records base cleanliness, patch
+SHA-256 and every source-file hash. All tested implementation/CMake hashes still
+match the final code; subsequent edits only record documentation outcomes.
+
+Three new sibling build directories used explicit GCC settings equivalent to
+Debug/Release presets, BUILD_TESTING=ON, warnings as errors, full mode ON and the
+same approved analysis interpreter. Optional tiers remained OFF. Environment
+verification and CMake plus generated-CTest exact-name checks preceded every
+build. Builds used --parallel 2; complete CTest suites used --parallel 1. Each
+configure/build/test command finished before the next began. Start/end timestamps
+in commands.json confirm no overlap. No existing CMake cache was reused.
+
+| Build | Registered | Passed | Failed | Exit | CTest wall seconds |
+|---|---:|---:|---:|---:|---:|
+| Debug | 31 | 31 | 0 | 0 | 48.71 |
+| Release | 31 | 31 | 0 | 0 | 43.29 |
+| ASan+UBSan | 31 | 31 | 0 | 0 | 82.98 |
+
+Process wall seconds including launch overhead: 48.761115, 43.308121, 83.035355.
+Sanitizer flags: -fsanitize=address,undefined -fno-omit-frame-pointer and matching
+link flags. ASAN_OPTIONS=detect_leaks=1:halt_on_error=1;
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. No sanitizer finding or timeout.
+Dijkstra passed in 1.07/0.07/3.14 s respectively; no timeout was changed.
+
+After the full suites completed, separate disposable configure checks confirmed:
+minimal/full-OFF tolerates an absent analysis interpreter (27 registered names);
+BUILD_TESTING=OFF remains configurable; FULL=ON with BUILD_TESTING=OFF fails;
+all four optional flags together produce exactly 37 registered names with the
+explicit optional-tier checker arguments. The actual CTest JSON CLI also rejected
+separate generated fixtures containing a missing, extra or duplicate test name.
+All compatibility expectations passed; no optional extended workload rerun was
+necessary. Exact commands, diagnostic logs and exits are in compatibility/.
+
+Evidence root: ignored results/validation/phase5c3b1/. isolated/commands.json
+retains exact argv, working directory, environment settings, timestamps and exit
+codes; per-command logs preserve combined stdout/stderr. environment.log records
+interpreter/pins/renderer; compiler logs record identities. summary.json independently
+compares all 31 passed test names with registrations, checks sequential timestamps
+and verifies final code hashes against the tested snapshot. Historical 5C-1/2A/2B/2C
+files and evidence are preserved.
+
+Final git diff --check passed; src/, include/, apps/, benchmarks/ and .github/
+remain identical to a6c6266. Root production CMake change is limited to the necessary
+opt-in option/incompatible BUILD_TESTING guard. Existing test bodies, intentional-race
+control isolation, optional tiers, algorithms, public APIs, heuristic and timing
+boundaries are unchanged. No commit/push/PR.
+
+Remaining 5C-3B-2: hosted CI full-suite parity, real end-to-end pipeline/archive
+verification and portable evidence distribution; calibrated alternative detector
+environment remains separate and unresolved. A clean committed-revision run of
+this new implementation can be performed once a later commit is authorized; it is
+not conflated with the successful pre-commit overlay validation. TSan acceptance
+remains unmet. No race/deadlock freedom or performance/scalability claim follows.
+Stop for independent review.
+
+## 2026-10-28 — Phase 5C-3B-1R audit-blocked infrastructure repair
+
+The independent audit blocked the original validation infrastructure even though
+its raw Debug/Release/ASan+UBSan suites actually passed 31/31. Name extraction did
+not reject disabled CTest entries, exit zero alone did not establish complete
+execution, and untracked symlinks were dereferenced during overlay copy. Those
+historical results above and all original evidence remain preserved; they do not
+validate the repaired tooling by themselves.
+
+Authorized repairs stay within tools/validation, test CMake and documentation.
+Strict CTest JSON parsing now validates the envelope, version, entries/properties,
+exact mandatory/explicit optional names and DISABLED values. CMake rejects disabled
+full-mode tests too. A separate strict JUnit acceptance checker requires all
+expected tests exactly once with executed status, no skip/failure/error markers,
+valid counts/times/output metadata and process exit zero. DTD/entity declarations
+are rejected before XML parsing. The sequential driver retains raw registrations,
+JUnit reports, per-test acceptance records, command receipts and evidence hashes.
+
+Overlay copying now preserves file bytes, modes and relative internal symlinks;
+source/destination typed inventories must match before building and at final
+checkpoints. Tracked binary changes/deletions/executable changes are retained in a
+binary patch. Unsupported types and unsafe/uncaptured symlink targets fail clearly.
+Canonicalized output/source paths must be disjoint; outputs cannot preexist.
+Receipts distinguish launch failures (null exit status) from executed commands,
+retain diagnostics and hashes, and bounded command timeouts kill the process group.
+The Python renderer probe now receives the source path via argv rather than
+interpolating it into Python source. The runner removes influential inherited
+Python/build/OpenMP/sanitizer settings, sets explicit controls and records its
+policy without dumping environment values or credentials. See the runbook for
+precise supported types, environment policy and non-hermetic limitations.
+
+Focused evidence before the new integration run:
+- /tmp/dynagraph-phase5c3b1r-focused-v1: 12 tests passed; first focused version.
+- /tmp/dynagraph-phase5c3b1r-focused-v2: 13 tests passed after adding a real Git
+  binary/deletion/mode/symlink overlay round-trip.
+- /tmp/dynagraph-phase5c3b1r-focused-v3: 13 tests passed with final runner policy.
+  Subcases cover disabled (all/one), skipped, not-run, missing, duplicate, extra,
+  malformed/missing reports, exit-zero incomplete results, nonzero superficially
+  passing results, and a valid 31/31 report. Actual CTest fixtures reproduce exit
+  zero with disabled/skipped tests and verify rejection; no final suite is mocked.
+- /tmp/dynagraph-phase5c3b1r-negative-v1: all six original configure failures
+  rejected for their exact expected diagnostics, each from a fresh build directory.
+- /tmp/dynagraph-phase5c3b1r-compatibility-v1: actual CMake configuration in a source
+  path containing spaces, an apostrophe and Unicode passed with 31 full names;
+  minimal absent-interpreter mode retained 27; library-only retained zero; optional
+  mode retained the exact 37 names; FULL with BUILD_TESTING=OFF correctly failed.
+
+No approved environment mutation, dependency installation, test timeout change,
+production/benchmark/API/heuristic/CI change, commit, push or PR. Full corrected
+integration results are recorded below only after execution. TSan acceptance
+remains unmet; no race-freedom, general deadlock-freedom or performance claim.
+
+The first corrected isolated run (`/tmp/dynagraph-phase5c3b1r-isolated-v1`) completed
+31/31 Debug (50.86 s), Release (44.72 s) and ASan+UBSan (86.46 s), with exit zero,
+strict JUnit acceptance and matching source/destination inventories. All evidence
+is retained. Subsequent boundary review found an additional reproducibility case:
+a relative symlink could traverse outside the source and then return to a captured
+file. `/tmp/dynagraph-phase5c3b1r-symlink-hop-probe/before.json` records that accepted
+fixture. The final resolver now checks every hop, rejects external intermediate
+traversal and symlink directory components, while preserving internal leaf chains.
+No source change was made while the first isolated run was active.
+
+The final focused suite (`/tmp/dynagraph-phase5c3b1r-focused-v4`) passed 14 tests,
+including rejection of that external-hop fixture and preservation of internal
+symlink chains. A new isolated full run is required below for this final source;
+the prior run is not relabeled as verification of the later resolver change.
+
+## 2026-10-29 — Phase 5C-3B-1R interrupted-session recovery and final verification
+
+Resumed on feature/reproducibility-validation at
+`a6c6266262dff4a59f99fa9d6fd2381f38f3748a`. Found four modified tracked files
+(CMakeLists.txt, tests/CMakeLists.txt, README.md, this log), the untracked runbook
+and ten untracked tools/validation files. Initial diff --check passed. Preserved
+all existing changes and results/validation evidence; no reset, stash, clean,
+commit, push or PR. The user explicitly authorized this repair beyond the older
+phase authorization text in AGENTS.md; Phase 5C-3B-2 remains deferred.
+
+Actual code inspection found the strict registration/execution validators, typed
+snapshot resolver, command receipts, environment policy and fourteen focused tests
+already implemented. The log's prior repair /tmp directories were absent in this
+workspace, so their outcomes were historical claims rather than available fresh
+acceptance evidence. The final external-hop symlink correction still needed a new
+complete isolated run. No production correction was needed. This session added
+explicit binary-byte, file-versus-link and symlink-target mutation rejection
+fixtures, plus PermissionError and invalid-cwd launch receipts. Focused coverage
+now comprises fifteen tests; the default CTest suite remains thirty-one.
+
+Audit blocker reconciliation (code inspected, then behavior rerun):
+
+| Item | At recovery | Final evidence / status |
+|---|---|---|
+| 1 Strict registration JSON structure/fields | COMPLETE | COMPLETE: structural and real CTest fixtures |
+| 2 Disabled mandatory registrations | COMPLETE | COMPLETE: one/all disabled rejected |
+| 3 Machine-readable execution validation | COMPLETE | COMPLETE: strict JUnit plus three real suites |
+| 4 Skipped/not-run/missing/duplicate/unexpected | COMPLETE | COMPLETE: all rejected by focused fixtures |
+| 5 False-success exit codes | COMPLETE | COMPLETE: real exit-zero disabled/skipped rejected |
+| 6 Overlay unsupported types | COMPLETE | COMPLETE: FIFO and unsafe links rejected |
+| 7 Binary/deletion/mode/symlink fidelity | COMPLETE | COMPLETE: Git round-trip plus mutation checks |
+| 8 Source/output/clone overlap | COMPLETE | COMPLETE: canonical aliases/ancestors rejected; clone is inside new output |
+| 9 Launch failure/OSError receipts | COMPLETE | COMPLETE: absent executable, permission and cwd failures |
+| 10 Spaces/apostrophes/Unicode paths | COMPLETE | COMPLETE: Git overlay and actual CMake configurations |
+| 11 Environment capture/sanitization | COMPLETE | COMPLETE: policy fixture and retained command environments |
+| 12 Focused positive/negative fixtures | COMPLETE | COMPLETE: strengthened 15/15 suite, six configure failures |
+| 13 Final sequential isolated verification | PARTIAL | COMPLETE: new Debug/Release/ASan+UBSan 31/31 each |
+| 14 Documentation/research log | PARTIAL | COMPLETE: this reconciliation and runbook outcome |
+
+Fresh reproduction commands, all executed without dependency installation:
+
+```sh
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase5c3b1r-resume-focused-20261029
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase5c3b1r-resume-focused-final-20261029
+python3 -B tools/validation/test_gate.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b1r-resume-negative-20261029
+python3 -B tools/validation/test_compatibility.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b1r-resume-compatibility-20261029
+python3 -B tools/validation/clean_checkout.py --revision a6c6266 --include-working-tree --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b1r-resume-isolated-20261029
+```
+
+First focused baseline: 14/14; strengthened final focused suite: 15/15, zero
+failures/errors. All six actual negative configure cases rejected their intended
+condition with the required diagnostic. Compatibility configurations reconciled
+31 full, 27 minimal with absent analysis interpreter, zero library-only and 37
+explicit optional names. FULL with BUILD_TESTING=OFF failed as required. Quoted
+source path included spaces, an apostrophe and Unicode. Compatibility completed
+before the isolated run started; no verification workload overlapped its suites.
+
+The complete driver ran through the approved outside-sandbox execution mechanism,
+using the existing pinned interpreter and fresh external evidence/build directories.
+All commands exited zero and sequential command timestamps were verified.
+
+| Build | Registered | Actual accepted passes | CTest process wall seconds | Exit |
+|---|---:|---:|---:|---:|
+| Debug | 31 | 31 | 47.393872 | 0 |
+| Release | 31 | 31 | 41.860162 | 0 |
+| ASan+UBSan | 31 | 31 | 80.606576 | 0 |
+
+Each acceptance required the exact expected names, each once, status=run, finite
+nonnegative times, output metadata, consistent counts, no disabled/skip/failure/
+error markers and process exit zero. Malformed/missing reports and nonzero exits
+with superficially passing XML also fail. Raw *-execution.xml reports and
+acceptance.json retain per-test results; registrations and command output are
+retained separately. Sanitizers used detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1, without timeout changes.
+
+source-identity.json retains all 122 typed source inventory entries and the binary
+patch hash. The initial source/destination and both final inventory comparisons
+passed. No source edits occurred during the run. evidence-sha256.json hashes were
+independently rechecked after completion. Later changes only append these outcome
+records to this log and the runbook; tested implementation/CMake files are unchanged.
+All fresh evidence directories above remain local under /tmp; preserve them for
+review. The initial focused baseline is retained separately, without relabeling it
+as coverage of the later fixture additions.
+
+Changed-file inventory remains CMakeLists.txt, tests/CMakeLists.txt, README.md,
+docs/research-log.md, docs/reproducibility-validation.md and ten tools/validation
+files (check_environment.py, check_execution.py, check_registration.py,
+clean_checkout.py, command_receipts.py, default-tests.json, snapshot.py,
+test_compatibility.py, test_gate.py, test_repair.py). Final diff --check passed;
+src/, include/, apps/, benchmarks/, .github/ and CMakePresets.json match the base.
+Existing optional test bodies, mandatory registrations, pins and timeouts remain
+unchanged. No dependency install, commit, push or PR.
+
+Ready for independent read-only audit. Snapshot checks are checkpoint-based,
+not atomic; directory modes/ACLs/xattrs and unsupported link/file types are outside
+the documented source contract. This is a clean base plus identified uncommitted
+overlay, not a committed-revision certification or hermetic OS. TSan acceptance
+remains unmet; no race/deadlock freedom or performance claim follows. Stop here;
+Phase 5C-3B-2 has not begun.
+
+## 2026-10-29 — Phase 5C-3B-2 CI configuration and real smoke pipeline
+
+Explicit user authorization extends the conditionally approved 5C-3B-1R work to
+parser hardening, CI workflow changes and bounded end-to-end validation. Recovery
+confirmed feature/reproducibility-validation at a6c6266262dff4a59f99fa9d6fd2381f38f3748a,
+four modified tracked files and eleven untracked files. All prior implementation,
+historical failures and evidence were preserved. No reset/clean/stash, dependency
+installation/upgrade, commit, push or PR occurred.
+
+Closed both conditional parser findings. check_registration.strict_loads rejects
+duplicate object keys at every nesting level, JSON NaN/Infinity and floating-point
+overflow to infinity. Both generated CTest JSON consumers use that decoder;
+configure-time name arrays use it too. Supplied command, backtrace/graph and known
+property metadata receive explicit type checks without requiring optional fields
+that real pre-build CTest output omits. Unknown extension metadata remains opaque
+JSON as documented; no universal future-schema claim. Added top-level/nested/
+DISABLED-value duplicate and invalid-metadata fixtures, preserving existing actual
+CTest disabled/skipped false-success and source-fidelity controls.
+
+Kept both existing CI jobs and the gcc Debug/Release matrix. Full-history checkout
+is required by the retained a6c6266 Git-overlay regression. ubuntu-24.04 plus
+setup-python CPython 3.13 provisions a fresh external venv with all eleven unchanged
+pins, binary wheels only, pip check and install/freeze logs. Published CPython 3.13
+manylinux x86_64 wheel metadata for compiled dependencies was checked on PyPI;
+links are in the runbook. This is availability/compatibility evidence, not a
+hosted installation or execution result. No dependencies were installed locally.
+
+New ci_verify.py is the shared local/hosted leg: source identity and environment,
+toolchain versions, new external CMake build, full validation, exactly 31 enabled
+default names, two compile jobs, sequential CTest/JUnit, strict per-test acceptance,
+unchanged sanitizer options/timeouts, source recheck, failure diagnostics and
+hashes. Existing gcc/sanitize coverage was not removed. Upload-artifact always()
+retains logs/metadata/raw reports/acceptance and partial failure evidence where
+possible; build and temporary directories are excluded. Release additionally runs
+new smoke_pipeline.py and test_smoke.py. No claim of hosted CI parity is made.
+
+The smoke calls existing generate.py generate/verify, run.py run/validate and
+analyze.py; pipeline_artifacts.py adds product integrity/structural checks rather
+than replacing benchmark/analysis logic. Workload and schedule are deterministic;
+run IDs, timestamps, real timings and their dependent artifact digests vary.
+The unchanged chain recipe has 8 vertices, 7 edges and 12 updates. Both timing
+modes run 16 completed trials over all four policies. Full-trace retains 16 timing
+observations; per-update retains 192. Independent artifact replay/regeneration,
+full compiled preflight and complete dataset validation precede descriptive
+analysis. All seven figure kinds produce SVG and PDF (14 products). These are
+harness-only observations, not performance/scalability evidence.
+
+Focused/compatibility evidence (new output directories):
+- /tmp/dynagraph-phase5c3b2-focused-v1: 17/17 standalone regressions passed.
+- /tmp/dynagraph-phase5c3b2-focused-final: 17/17 passed, including nonfinite numeric
+  overflow after final parser hardening. These retain all fifteen prior tests.
+- /tmp/dynagraph-phase5c3b2-compatibility-v1 and -compatibility-final: actual CMake
+  configurations reconcile 31 full, 27 minimal, zero library-only, 37 optional names;
+  FULL with BUILD_TESTING=OFF fails. Source path includes spaces/apostrophe/Unicode.
+  No intentional-race controls appear in any accepted registration set.
+- /tmp/dynagraph-phase5c3b2-negative-final: all six actual configure failures
+  rejected the intended case with the required diagnostic.
+- /tmp/dynagraph-phase5c3b2-workflow-v1 and -workflow-final: existing PyYAML 6.0.3
+  parsed YAML (BaseLoader preserves the Actions on key), assertions checked jobs,
+  matrix, setup and always-upload configuration, and bash -n accepted all five
+  run scripts. The final check additionally requires full-history checkout.
+  actionlint is unavailable; this is not full GitHub schema/expression validation.
+
+Retained development outcomes:
+- /tmp/dynagraph-phase5c3b2-smoke-v1 failed its environment gate under system Python:
+  missing matplotlib metadata. It did not generate a successful pipeline. No
+  package was installed to bypass the gate.
+- /tmp/dynagraph-phase5c3b2-smoke-v2 passed under the existing .venv-analysis and a
+  previously reviewed Release executable. Its nine negative controls passed in
+  /tmp/dynagraph-phase5c3b2-smoke-negative-v1. This prototype is distinct from the
+  final fresh-build acceptance run below.
+- /tmp/dynagraph-phase5c3b2-debug-final passed 31/31 before a subsequent workflow-only
+  full-history checkout correction. The final snapshot was then verified afresh.
+
+Final local CI-driver commands ran sequentially via the approved outside-sandbox
+execution mechanism so LeakSanitizer could retain process-inspection support:
+
+```sh
+python3 -B tools/validation/ci_verify.py --mode debug --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b2-ci-debug-final
+python3 -B tools/validation/ci_verify.py --mode release --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b2-ci-release-final --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-phase5c3b2-ci-sanitize-final
+```
+
+| Mode | Actual accepted passes | CTest process wall seconds | Exit |
+|---|---:|---:|---:|
+| Debug | 31/31 | 46.962652 | 0 |
+| Release | 31/31 | 40.866738 | 0 |
+| ASan+UBSan | 31/31 | 80.286637 | 0 |
+
+All three exact registration sets, individual raw-log Passed names and JUnit run
+results were independently reconciled. All 38 driver commands succeeded, with
+sequential timestamps within and across legs. Sanitizers used detect_leaks=1:
+halt_on_error=1 and UBSAN halt_on_error=1:print_stacktrace=1. No test timeout changed.
+Local Python is the existing 3.14.2 interpreter, GCC 13.3.0 and CMake 3.28.3;
+hosted CPython 3.13/runner execution remains untested.
+
+The final Release pipeline at
+/tmp/dynagraph-phase5c3b2-ci-release-final/pipeline passed every stage and hash check.
+Nine controls at its sibling pipeline-negative directory rejected tampered workload
+bytes, incorrect manifest hash, incomplete replay (with updated stdout digest),
+missing timing observations, invalid schema, missing figure, malformed SVG/PDF
+(with updated product digests), and incorrect artifact digest. Original positive
+artifacts remained unchanged. Stage-level argv is explicitly recorded. Worker
+subprocess exits and stdout/stderr hashes are retained by existing orchestration;
+child invocations are reconstructible from source/configuration/identities, but
+per-worker argv is not individually serialized. This wording was corrected in
+Phase 5C-3B-3 following the independent audit.
+
+All three legs identify the same 126-entry source snapshot:
+8f93bebc807f3f03efc249d81f8bf30f5a98a8cd0a97acbda6d7786e2541328c.
+Git base/dirty state and this snapshot identity are separate from executable
+SHA-256 and build metadata. Source inventory rechecks passed; no source edits
+occurred during the final run. Top-level CI evidence hashes, recursive pipeline
+hashes, analysis output/figure hashes and command log hashes were independently
+reverified. /tmp/dynagraph-phase5c3b2-review-final/reconciliation.json records the
+raw-evidence reconciliation. Only outcome documentation was appended afterwards.
+Relative analysis input paths and artifact inventory names support relocation;
+exact command/build provenance still retains original absolute paths.
+
+Complete current uncommitted inventory (including preserved 5C-3B-1 work):
+- Tracked: .github/workflows/ci.yml, AGENTS.md, CMakeLists.txt, README.md,
+  docs/experimental-protocol.md, docs/research-log.md, tests/CMakeLists.txt.
+- Untracked documentation: docs/reproducibility-validation.md.
+- Untracked tools/validation: check_environment.py, check_execution.py,
+  check_registration.py, ci_verify.py, clean_checkout.py, command_receipts.py,
+  default-tests.json, pipeline_artifacts.py, smoke_pipeline.py, snapshot.py,
+  test_compatibility.py, test_gate.py, test_repair.py, test_smoke.py.
+
+Current-session edits are CI/scope/documentation, parser consumers/fixtures and
+four new pipeline/CI modules. Existing root and test CMake modifications from
+5C-3B-1 are preserved. Final git diff --check passed; src/, include/, apps/,
+benchmarks/ and CMakePresets.json match a6c6266. No shortest-path/API/heuristic,
+benchmark timing boundary, scientific measurement definition, workload format or
+pin change. Existing optional tiers and TSan-control isolation remain intact.
+
+Ready for independent review of implementation/local evidence. Hosted provisioning,
+all three job logs, 31 actual passes in each hosted leg, uploaded artifacts and
+Release pipeline evidence must still be checked after a separately authorized
+publication/CI trigger. No push was made solely to trigger CI. Static checks cannot
+certify GitHub expressions, artifact service behavior or hosted environment parity.
+PDF checks are bounded structural sanity, not general PDF conformance or visual
+certification. SHA-256 is integrity, not authentication. Snapshot and environment
+limitations from 5C-3B-1R persist. TSan acceptance remains unmet; no race/deadlock
+freedom or performance/scalability inference follows. Stop here; 5C-3B-3 not begun.
+
+## 2026-10-29 — Phase 5C-3B-3 interruption recovery and portable evidence
+
+The user explicitly authorized resuming/completing Phase 5C-3B-3, superseding the
+historical deferred scope in AGENTS.md. Recovered branch
+feature/reproducibility-validation at a6c6266262dff4a59f99fa9d6fd2381f38f3748a.
+Preserved all seven tracked modifications, the untracked runbook and all fifteen
+existing tools/validation files. No reset, clean, stash, commit, push or PR.
+
+Recovery inspection found Phase 5C-3B-2's parser/CI/smoke implementation complete.
+The child-worker argv correction already existed in the preceding log entry;
+test_smoke.py already partially checked intended CLI rejection diagnostics.
+The interrupted session's test_negative_diagnostics.py contained three focused
+unit tests for that helper; it was preserved and exercised. It did not establish
+that real negative smoke products had been tested in that session. Artifact-side
+diagnostic checks, archive creation, offline verification, archive adversaries,
+archive upload integration and release checklist were not implemented.
+pipeline_artifacts.py was existing product validation, not archive packaging.
+
+Implemented evidence_archive.py (Python standard library only): creation from
+completed CI-driver evidence plus its matching typed source snapshot, complete
+file/size/mode/SHA-256 manifest, regular-file permission preservation, safe member
+validation before manual extraction and independent offline semantic acceptance.
+Rejects unsafe paths, duplicates, parent-file collisions, symlink/hardlink members,
+directories, special/unsupported types and special permission bits. Input links
+are rejected too. Resource bounds are 50,000 members and 1 GiB declared payload.
+Source inventory hashes and actual source files/modes, mandatory exact-name
+registration and raw JUnit results, acceptance records, command log hashes,
+source Git receipt coherence, declared mode/configure coherence, sanitizer options,
+smoke analysis products and all nine intended negative-control logs are checked.
+The independently copied kit requires no checkout, build products, Git, renderer,
+third-party packages or network. SHA-256 is integrity, not authentication.
+
+ci_verify.py creates/reopens a sibling tarball after successful local/hosted legs.
+CI now runs archive/diagnostic regressions and uploads tarballs alongside raw
+failure/partial evidence. Top-level build/tmp/renderer caches are omitted; nested
+pipeline files referenced by its digest inventory are retained. All nine smoke
+controls require intended diagnostics; CLI controls additionally require an
+executed exit 2. README/runbook/AGENTS/protocol and a new research-validation
+release-readiness checklist document scope, trust/portability limits and gates.
+No algorithm, API, heuristic, timing boundary, workload format, pin or timeout edit.
+
+Actual focused commands (new output directories):
+
+```sh
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-3b3-repair-recovery
+python3 -B tools/validation/test_gate.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3-gate-recovery
+python3 -B tools/validation/test_compatibility.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3-compatibility-recovery
+```
+
+Results: 3 diagnostic tests; final 12 archive tests with multiple adversarial
+subcases; 17 repair tests; six configure failures with intended diagnostics;
+compatibility reconciled 31 full, 27 minimal, 0 library and 37 optional names.
+Archive tests cover missing/extra/modified members, mode changes, refreshed outer
+hashes with mismatched source, skipped mandatory results, duplicate JSON keys,
+revision/configure contradictions, Unicode executable roundtrip, unsafe paths,
+duplicate members, links and unsupported types. Existing source/receipt/parser
+fixtures remained passing. Logs at /tmp/dynagraph-3b3-focused include archive
+iterations, diagnostics, static checks and reconciliation; repair/gate/compatibility
+each retain their own fixture directories. No dependencies were installed.
+
+Inspected the surviving original phase5c3b1 command receipts/summary under ignored
+results/validation before rerunning. Historical /tmp phase5c3b1r/3b2 roots were
+absent after interruption. Retained historical evidence was not substituted for
+new acceptance evidence. Recovery first ran ci_verify.py debug to
+/tmp/dynagraph-3b3-debug-recovery and release --smoke to
+/tmp/dynagraph-3b3-release-recovery. Both suites actually passed 31/31. Release
+smoke and all nine intended controls passed, but archive staging failed on
+`missing/symlink artifact: mpl-cache/fontlist-v390.json`: an excluded nested cache
+was referenced by pipeline evidence-sha256.json. Original evidence remains intact;
+/tmp/dynagraph-3b3-focused/interrupted-archive-attempt.json records the failure.
+Fixed only packaging selection and added a regression. Restored matching source
+from the verified first Debug archive and successfully repackaged that first
+Release evidence at /tmp/dynagraph-3b3-release-recovered.tar.gz. Its offline copy
+passed as well. These attempts are distinct from the fresh final legs below.
+
+Actual final sequential commands:
+
+```sh
+python3 -B tools/validation/ci_verify.py --mode debug --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3-debug-final
+python3 -B tools/validation/ci_verify.py --mode release --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3-release-final --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3-sanitize-final
+```
+
+Sanitizer was explicitly launched outside the sandbox for LeakSanitizer process
+inspection. All directories/build caches were new. Same approved Python 3.14.2
+venv with all eleven unchanged pins and working Agg; GCC 13.3.0/CMake 3.28.3.
+No suite overlap; raw command timestamps were reconciled independently.
+
+| Leg | Actual accepted passes | CTest process wall seconds | Archive created/reopened |
+|---|---:|---:|---|
+| Debug | 31/31 | 46.524112 | yes |
+| Release | 31/31 | 41.546065 | yes, including smoke/controls |
+| ASan+UBSan | 31/31 | 79.471757 | yes |
+
+Sanitizer compile/link flags and leak/halt options are unchanged; raw JUnit and
+per-test results agree. Release produced complete 16-trial datasets in both modes,
+all 14 SVG/PDF products and nine intended rejections. Source inventories remained
+unchanged throughout each final leg. All final legs captured source inventory
+`d5044e422ff6cba438a6e9a49720276435906116eba6d1377b0da03471293922`.
+
+Final offline review then added explicit Git-receipt/configure-mode consistency
+checks in evidence_archive.py and their regression in test_archive.py. Those two
+files postdate the CTest source snapshot. Mandatory JUnit acceptance, driver,
+CMake and compiled source/tests did not change. The final 12 focused archive tests
+passed, and the stricter verifier directly reaccepted all retained final evidence;
+no expensive CTest rerun was needed to test these offline comparisons.
+
+Using the matching final source snapshot restored from the verified Debug archive
+at /tmp/dynagraph-3b3-tested-source, called the current creator for each real leg:
+
+```python
+create(Path('/tmp/dynagraph-3b3-' + mode + '-final'),
+       Path('/tmp/dynagraph-3b3-tested-source'),
+       Path('/tmp/dynagraph-3b3-' + mode + '-review.tar.gz'))
+```
+
+The review archives retain the actual tested source snapshot and a separately
+inventoried current verifier kit. Copied all three to /tmp/dynagraph-3b3-offline.
+The retained offline_verify.py launcher adds only the copied kit to sys.path and
+uses a Python audit guard denying /workspaces file opens, socket operations and
+subprocess launches. It explicitly confirms source checkout access is denied.
+From cwd /tmp, executed each copied archive using:
+
+```sh
+python3 -I -B /tmp/dynagraph-3b3-offline/offline_verify.py --verify /tmp/dynagraph-3b3-offline/dynagraph-3b3-debug-review.tar.gz
+python3 -I -B /tmp/dynagraph-3b3-offline/offline_verify.py --verify /tmp/dynagraph-3b3-offline/dynagraph-3b3-release-review.tar.gz
+python3 -I -B /tmp/dynagraph-3b3-offline/offline_verify.py --verify /tmp/dynagraph-3b3-offline/dynagraph-3b3-sanitize-review.tar.gz
+```
+
+All exited 0 with 31 mandatory passes; Release also accepted smoke/negative logs.
+A real copied Debug tarball with execution.xml removed exited 1 with complete
+inventory/hash/mode mismatch. offline-results.json records exact commands, exits
+and copied archive hashes. focused/reconciliation.json reconciles raw reports,
+registrations, source identity, sequencing, archive sizes and member counts.
+Review tarball SHA-256 values:
+
+- Debug (158 members): e9abb981340130589e021056a5412c45ff51e5c42d32e9ed8d8a608612227604
+- Release (658 members): 0f2ebad3ae21d56ec63e531442842a4362bfe19d9ed66af17dcb71dc0c7f2f00
+- ASan+UBSan (158 members): 5baadf67e3098a2c630c5234e61de5bcee201256f6b0c088b5b137b299a8941a
+
+Complete working-tree inventory for independent review (26 files):
+
+- Seven modified tracked files: .github/workflows/ci.yml, AGENTS.md,
+  CMakeLists.txt, README.md, docs/experimental-protocol.md, docs/research-log.md,
+  tests/CMakeLists.txt. Earlier CMake implementation remains preserved.
+- Two untracked documents: docs/reproducibility-validation.md,
+  docs/research-validation-checklist.md.
+- Seventeen untracked tools/validation files: check_environment.py,
+  check_execution.py, check_registration.py, ci_verify.py, clean_checkout.py,
+  command_receipts.py, default-tests.json, evidence_archive.py,
+  pipeline_artifacts.py, smoke_pipeline.py, snapshot.py, test_archive.py,
+  test_compatibility.py, test_gate.py, test_negative_diagnostics.py,
+  test_repair.py, test_smoke.py.
+
+Of the tools, this recovery modified ci_verify.py/test_smoke.py and added
+only evidence_archive.py/test_archive.py. The existing test_negative_diagnostics.py
+was preserved, exercised and integrated into CI. Worker argv wording was expanded
+in the runbook. Final documentation records outcomes after verification.
+
+Local YAML parse and all six workflow shell syntax checks passed. Every validation
+Python module parses with Python 3.8 grammar. Protected src/include/apps/benchmarks,
+CMakePresets.json and tests/tsan_controls remain identical to a6c6266; no existing
+timeout changed. Final git diff --check passed. No hosted job has run; local checks
+cannot certify GitHub provisioning, expression evaluation or artifact upload.
+
+Ready for independent review of local implementation/evidence, with hosted CI
+acceptance and the release checklist still pending independent confirmation.
+Archives establish integrity, not producer authentication; OS/toolchain isolation
+is not hermetic, source checkpoints are not atomic, and portable byte/mode review
+is not cross-platform execution or bitwise-build certification. Source revision
+metadata is not a cryptographic certificate binding executable bytes to source.
+TSan acceptance remains unmet (the calibrated work_ report was LIKELY TOOL/RUNTIME
+LIMITATION, not race freedom). No performance/scalability, inferential-statistics
+or general deadlock/race-freedom claim. Preserve external /tmp evidence to durable
+storage before another lifecycle interruption. Stop before commit/push/PR or Phase 6.
+
+## 2026-10-29 — Phase 5C-3B-3R audit-blocked archive repair
+
+Explicit user authorization resumes only the archive acceptance repair, CI/local
+verification and documentation. Initial branch/HEAD remained
+feature/reproducibility-validation / a6c6266262dff4a59f99fa9d6fd2381f38f3748a.
+All 26 original changed/untracked files were copied faithfully to
+/tmp/dynagraph-3b3r-recovery/original, with original SHA-256 inventory and binary
+tracked patch retained alongside them. All earlier raw evidence and archives are
+preserved. No reset/clean/stash, dependency installation, commit, push or PR.
+
+The independent audit's BLOCKED verdict is preserved here: producer-supplied
+inventories could hide a required dataset/hash key, mandatory pipeline stages or
+environment policy. failure.json could coexist with an accepted complete result.
+Tar iteration did not drain the gzip footer, admitting truncation. EOFError and
+array-shaped manifests escaped controlled diagnostics. Broad exception-only tests
+missed these defects. The documented launcher retained the kit argument, and
+archive SHA-256 sidecars were absent. Passing genuine suites did not excuse these
+false-success routes or certify the former archive gate.
+
+Repairs add archive_contract.py with explicit supported success profiles and one
+failed-run integrity profile; archive_transport.py implements bounded complete
+gzip decoding and a preflighted regular-file/local-PAX tar subset. The archiver
+uses format v2, mandatory verifier-kit inventory, full member size/mode/hash checks,
+profile/terminal reconciliation and SHA-256 sidecars. Kit modules include unchanged
+trusted copies of the four existing standard-library benchmark validators; archived
+source and binaries are never executed. The release contract now revalidates both
+complete datasets, workload/executable identities, worker/preflight evidence,
+mandatory ordered stage receipts and analysis acceptance/input inventories.
+The bounded recipe is checked before independent workload regeneration/replay.
+See the final runbook section for every mandatory stage/file, limit and policy.
+
+ci_verify.py enforces the three supported successful modes (Release requires
+--smoke), preserves original failures, and attempts a separately classified
+failed-run archive only when the captured source/evidence supports that profile.
+Its original failing command still exits nonzero. CI uploads tarballs and digest
+sidecars, including supported failed archives, alongside always() raw evidence.
+No mandatory CTest registration, existing timeout or production behavior changes.
+The exact documented isolated command now removes its kit argv element and has a
+subprocess regression, including a copied kit path containing spaces.
+
+Focused archive fixtures are explicitly SYNTHETIC and never substitute for real
+validation evidence. archive_test_support.py reuses existing synthetic worker and
+independent replay helpers, with clearly labeled synthetic tables/structural figures.
+No missing genuine artifact was fabricated. All 39 final focused tests passed:
+/tmp/dynagraph-3b3r-focused/archive-final-v4.log. Earlier 33/35/37-test development
+logs remain separate. Every negative assertion now names its intended diagnostic.
+Coverage includes all audited self-consistent omissions with refreshed inventories,
+conflicting terminal markers, mandatory result variants, receipt/schema/identity
+mismatches, complete compressed/tar integrity, metadata/resource bounds, unsafe
+paths/links/types, parent collisions, permissions, sidecars and exact offline argv.
+
+Actual focused/configuration commands:
+
+```sh
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-3b3r-repair
+python3 -B tools/validation/test_gate.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3r-gate
+python3 -B tools/validation/test_compatibility.py --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3r-compatibility
+```
+
+Results: 39 archive tests, 3 diagnostic tests, 17 repair tests, all six intended
+configure failures and 31/27/0/37 full/minimal/library/optional registrations passed.
+No dependency installation or upgrade. Initial static YAML/six shell syntax checks,
+Python 3.8 grammar parsing and protected-path comparison passed. Full current
+verification outcomes and exact archive identities are recorded below after actual
+completion; no historical suite is claimed as testing this repaired gate.
+
+First genuine repackaging used the retained /tmp/dynagraph-3b3-{mode}-final evidence
+and its matching /tmp/dynagraph-3b3-tested-source snapshot (identity
+d5044e422ff6cba438a6e9a49720276435906116eba6d1377b0da03471293922).
+All three satisfied the new mandatory contract; no required artifact was missing.
+Initial repaired archives at /tmp/dynagraph-3b3r-retained-{mode}.tar.gz and their
+sidecars remain preserved. Subsequent final-code repackaging/offline checks use new
+names and retain the distinction between tested source and reviewed verifier kit.
+
+An intentional actual driver failure exercised the supported failure profile:
+
+```sh
+python3 -B tools/validation/ci_verify.py --mode debug --python /nonexistent/intentional-negative-python --output /tmp/dynagraph-3b3r-failed-driver
+```
+
+It recorded a launch-error/null exit for environment setup and the top-level command
+exited 1. Its diagnostic log, failure classification, source snapshot and raw
+receipts remain intact. A .failed.tar.gz and sidecar were produced and reopened;
+verification classified failed validation separately from integrity. This is an
+intentional infrastructure negative, not a failed algorithm suite. The first
+repaired iteration included an accepted-count field of zero; final failed-profile
+output instead omits test-count claims entirely. Historical output is not rewritten.
+
+Current working tree contains 29 changed/untracked files: the original seven tracked
+modifications and two untracked documents, plus twenty tools/validation files.
+New in this repair: archive_contract.py, archive_transport.py, archive_test_support.py.
+Modified in this repair: evidence_archive.py, test_archive.py, ci_verify.py,
+.github/workflows/ci.yml, AGENTS.md, README.md, docs/experimental-protocol.md,
+docs/reproducibility-validation.md, docs/research-validation-checklist.md and this
+research log. All other prior implementation is preserved. Root/test CMake changes
+from earlier phases remain intact; protected production paths still match a6c6266.
+
+### Phase 5C-3B-3R completed local verification
+
+The final 39-case archive regression log is archive-final-v4.log; all assertions
+passed for their intended reasons. Three diagnostic tests and seventeen repair
+tests passed. Six actual negative configure cases produced expected diagnostics;
+full/minimal/library/optional raw registrations reconciled 31/27/0/37. Earlier
+focused development logs are preserved, with no configuration or suite failure
+silently retried. No algorithm-suite failure occurred in this repair.
+
+Fresh sequential current-implementation commands, all new directories:
+
+```sh
+python3 -B tools/validation/ci_verify.py --mode debug --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3r-debug-final
+python3 -B tools/validation/ci_verify.py --mode release --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3r-release-final --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python "$PWD/.venv-analysis/bin/python" --output /tmp/dynagraph-3b3r-sanitize-final
+```
+
+Top-level output was redirected respectively to focused/debug-driver.log,
+release-driver.log and sanitize-driver.log under /tmp/dynagraph-3b3r-focused.
+Sanitizer used the approved outside-sandbox mechanism for LeakSanitizer inspection.
+All commands in each leg were sequential; legs did not overlap. Same existing
+approved Python 3.14.2 venv, unchanged eleven pins, working Agg, GCC 13.3.0 and
+CMake 3.28.3. No dependency installation, cache reuse or test-timeout change.
+
+| Leg | Exact registrations | Actual accepted passes | CTest process wall seconds |
+|---|---:|---:|---:|
+| Debug | 31 | 31/31 | 49.598802 |
+| Release | 31 | 31/31 | 50.509218 |
+| ASan+UBSan | 31 | 31/31 | 85.042869 |
+
+All source identity snapshots equal
+76a49ecd77378a0aacafc30d98f9e640b5aaeaf64d638eca8af24f228c52fceb.
+Raw registration/JUnit/acceptance and every command-log digest were independently
+reconciled. Compile/link sanitizer flags and ASAN_OPTIONS=detect_leaks=1:halt_on_error=1,
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 remain unchanged. Release's complete
+16-trial datasets per timing mode, fourteen figures and nine intended control
+rejections passed the repaired archive contract, including actual replay/worker
+validation and analysis input inventories. These wall times are harness observations,
+not performance/scalability measurements.
+
+Current-code genuine historical repackaging used the actual matching old source:
+
+```sh
+python3 -B tools/validation/evidence_archive.py --create /tmp/dynagraph-3b3-debug-final --source /tmp/dynagraph-3b3-tested-source --output /tmp/dynagraph-3b3r-retained-debug-final.tar.gz
+python3 -B tools/validation/evidence_archive.py --create /tmp/dynagraph-3b3-release-final --source /tmp/dynagraph-3b3-tested-source --output /tmp/dynagraph-3b3r-retained-release-final.tar.gz
+python3 -B tools/validation/evidence_archive.py --create /tmp/dynagraph-3b3-sanitize-final --source /tmp/dynagraph-3b3-tested-source --output /tmp/dynagraph-3b3r-retained-sanitize-final.tar.gz
+```
+
+All three verified under the repaired profiles without a genuinely missing required
+artifact. Their source identity remains d5044e422ff6cba438a6e9a49720276435906116eba6d1377b0da03471293922;
+this is separate from the newly tested 3R identity above. The current trusted kit
+is separately inventoried. Source files/binaries from those archives are never
+executed by verification. Real retained executable modes 0757 were preserved in
+both positive datasets and the three negative dataset copies; tests independently
+exercise a 0755 Unicode-named source executable as well.
+
+Every pair was copied to /tmp/dynagraph-3b3r-offline with its basename unchanged.
+For each old-source repackaged pair and each fresh pair, executed three checks
+from that directory: sha256sum -c <basename>.sha256, the exact corrected documented
+python3 -I -B -c launcher, and /usr/bin/python3 -I -S -B guarded_verify.py. The
+retained-offline-results.json and focused/final-reconciliation.json preserve every
+argv and exit. The guard explicitly denies checkout/venv access using normalized
+absolute paths and denies socket/subprocess operations. System Python 3.12.3 with
+site packages disabled passed all copied archives, including Release replay/worker
+and figure structural verification. No network, original checkout, project venv,
+compiler or installed project package was needed. All three commands exited 0 for
+each pair; no hosted CI result is inferred from this.
+
+The exact documented launcher, also subprocess-tested with a spaced kit directory:
+
+```sh
+python3 -I -B -c 'import runpy,sys; kit=sys.argv.pop(1); sys.path.insert(0,kit); runpy.run_path(kit+"/evidence_archive.py",run_name="__main__")' /path/to/kit --verify /path/to/copied-artifacts/evidence.tar.gz --sidecar /path/to/copied-artifacts/evidence.tar.gz.sha256
+```
+
+Final fresh archive digests (167/667/167 members, respectively):
+
+- dynagraph-3b3r-debug-final.tar.gz: 48317c1018b794b23f16499f79abb8edebc069dd1b632f768ed61b6e3d63d05f
+- dynagraph-3b3r-release-final.tar.gz: 75d8bfc4b5262e43e66a316fe7ff186db3440b861c6a763fcabc740ce5fcfd3e
+- dynagraph-3b3r-sanitize-final.tar.gz: da3c22c03905e44bee9cbbae6766ae71bd1e8590e810c3b3cc9ba4214bfe5390
+
+A second final-code intentional driver failure used the same missing-interpreter
+command with output /tmp/dynagraph-3b3r-failed-driver-final. Its command exited 1
+and retained launch-error/null-exit/error diagnostics. The new failed archive and
+sidecar passed all three copied checks, returning integrity-verified /
+validation_status failed / failure_classification command-failed with no test-count
+claim. Source identity is the same 76a49e... snapshot. Its 157-member archive digest:
+6012fb8138950e55fff5cde1c7f95488c0c332c0cf4b8a86479c328436a32ec8.
+This tests preservation/classification of an actual failed infrastructure attempt;
+it is never presented as a passing suite or fabricated scientific evidence.
+
+Durable-workspace preservation: new ignored results/validation/phase5c3b3r contains
+all newly produced archive/sidecar attempts, copied offline kit and checks, focused
+logs, selected raw gate/compatibility/repair diagnostics, original 26-file backup
+and binary patch, final receipt/source/archive reconciliation and SHA-256 preservation
+inventories. Full external builds and all original historical directories remain
+untouched. Archived selected raw evidence is complete under its explicit profile;
+no build products or ephemeral caches are claimed as portable rebuild environments.
+
+The implementation, tests and CI bytes in every fresh verifier kit match the final
+code. Only this outcome documentation and the runbook changed after the fresh
+source snapshot. No post-suite implementation strengthening is claimed this time.
+Final source-preservation, grammar/YAML/shell checks and git diff --check are recorded
+in the final audit evidence. Local work is ready for independent re-audit, not an
+assertion that the BLOCKED independent gate has already been cleared.
+
+Remaining limits: one gzip member and a deliberately restricted tar/PAX subset;
+regular POSIX modes only; bounded standard-library parsing/replay rather than all
+archive formats; no producer authentication/source-to-binary certificate; environment
+not hermetic and snapshots not atomic. Failed evidence before source capture or
+with source drift may remain raw-only. Hosted Python 3.13 provisioning, all hosted
+jobs, archive/sidecar retrieval and artifact service behavior remain unexecuted.
+TSan acceptance remains unmet. No race freedom, general deadlock freedom, calibrated
+selection, inferential statistics, performance or scalability claim. No dependency
+installation, commit, push, PR or Phase 6 work. Stop for independent re-audit.
+
+Complete final 29-file review inventory:
+
+- Modified tracked: .github/workflows/ci.yml
+- Modified tracked: AGENTS.md
+- Modified tracked: CMakeLists.txt
+- Modified tracked: README.md
+- Modified tracked: docs/experimental-protocol.md
+- Modified tracked: docs/research-log.md
+- Modified tracked: tests/CMakeLists.txt
+- Untracked: docs/reproducibility-validation.md
+- Untracked: docs/research-validation-checklist.md
+- Untracked: tools/validation/archive_contract.py
+- Untracked: tools/validation/archive_test_support.py
+- Untracked: tools/validation/archive_transport.py
+- Untracked: tools/validation/check_environment.py
+- Untracked: tools/validation/check_execution.py
+- Untracked: tools/validation/check_registration.py
+- Untracked: tools/validation/ci_verify.py
+- Untracked: tools/validation/clean_checkout.py
+- Untracked: tools/validation/command_receipts.py
+- Untracked: tools/validation/default-tests.json
+- Untracked: tools/validation/evidence_archive.py
+- Untracked: tools/validation/pipeline_artifacts.py
+- Untracked: tools/validation/smoke_pipeline.py
+- Untracked: tools/validation/snapshot.py
+- Untracked: tools/validation/test_archive.py
+- Untracked: tools/validation/test_compatibility.py
+- Untracked: tools/validation/test_gate.py
+- Untracked: tools/validation/test_negative_diagnostics.py
+- Untracked: tools/validation/test_repair.py
+- Untracked: tools/validation/test_smoke.py
+
+## 2026-10-29 — Phase 5C-3B-3R2 narrow configuration-validation repair
+
+The independent 3R re-audit confirmed all original six archive false-success cases
+closed and reconciled all genuine evidence, but BLOCKED approval on a new profile
+bypass. configuration() inspected only joined -DKEY=value arguments and ignored
+split -D KEY=value arguments. An appended split override could make native CMake
+select Release, disable full validation and clear both sanitizer flags while the
+checker accepted the profile. The auditor confirmed actual CMake behavior in
+script mode with an anonymous RAM-backed script, without configuring/building.
+Separately, math.isfinite(10**400) raised an uncaught OverflowError on a receipt
+timestamp. These findings are preserved; the passing real algorithm results were
+not invalidated or relabeled by the archive-acceptance findings.
+
+Explicit user authorization permits only this narrow repair and verification.
+Branch/HEAD remain feature/reproducibility-validation /
+a6c6266262dff4a59f99fa9d6fd2381f38f3748a. All 29 original changed/untracked files,
+their SHA-256 inventory and binary tracked patch are preserved under new ignored
+results/validation/phase5c3b3r2/original and its adjacent records. All historical
+phase5c3b3r evidence is left untouched. No reset, clean, stash or dependency install.
+
+Changed implementation: archive_contract.py now recognizes only the exact argv
+representation emitted by the unchanged ci_verify.py. It requires the literal
+cmake/-S/-B/-G prefix, canonical absolute source/build paths with source equal to
+recorded cwd, Unix Makefiles, the exact ordered compiler/build/testing/warnings/
+full-validation/interpreter definitions and the two exact sanitizer definitions
+for sanitizer only. Every argument is consumed. Unknown arguments/keys, split or
+typed definitions, ambiguous or malformed tokens, and all duplicates (including
+identical duplicates) fail. No general CMake normalization or implicit first/last
+winner behavior remains. Cache preloads/removals, presets, toolchains and other
+unallowlisted override mechanisms fail. Protected values must match the profile;
+empty or missing sanitizer settings cannot pass. Metadata paths are checked
+lexically only and are never opened or resolved by the verifier.
+
+Receipt times now pass a dedicated type/finite/range check with no int-to-float
+conversion. start_unix/end_unix/wall_seconds are int or finite float, excluding
+bool, in [0, 253402300799] seconds. The cap is the last whole Unix second in UTC
+year 9999 and a broad duration-data cap, not an execution/test timeout. Rejections
+identify type, nonfinite value or range and name the receipt/field. Existing
+sequential-time checks remain unchanged. No broad exception catch was added.
+
+Only three code files changed: archive_contract.py, archive_test_support.py and
+test_archive.py. The fixture producer was corrected to match genuine canonical
+argv and cwd; production ci_verify.py and command_receipts.py remain byte-for-byte
+unchanged from the 29-file recovery snapshot. Documentation changes are limited
+to the reproducibility runbook, this research log and the release checklist.
+The overall changed/untracked inventory remains 29 files.
+
+The existing 39 archive regressions passed first, with the corrected fixture:
+archive-existing-39.log. Expanded verification then passed 59 tests (39 existing
+plus 20 added methods with multiple diagnostic-specific subcases), recorded in
+archive-expanded-v1.log. Positive Debug, Release-smoke and sanitizer archives all
+exercise the actual verifier. Negative fixtures retain otherwise valid evidence,
+refresh supplied hashes/inventories and assert specific configure/time diagnostics.
+Coverage includes every requested split/joined override, duplicate, malformed or
+missing definition, -C/-U/preset/toolchain/script and injected cache setting,
+required flag removal/empty value, all protected settings, paths/order, normal
+and boundary timestamps, huge integers, nonfinite values and malformed types.
+A real CLI subprocess verifies controlled exit 1 with no traceback for 10**400.
+All original mandatory-evidence, terminal-status, gzip/tar, mode/hash/link/path and
+manifest security regressions remain in the passing 59-test suite.
+
+Initial local commands:
+
+```sh
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+```
+
+The first command's two actual runs wrote archive-existing-39.log and
+archive-expanded-v1.log respectively; three diagnostic-control tests also passed,
+recorded in diagnostic-controls.log. No dependency or environment was changed.
+Subsequent genuine-archive and independent CLI checks are recorded below after
+actual completion. No previous result is claimed as a new C++ execution.
+
+### 2026-10-29 — Interrupted 3R2 recovery and final local reconciliation
+
+Recovered branch feature/reproducibility-validation at
+a6c6266262dff4a59f99fa9d6fd2381f38f3748a, with seven tracked modifications and
+22 untracked review files (29 total). Read AGENTS.md and inspected actual code,
+tests, producer, runbook and retained logs before executing checks. Both narrow
+repairs were COMPLETE in source and regression coverage before interruption;
+the final reconciliation/documentation was INCOMPLETE. The inspected 39-test,
+59-test and three diagnostic-control logs all have terminal OK results; retained
+offline/adversarial records also have terminal exit codes. No interrupted test
+run was identified or relabeled as passing. All historical evidence is preserved.
+
+Comparison against phase5c3b3r2/original found exactly six changed files:
+tools/validation/archive_contract.py, archive_test_support.py, test_archive.py,
+docs/reproducibility-validation.md, docs/research-validation-checklist.md and this
+log. The three code changes and three documentation changes predate recovery.
+During recovery only this log and the runbook were edited; no implementation
+change was needed. ci_verify.py, evidence_archive.py, CI/CMake infrastructure,
+production algorithms/APIs/heuristics/timing boundaries, workload formats,
+dependency pins and existing timeouts are unchanged from the recovery snapshot.
+Production apps/include/src and dependency pins also have no diff against HEAD.
+
+New records are under ignored
+results/validation/phase5c3b3r2/recovery-20261029/. Commands and exit codes are in
+focused-results.json, genuine-results.json and adversarial-results.json; individual
+logs retain actual output. recovered-inventory.json records the working tree and
+snapshot comparison, and prior-evidence-sha256.json preserves historical bytes.
+
+Recovery commands `python3 -B tools/validation/test_archive.py` and
+`python3 -B tools/validation/test_negative_diagnostics.py` passed 59 tests in
+18.004 seconds and three tests in 0.001 seconds respectively. This includes all
+39 original archive-security regressions and all 20 added configure/time methods.
+The oversized timestamp CLI exits 1 with its range diagnostic and no traceback.
+
+For each of the seven paths in retained genuine-verification.json, ran
+`python3 -B tools/validation/evidence_archive.py --verify ARCHIVE --sidecar ARCHIVE.sha256`.
+All exited 0: both historical sets of Debug, Release-smoke and sanitizer archives
+reported verified/passed/31; Release retained its smoke acceptance. The failed
+driver archive reported integrity-verified/failed/command-failed, with no passed
+count. Source inventory identities remain d5044e422ff6cba438a6e9a49720276435906116eba6d1377b0da03471293922
+and 76a49ecd77378a0aacafc30d98f9e640b5aaeaf64d638eca8af24f228c52fceb.
+Archive SHA-256 values in genuine-results.json match the prior recorded values.
+
+The same current-code CLI with sidecars rejected all seven retained synthetic
+adversaries: four split overrides and combined-audit with the split-definition
+diagnostic, cache-preload with unsupported -C, and huge-time with the revision
+start_unix range diagnostic. Every exit was 1 with no traceback. These mutations
+are diagnostic controls, not genuine execution evidence. Prior isolated offline
+checks and cache corroboration remain retained, not claimed as newly executed.
+
+No expensive C++ suite was rerun: the recovered acceptance logic, producer and
+build infrastructure required no further change, and genuine raw results were
+reverified directly. Final git diff --check passed. Local repair is ready for
+independent re-audit; independent approval and hosted CI remain pending, and the
+TSan acceptance gate remains unmet. Archive integrity does not authenticate the
+producer or certify source-to-binary correspondence. No dependencies installed,
+commit, push, PR or Phase 6 work. Stop here for independent review.

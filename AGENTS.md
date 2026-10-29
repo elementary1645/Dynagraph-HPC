@@ -2,10 +2,14 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 5C-2B parallel and concurrency stress validation,
-  explicitly approved after Phase 5C-2A investigation. Extend tests, registration and docs only;
-  preserve production algorithms, graph semantics, APIs, heuristic and timing.
-- Stop after Phase 5C-2B implementation/testing for independent source review.
+- Current authorized scope: Phase 5C-3B-3R archive acceptance repair: mandatory evidence
+  profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
+  sidecars, with local/CI integration and documentation. Preserve all
+  completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
+  authorized; preserve production algorithms, graph semantics, APIs, heuristic,
+  timing boundaries, workload formats and pinned dependency versions.
+- Stop after Phase 5C-3B-3R implementation/local verification for independent review;
+  Phase 6 remains deferred. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
   Preserve tests/tsan_controls and ignored results/validation/phase5c2a* evidence;

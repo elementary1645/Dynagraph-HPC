@@ -1,5 +1,14 @@
 # DynaGraph-HPC
 
+Phase 5C-3B-3R repairs the audit-blocked archive gate with mandatory evidence
+profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256 sidecars.
+See [full validation and isolated build runbook](docs/reproducibility-validation.md).
+See the [research-validation release checklist](docs/research-validation-checklist.md).
+Default/minimal builds remain supported; production behavior is unchanged.
+Hosted CI verification remains pending actual hosted job evidence. Smoke timings
+are harness validation, not performance evidence; TSan acceptance remains unmet.
+
+
 Phase 5B-4B adds read-only descriptive analysis of complete timing evidence:
 
 ```sh
