@@ -8,6 +8,10 @@ option(DYNAGRAPH_WARNINGS_AS_ERRORS "Treat project compiler warnings as errors" 
 
 find_package(OpenMP REQUIRED COMPONENTS CXX)
 include(CTest)
+option(DYNAGRAPH_FULL_VALIDATION "Require complete pinned analysis and exact test registrations" OFF)
+if(DYNAGRAPH_FULL_VALIDATION AND NOT BUILD_TESTING)
+    message(FATAL_ERROR "DYNAGRAPH_FULL_VALIDATION requires BUILD_TESTING=ON")
+endif()
 
 function(dynagraph_set_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

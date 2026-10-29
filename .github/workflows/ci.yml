@@ -17,28 +17,78 @@ jobs:
         preset: [debug, release]
     steps:
       - uses: actions/checkout@v4
-      - name: Configure GCC and OpenMP
-        run: cmake --preset ${{ matrix.preset }}
-      - name: Build with warnings as errors
-        run: cmake --build --preset ${{ matrix.preset }} --parallel 2
-      - name: Run CTest
-        run: ctest --preset ${{ matrix.preset }}
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Provision exact analysis pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/provision-${{ matrix.preset }}"
+          python -m venv "$RUNNER_TEMP/analysis-python"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip install --only-binary=:all: -r benchmarks/requirements-analysis.txt 2>&1 | tee "$RUNNER_TEMP/provision-${{ matrix.preset }}/install.log"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip check 2>&1 | tee "$RUNNER_TEMP/provision-${{ matrix.preset }}/check.log"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip freeze --all > "$RUNNER_TEMP/provision-${{ matrix.preset }}/freeze.txt"
+      - name: Parser and infrastructure regressions
+        run: python -B tools/validation/test_repair.py --output "$RUNNER_TEMP/focused-${{ matrix.preset }}"
+      - name: Archive and diagnostic regressions
+        run: |
+          python -B tools/validation/test_negative_diagnostics.py
+          python -B tools/validation/test_archive.py
+      - name: Full suite and Release smoke pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [[ '${{ matrix.preset }}' == release ]]; then extra+=(--smoke); fi
+          python -B tools/validation/ci_verify.py --mode '${{ matrix.preset }}' --python "$RUNNER_TEMP/analysis-python/bin/python" --output "$RUNNER_TEMP/verification-${{ matrix.preset }}" "${extra[@]}"
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ matrix.preset }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/provision-${{ matrix.preset }}/
+            ${{ runner.temp }}/focused-${{ matrix.preset }}/
+            ${{ runner.temp }}/verification-${{ matrix.preset }}*.tar.gz
+            ${{ runner.temp }}/verification-${{ matrix.preset }}*.tar.gz.sha256
+            ${{ runner.temp }}/verification-${{ matrix.preset }}/
+            !${{ runner.temp }}/verification-${{ matrix.preset }}/build/**
+            !${{ runner.temp }}/verification-${{ matrix.preset }}/tmp/**
 
   sanitize:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Configure ASan and UBSan
-        run: >-
-          cmake -S . -B build/sanitize -DCMAKE_CXX_COMPILER=g++
-          -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
-          -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON
-          '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
-          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
-      - name: Build sanitizer targets
-        run: cmake --build build/sanitize --parallel 2
-      - name: Run instrumented CTest
-        env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
-          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build/sanitize --output-on-failure
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Provision exact analysis pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/provision-sanitize"
+          python -m venv "$RUNNER_TEMP/analysis-python"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip install --only-binary=:all: -r benchmarks/requirements-analysis.txt 2>&1 | tee "$RUNNER_TEMP/provision-sanitize/install.log"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip check 2>&1 | tee "$RUNNER_TEMP/provision-sanitize/check.log"
+          "$RUNNER_TEMP/analysis-python/bin/python" -m pip freeze --all > "$RUNNER_TEMP/provision-sanitize/freeze.txt"
+      - name: Full ASan and UBSan suite with leak detection
+        run: python -B tools/validation/ci_verify.py --mode sanitize --python "$RUNNER_TEMP/analysis-python/bin/python" --output "$RUNNER_TEMP/verification-sanitize"
+      - name: Preserve sanitizer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-sanitize
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/provision-sanitize/
+            ${{ runner.temp }}/verification-sanitize*.tar.gz
+            ${{ runner.temp }}/verification-sanitize*.tar.gz.sha256
+            ${{ runner.temp }}/verification-sanitize/
+            !${{ runner.temp }}/verification-sanitize/build/**
+            !${{ runner.temp }}/verification-sanitize/tmp/**

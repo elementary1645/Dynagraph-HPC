@@ -80,6 +80,17 @@ set_tests_properties(benchmark_experiment PROPERTIES TIMEOUT 120 PROCESSORS 2
 # Analysis uses Python 3.11+; existing artifact tooling retains its Python 3.8 minimum.
 # No installation is performed by CMake. An approved pinned venv is optional.
 set(DYNAGRAPH_ANALYSIS_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH "Python for descriptive analysis tests")
+if(DYNAGRAPH_FULL_VALIDATION)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env
+        "PYTHONDONTWRITEBYTECODE=1" "MPLCONFIGDIR=${CMAKE_CURRENT_BINARY_DIR}/analysis-mpl-cache"
+        "${DYNAGRAPH_ANALYSIS_PYTHON}" "${PROJECT_SOURCE_DIR}/tools/validation/check_environment.py"
+        RESULT_VARIABLE full_environment_result OUTPUT_VARIABLE full_environment_output
+        ERROR_VARIABLE full_environment_error TIMEOUT 60)
+    if(NOT full_environment_result STREQUAL "0")
+        message(FATAL_ERROR "Full validation requires a working DYNAGRAPH_ANALYSIS_PYTHON interpreter, Python >=3.11, exact analysis pins and Agg. Result: ${full_environment_result}\n${full_environment_output}\n${full_environment_error}")
+    endif()
+    message(STATUS "Full-validation environment: ${full_environment_output}")
+endif()
 execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -c
     "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)"
     RESULT_VARIABLE DYNAGRAPH_ANALYSIS_SUPPORTED)
@@ -95,7 +106,8 @@ if(DYNAGRAPH_ANALYSIS_SUPPORTED EQUAL 0)
     set_tests_properties(analysis_integration PROPERTIES TIMEOUT 120 PROCESSORS 2
         ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0;OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2;OMP_DYNAMIC=FALSE")
     execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -c
-        "import sys; sys.path.insert(0, '${PROJECT_SOURCE_DIR}/benchmarks/python'); from analysis_figures import pinned_versions; pinned_versions()"
+        "import sys; sys.path.insert(0, sys.argv[1]); from analysis_figures import pinned_versions; pinned_versions()"
+        "${PROJECT_SOURCE_DIR}/benchmarks/python"
         RESULT_VARIABLE DYNAGRAPH_RENDERING_SUPPORTED OUTPUT_QUIET ERROR_QUIET)
     if(DYNAGRAPH_RENDERING_SUPPORTED EQUAL 0)
         add_test(NAME analysis_figures COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}"
@@ -172,3 +184,38 @@ foreach(failure_profile IN ITEMS fast stress extended)
             ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
     endif()
 endforeach()
+
+if(DYNAGRAPH_FULL_VALIDATION)
+    # Check CMake's registered names now; the standalone checker additionally
+    # enumerates generated CTest JSON after generation (including duplicates).
+    get_property(full_test_names DIRECTORY PROPERTY TESTS)
+    set(full_names_json "[")
+    foreach(full_name IN LISTS full_test_names)
+        get_test_property("${full_name}" DISABLED full_disabled)
+        if(full_disabled)
+            message(FATAL_ERROR "Full validation requires enabled test: ${full_name} is DISABLED")
+        endif()
+        string(APPEND full_names_json "\"${full_name}\",")
+    endforeach()
+    string(REGEX REPLACE ",$" "" full_names_json "${full_names_json}")
+    string(APPEND full_names_json "]")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/full-validation-names.json" "${full_names_json}\n")
+    set(full_optional_args)
+    foreach(tier IN ITEMS CONCURRENCY_STRESS CONCURRENCY_EXTENDED VALIDATION_STRESS VALIDATION_EXTENDED)
+        if(DYNAGRAPH_ENABLE_${tier})
+            string(TOLOWER "${tier}" tier_name)
+            string(REPLACE "_" "-" tier_name "${tier_name}")
+            string(REPLACE "validation-" "system-" tier_name "${tier_name}")
+            list(APPEND full_optional_args --optional "${tier_name}")
+        endif()
+    endforeach()
+    execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -B
+        "${PROJECT_SOURCE_DIR}/tools/validation/check_registration.py"
+        --names-file "${CMAKE_CURRENT_BINARY_DIR}/full-validation-names.json" ${full_optional_args}
+        RESULT_VARIABLE full_registration_result OUTPUT_VARIABLE full_registration_output
+        ERROR_VARIABLE full_registration_error TIMEOUT 30)
+    if(NOT full_registration_result STREQUAL "0")
+        message(FATAL_ERROR "Full-validation registration gate failed: ${full_registration_error}")
+    endif()
+    message(STATUS "Full-validation registrations: ${full_registration_output}")
+endif()
