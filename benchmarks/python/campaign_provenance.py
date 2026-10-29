@@ -1,4 +1,4 @@
-"""Hardware report v2 structural validation; no processes or filesystem access.
+"""Hardware v2 / runtime evidence v3 validation; no filesystem/process access.
 
 Supplied evidence is not authenticated. A valid snapshot does not prove ownership
 or execution-time stability. Linux cgroup2 and ELF/libgomp are the supported subset.
@@ -8,6 +8,7 @@ import re
 
 from campaign_contract import fields, digest, integer, path_text
 from workloads import canonical_json
+from campaign_elf import parse_elf, reconcile_mappings
 
 VISIBILITY = 'all declared visible mounts reconciled; hidden host restrictions unverified'
 MAX_CPU = 1048575
@@ -222,7 +223,8 @@ def mapping_line(line):
     path=absolute_path(parts[5])
     if re.fullmatch(r'libgomp\.so\.1(\.[0-9]+)*',path.name) is None:
         raise ValueError('mapping soname/path mismatch')
-    return dict(lo=lo,hi=hi,path=str(path),device_major=major,device_minor=minor,inode=inode)
+    return dict(lo=lo,hi=hi,offset=int(parts[2],16),permissions=parts[1],
+                path=str(path),device_major=major,device_minor=minor,inode=inode)
 
 
 def validate_runtime(value):
@@ -231,7 +233,8 @@ def validate_runtime(value):
     if kind=='candidate-library':
         fields(value,'path sha256 soname linkage','runtime candidate')
     elif kind=='observed-process-mapping':
-        fields(value,'path sha256 soname linkage executable_sha256 pid process_stat process_start_ticks mappings file_identity','observed runtime')
+        fields(value,'path sha256 soname linkage executable_sha256 pid process_stat process_start_ticks mappings file_identity evidence_version page_size elf executable_elf','observed runtime')
+        integer(value['evidence_version'],3,3,'runtime evidence version')
         integer(value['pid'],1,1<<30,'runtime PID')
         digest(value['executable_sha256'])
         integer(value['process_start_ticks'],1,MAX_COUNTER,'process start ticks')
@@ -253,6 +256,17 @@ def validate_runtime(value):
         ordered=sorted(parsed,key=lambda r:r['lo'])
         if any(a['hi']>b['lo'] for a,b in zip(ordered,ordered[1:])):
             raise ValueError('overlapping runtime mappings')
+        elf=parse_elf(value['elf'])
+        executable=parse_elf(value['executable_elf'])
+        if (value['elf']['file_size']!=info['size'] or elf['kind']!=3 or
+                elf['interpreter'] is not None or elf['soname']!='libgomp.so.1'):
+            raise ValueError('runtime ELF identity/SONAME mismatch')
+        interpreter=executable['interpreter']
+        if (not executable['entry'] or interpreter is None or absolute_path(interpreter).name!='ld-linux-x86-64.so.2' or
+                executable['needed'].count('libgomp.so.1')!=1 or
+                any('libgomp' in name and name!='libgomp.so.1' for name in executable['needed'])):
+            raise ValueError('unsupported direct runtime linkage')
+        reconcile_mappings(ordered,elf,info['size'],value['page_size'])
     else: raise ValueError('unsupported runtime evidence kind')
     absolute_path(value['path']);digest(value['sha256'])
     if value['soname']!='libgomp.so.1' or re.fullmatch(r'libgomp\.so\.1(\.[0-9]+)*',PurePosixPath(value['path']).name) is None:

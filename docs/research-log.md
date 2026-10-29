@@ -3390,3 +3390,126 @@ requires recapture as complete v2, with no inferred upgrade. Later execution,
 resource enforcement, actual-team collection, inference and replication remain
 deferred. No performance campaign, tuning, TSan acceptance or race-freedom claim.
 Stop after the authorized local remediation commit; no push, merge or PR.
+
+## 2026-10-30 — Phase 6B-1R2 runtime provenance remediation
+
+Started clean at c45c760b134f49feb0c9c37fd7d96eb5e8d39eaf on
+feature/phase6b-campaign-foundation. The user authorizes N1/N2 implementation,
+fresh validation and a local commit, without push, merge, PR or performance work.
+Prior Phase 6B-1 and 6B-1R evidence hashes are captured under the new ignored
+results/validation/phase6b1r2 directory before edits. No prior evidence is rewritten.
+
+Independently reran the audit's plain-text mmap reproducer and mapping mutation
+matrix before implementation. The fake read-only libgomp file was collected and
+scientifically admitted (API true, CLI 0). Added four test methods before fixes:
+both plain-text and genuine read-only data mappings, unaligned address/offsets,
+and out-of-bounds/overflow offsets. The 66-test red run retained the original 62
+passing tests with six failing subcases, saved in red-regressions.log. Original
+independent outputs are before-n1.log and before-mutations.log.
+
+N1 root cause was inferring linkage/SONAME from a filename plus file mapping,
+without checking ELF structure, executable segments or an explicit dependency.
+N2 root cause was discarding mapping offsets and never reconciling page/file/ELF
+geometry. New campaign_elf.py performs bounded standard-library ELF64 parsing;
+runtime evidence v3 contains raw metadata excerpts for pure offline reparsing,
+explicit page size, and complete file-backed load geometry. The supported direct
+DT_NEEDED + actual SONAME + complete mappings relationship and its narrow platform
+scope are specified in campaign-foundation.md. It does not prove active execution
+or symbol binding and is not host authentication. Unsupported/legacy scientific
+runtime records reject; plan/trial/hardware/admission versions remain unchanged.
+
+The first repaired 66-test run closed the original failures and exposed one old
+collector mock that did not provide the newly required ELF file snapshots. Its
+actual output is retained as first-green-attempt.log. Updated that mock to preserve
+its original identity/change assertions, retained all previous test cases, and
+added independently built synthetic metadata plus a real trusted idle linked
+process fixture. No candidate or benchmark is launched by the collector.
+
+### Phase 6B-1R2 completed verification
+
+All commands below actually ran. Exact profile argv, controlled environments,
+command receipts and raw outcomes are retained in the three new archives and in
+results/validation/phase6b1r2/verification-summary.json. No dependencies were
+installed. The sanitizer command used the explicitly approved outside-sandbox
+execution path; leak detection and halt-on-error settings were not weakened.
+
+```sh
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b1r2-repair
+.venv-analysis/bin/python -B tools/validation/check_environment.py
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r2-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r2-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b1r2-sanitize-unsandboxed
+```
+
+Results: final campaign suite 75 tests passed; archive regressions 59 passed;
+diagnostic controls 3 passed; infrastructure regressions 17 passed; exact installed
+analysis dependencies and Agg renderer gate passed. The earlier expanded run had
+73 passing tests; the final 75 includes additional metadata/RELRO and descriptor
+checks. Final-campaign.log retains the final run. All original F1–F4 regressions
+remain present and pass.
+
+Fresh Debug, Release and approved outside-sandbox ASan+UBSan each built and passed
+31/31 required CTest tests. Release also completed full-trace and per-update smoke,
+analysis, raw-artifact checks and intended negative controls. These are harness
+validation results, not performance experiments or speedup evidence. Sanitizer
+options remained ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. No new sanitizer failure occurred;
+all historical failed sanitizer archives/logs remain separately preserved and
+hash-identical. No TSan acceptance, hosted CI or race-freedom claim is made.
+
+Each full driver created and independently reopened its archive/sidecar pair.
+Copied all three pairs into the new evidence directory, then independently ran
+sha256sum -c and the trusted copied verifier with Python -I -S -B, --verify and
+--sidecar. All six copied checks exited 0. Offline results were verified/passed/31
+for debug-full-v1, release-smoke-v1 and sanitize-full-v1; Release smoke=true.
+The verifier kit comes from current trusted repository files, never archived code.
+Complete nested raw evidence remains inside the archives; build trees are omitted.
+
+All three gates captured identical source inventory
+ac07aa6b5f87ecb4dbf3192fe059ceee211b4de0de56f5b44a095a1d55734aa5.
+Their captured implementation and test bytes match the five entries in
+implementation-sha256.json and the final implementation. No implementation or test
+changes postdate those gates; only this outcome documentation was appended later.
+
+Independent after-reproducer results are retained under reproducers/ and in
+static-compatibility-reproducers.json and after-n1-api-cli.log:
+
+| Case | Before | After |
+| --- | --- | --- |
+| Plain-text file, read-only mmap | runtime collected; science true; CLI 0 | collector/CLI inspect unavailable; science false; admission CLI 1 |
+| Genuine libgomp mapped only as data | runtime collected; science true | collector/CLI inspect unavailable; science false; admission CLI 1 |
+| Unaligned VMA start | science true; CLI 0 | science false; CLI 1 |
+| Unaligned file offset | science true; CLI 0 | science false; CLI 1 |
+| Out-of-bounds/overflow file offset | science true; CLI 0 | science false; CLI 1 |
+| Trusted idle direct-linked helper | not previously required | genuine five-VMA runtime v3 collected; positive synthetic-hardware API/CLI admission |
+
+The positive runtime observation is a real procfs record; the rest of its hardware
+fixture is explicitly synthetic. It is not an admission claim for this shared host.
+No candidate is executed by collection and no benchmark is run by these reproducers.
+Older/incomplete runtime records reject science while development remains admitted
+with scientific failures and scientific_performance_allowed=false.
+
+The representative 104-trial development manifest is byte-identical to preserved
+Phase 6B-1 output. Plan SHA-256 remains
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+manifest SHA-256 remains
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+All 263 captured prior Phase 6B-1/6B-1R evidence files still match their hashes.
+Protected-path comparison against c45c760 confirms unchanged production algorithms,
+APIs, heuristic/timing/workload/analysis code, existing schemas/goldens/dependency
+pins, CMake registration, workflow, archive tools and TSan controls. AST parsing of
+50 Python files and installed PyYAML loading plus bash -n for all six workflow
+command blocks passed. GitHub expressions were replaced only for local shell
+syntax checking. Git diff checks passed; no hosted workflow execution is claimed.
+
+Changed files are AGENTS.md, campaign_hardware.py, campaign_provenance.py, new
+campaign_elf.py, test_campaign.py, new campaign_runtime_support.py, this research log
+and campaign-foundation.md. Remaining limitations are the documented narrow ELF
+platform/layout/linkage subset, unauthenticated excerpts/declarations, non-atomic
+snapshots, hidden host restrictions, unverified symbol binding/active execution,
+reservation/build provenance and runtime stability. Later execution/inference
+remains deferred. Stop after the authorized local commit for independent re-audit;
+no push, merge or PR.

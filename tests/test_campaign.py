@@ -20,6 +20,8 @@ from campaign_hardware import (admit, cgroup_ancestry, cpu_list, inspect, mapped
 from campaign_provenance import validate_runtime, validate_cgroups, topology_ids
 from experiment_records import POLICIES
 from workloads import canonical_json
+from campaign_runtime_support import elf_bytes, elf_evidence, patch_hex
+from campaign_elf import collect_elf, parse_elf, add
 
 
 def fixture():
@@ -52,9 +54,12 @@ def runtime_fixture():
     numbers[0]=1;numbers[1]=123;numbers[2]=123;numbers[18]=100000
     return dict(path='/usr/lib/libgomp.so.1.0.0',sha256='c'*64,soname='libgomp.so.1',
         linkage='observed-process-mapping',executable_sha256='a'*64,pid=123,
+        evidence_version=3,page_size=4096,elf=elf_evidence(),executable_elf=elf_evidence(True),
         process_stat='123 (synthetic worker) S '+' '.join(map(str,numbers)),process_start_ticks=100000,
-        mappings=['7f000000-7f001000 r-xp 00000000 08:01 7 /usr/lib/libgomp.so.1.0.0'],
-        file_identity=dict(device_major=8,device_minor=1,inode=7,size=8192,mtime_ns=1793284000000000000))
+        mappings=['7f000000-7f002000 r-xp 00000000 08:01 7 /usr/lib/libgomp.so.1.0.0',
+                  '7f005000-7f006000 r--p 00002000 08:01 7 /usr/lib/libgomp.so.1.0.0',
+                  '7f006000-7f007000 rw-p 00003000 08:01 7 /usr/lib/libgomp.so.1.0.0'],
+        file_identity=dict(device_major=8,device_minor=1,inode=7,size=0x3800,mtime_ns=1793284000000000000))
 
 
 def cgroup_fixture():
@@ -355,14 +360,15 @@ class CampaignTests(unittest.TestCase):
         # No process is launched: synthetic /proc maps and file digests.
         sample=runtime_fixture();maps='\n'.join(sample['mappings']);stat=sample['process_stat']
         def read(path):return maps if path.endswith('/maps') else stat
-        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=8192,st_mtime_ns=1793284000000000000)
-        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
+        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=0x3800,st_mtime_ns=1793284000000000000,st_ctime_ns=1793284000000000000)
+        snapshots=[(elf_evidence(True),'a'*64,info),(elf_evidence(),'c'*64,info)]
+        with patch('campaign_hardware.elf_file',side_effect=snapshots),patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
             value=mapped_runtime(123,'fixture',read)
             self.assertEqual(value['linkage'],'observed-process-mapping')
-        bad=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=8,st_size=8192,st_mtime_ns=1793284000000000000)
-        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=bad):
+        bad=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=8,st_size=0x3800,st_mtime_ns=1793284000000000000,st_ctime_ns=1793284000000000000)
+        with patch('campaign_hardware.elf_file',side_effect=[snapshots[0],(elf_evidence(),'c'*64,bad)]),patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=bad):
             self.assertIsNone(mapped_runtime(123,'fixture',read))
-        with patch('campaign_hardware.file_hash',side_effect=['a'*64,'b'*64]):
+        with patch('campaign_hardware.elf_file',return_value=snapshots[0]),patch('campaign_hardware.file_hash',return_value='b'*64):
             self.assertIsNone(mapped_runtime(123,'fixture',read))
 
     def test_cli_admission_exit_and_no_execution(self):
@@ -505,7 +511,7 @@ class CampaignTests(unittest.TestCase):
                  lambda v:v.update(mappings=[]),lambda v:v['mappings'].append(v['mappings'][0]),
                  lambda v:v.update(mappings=[v['mappings'][0].replace('08:01','08:02')]),
                  lambda v:v.update(mappings=[v['mappings'][0].replace('r-xp','nope')]),
-                 lambda v:v.update(mappings=[v['mappings'][0].replace('7f001000','7f000000')])]
+                 lambda v:v.update(mappings=[v['mappings'][0].replace('7f002000','7f000000')]+v['mappings'][1:])]
         for change in changes:
             r=hardware();change(r['openmp']['value']);self.assert_not_scientific(r,cli=True)
 
@@ -577,8 +583,8 @@ class CampaignTests(unittest.TestCase):
             read.calls+=1
             return stat if read.calls==1 else stat.replace('100000','100001')
         read.calls=0
-        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=8192,st_mtime_ns=1793284000000000000)
-        with patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
+        info=SimpleNamespace(st_dev=os.makedev(8,1),st_ino=7,st_size=0x3800,st_mtime_ns=1793284000000000000,st_ctime_ns=1793284000000000000)
+        with patch('campaign_hardware.elf_file',side_effect=[(elf_evidence(True),'a'*64,info),(elf_evidence(),'c'*64,info)]),patch('campaign_hardware.file_hash',return_value='a'*64),patch('pathlib.Path.stat',return_value=info):
             self.assertIsNone(mapped_runtime(123,'fixture',read))
 
     def test_f3_memory_only_numa_node(self):
@@ -604,6 +610,169 @@ class CampaignTests(unittest.TestCase):
             for name in ('caf\u00e9','cafe\u0301','\u56fe'):
                 target=Path(tmp)/name;target.write_text('legitimate Unicode',encoding='utf-8')
                 self.assertEqual(os.fsdecode(os.fsencode(str(target))),str(target))
+
+    def test_r2_plain_text_mapping_is_not_runtime(self):
+        import mmap
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'libgomp.so.1';path.write_bytes(b'not an ELF runtime\n'+b'X'*8192)
+            with path.open('rb') as stream, mmap.mmap(stream.fileno(),4096,
+                    flags=mmap.MAP_PRIVATE,prot=mmap.PROT_READ):
+                self.assertIsNone(mapped_runtime(os.getpid(),sys.executable))
+
+    def test_r2_genuine_runtime_data_mapping_is_not_linkage(self):
+        import mmap
+        path=Path(subprocess.check_output(['g++','-print-file-name=libgomp.so.1'],text=True).strip()).resolve()
+        with path.open('rb') as stream, mmap.mmap(stream.fileno(),4096,
+                flags=mmap.MAP_PRIVATE,prot=mmap.PROT_READ):
+            self.assertIsNone(mapped_runtime(os.getpid(),sys.executable))
+
+    def test_r2_unaligned_mappings_rejected_api_cli(self):
+        for start,offset in [('7f000001-7f002001','00000000'),('7f000000-7f002000','00000001')]:
+            r=hardware();r['openmp']['value']['mappings'][0]=(
+                start+' r-xp '+offset+' 08:01 7 /usr/lib/libgomp.so.1.0.0')
+            with self.subTest(start=start,offset=offset):self.assert_not_scientific(r,cli=True)
+
+    def test_r2_out_of_bounds_mapping_rejected_api_cli(self):
+        for offset in ('00010000','ffffffffffffffff'):
+            r=hardware();r['openmp']['value']['mappings'][0]=(
+                '7f000000-7f002000 r-xp '+offset+' 08:01 7 /usr/lib/libgomp.so.1.0.0')
+            with self.subTest(offset=offset):self.assert_not_scientific(r,cli=True)
+
+    def test_r2_elf_header_adversaries_api_cli(self):
+        changes=[('magic',0,'<I',0),('class',4,'<B',1),('encoding',5,'<B',2),
+                 ('architecture',18,'<H',183),('type',16,'<H',1),('version',20,'<I',2),
+                 ('header-size',52,'<H',63),('ph-size',54,'<H',55),('ph-count',56,'<H',129),
+                 ('ph-bounds',32,'<Q',0x3800),('section-bounds',40,'<Q',0x3800)]
+        for name,offset,fmt,value in changes:
+            r=hardware();patch_hex(r['openmp']['value']['elf'],'header',offset,fmt,value)
+            with self.subTest(name=name):self.assert_not_scientific(r,cli=True)
+
+    def test_r2_elf_segments_and_dynamic_adversaries_api_cli(self):
+        changes=[('no-exec','program_headers',4,'<I',4),
+                 ('file-range','program_headers',56+8,'<Q',0xfffffffffffff000),
+                 ('virtual-overflow','program_headers',56+16,'<Q',0xfffffffffffff000),
+                 ('filesz-memsz','program_headers',56+32,'<Q',0x3000),
+                 ('segment-align','program_headers',56+48,'<Q',24),
+                 ('no-soname','dynamic',32,'<q',1),('bad-soname-offset','dynamic',40,'<Q',9999),
+                 ('no-null','dynamic',48,'<q',1),('bad-strtab','dynamic',8,'<Q',0x9000),
+                 ('no-strsize','dynamic',16,'<q',1)]
+        for name,key,offset,fmt,value in changes:
+            r=hardware();patch_hex(r['openmp']['value']['elf'],key,offset,fmt,value)
+            with self.subTest(name=name):self.assert_not_scientific(r,cli=True)
+        for key in ('program_headers','dynamic','strings'):
+            r=hardware();r['openmp']['value']['elf'][key]=r['openmp']['value']['elf'][key][:-2]
+            with self.subTest(truncated=key):self.assert_not_scientific(r,cli=True)
+        r=hardware();r['openmp']['value']['elf']['strings']=b'\0libgomp.so.2\0'.hex()
+        self.assert_not_scientific(r,cli=True)
+
+    def test_r2_mapping_permissions_and_completeness_api_cli(self):
+        for change in (lambda v:v['mappings'].pop(0),lambda v:v['mappings'].pop(),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('r-xp','r--p')]+v['mappings'][1:]),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('r-xp','rwxp')]+v['mappings'][1:]),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('r-xp','r-xs')]+v['mappings'][1:]),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('7f002000','7f001000')]+v['mappings'][1:]),
+                       lambda v:v.update(mappings=[v['mappings'][0]]+[v['mappings'][1].replace('00002000','00001000')]+v['mappings'][2:]),
+                       lambda v:v.update(mappings=[v['mappings'][0].replace('7f002000','fffffffffffff000')]+v['mappings'][1:])):
+            r=hardware();change(r['openmp']['value']);self.assert_not_scientific(r,cli=True)
+        with self.assertRaisesRegex(ValueError,'overflow'):add((1<<64)-1,1)
+
+    def test_r2_version_page_and_linkage_api_cli(self):
+        for key in ('evidence_version','page_size','elf','executable_elf'):
+            r=hardware();r['openmp']['value'].pop(key);self.assert_not_scientific(r,cli=True)
+        for key,value in [('evidence_version',2),('evidence_version',True),('page_size',8192),('page_size',True)]:
+            r=hardware();r['openmp']['value'][key]=value;self.assert_not_scientific(r,cli=True)
+        r=hardware();patch_hex(r['openmp']['value']['executable_elf'],'dynamic',32,'<q',14)
+        self.assert_not_scientific(r,cli=True)
+        r=hardware();r['openmp']['value']['executable_elf']['interpreter']=b'/lib64/xx-linux-x86-64.so.2\0'.hex()
+        self.assert_not_scientific(r,cli=True)
+        r=hardware();r['openmp']['value']['elf']['unknown']=1;self.assert_not_scientific(r,cli=True)
+
+    def test_r2_padding_relocation_and_alternate_layout(self):
+        import io
+        self.assertEqual(collect_elf(io.BytesIO(elf_bytes())),elf_evidence())
+        # Final file page is padded; writable segment's vaddr differs from offset.
+        r=hardware();validate_runtime(r['openmp']['value'])
+        # Split executable VMA and remove RELRO splitting: both are valid layouts.
+        v=r['openmp']['value'];first=v['mappings'][0]
+        v['mappings']=[first.replace('7f002000','7f001000'),
+            first.replace('7f000000-7f002000','7f001000-7f002000').replace('00000000','00001000')]+v['mappings'][1:]
+        validate_runtime(v);self.assertEqual(self.admission_cli(r).returncode,0)
+        v['mappings']=v['mappings'][:2]+['7f005000-7f007000 rw-p 00002000 08:01 7 /usr/lib/libgomp.so.1.0.0']
+        validate_runtime(v)
+        patch_hex(v['executable_elf'],'header',16,'<H',2)
+        patch_hex(v['executable_elf'],'header',24,'<Q',0x401000)
+        for index,address in enumerate((0x300,0,0x5000,0x400,0x5000)):
+            patch_hex(v['executable_elf'],'program_headers',index*56+16,'<Q',0x400000+address)
+        patch_hex(v['executable_elf'],'dynamic',8,'<Q',0x400800)
+        validate_runtime(v)
+
+    def test_r2_relro_and_metadata_consistency(self):
+        r=hardware();patch_hex(r['openmp']['value']['elf'],'program_headers',3*56+16,'<Q',0x1000)
+        self.assert_not_scientific(r,cli=True)
+        r=hardware();r['openmp']['value']['file_identity']['size']+=1
+        self.assert_not_scientific(r,cli=True)
+        r=hardware();patch_hex(r['openmp']['value']['executable_elf'],'header',24,'<Q',0)
+        self.assert_not_scientific(r,cli=True)
+        # An RX load cannot silently become writable, and a non-RELRO data page
+        # cannot silently lose write permission under this explicitly narrow scope.
+        r=hardware();r['openmp']['value']['mappings'][2]=r['openmp']['value']['mappings'][2].replace('rw-p','r--p')
+        self.assert_not_scientific(r,cli=True)
+
+    def test_r2_collected_bytes_and_bounds(self):
+        import io
+        from campaign_hardware import elf_file
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'libgomp.so.1';path.write_bytes(elf_bytes())
+            evidence,digest,info=elf_file(path)
+            self.assertEqual(evidence,elf_evidence())
+            self.assertEqual(digest,hashlib.sha256(elf_bytes()).hexdigest())
+            self.assertEqual(info.st_size,len(elf_bytes()))
+        evidence=elf_evidence();evidence['strings']='00'*(65536+1)
+        with self.assertRaises(ValueError):parse_elf(evidence)
+        raw=bytearray(elf_bytes());raw[18:20]=b'\xb7\0'
+        with self.assertRaises(ValueError):collect_elf(io.BytesIO(raw))
+
+    def test_r2_collect_invalid_elf_bytes(self):
+        import io
+        for raw in (b'not ELF'*100,elf_bytes()[:100],b'\0'*0x3800):
+            with self.subTest(prefix=raw[:8]),self.assertRaises(ValueError):collect_elf(io.BytesIO(raw))
+
+    def test_r2_real_direct_linked_runtime(self):
+        import select
+        from campaign_hardware import read_text
+        # Compile and run only this trusted idle test helper, never a candidate or benchmark.
+        source='#include <omp.h>\n#include <unistd.h>\nint main(){if(omp_get_max_threads()<1)return 1; if(write(1,"ready\\n",6)!=6)return 2; char c; return read(0,&c,1)==1?0:3;}\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            cpp=Path(tmp)/'idle.cpp';exe=Path(tmp)/'idle';cpp.write_text(source)
+            subprocess.run(['g++','-fopenmp',str(cpp),'-o',str(exe)],check=True,capture_output=True,timeout=30)
+            with subprocess.Popen([str(exe)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE) as child:
+                try:
+                    self.assertTrue(select.select([child.stdout],[],[],5)[0])
+                    self.assertEqual(child.stdout.readline(),b'ready\n')
+                    value=mapped_runtime(child.pid,exe)
+                    self.assertIsNotNone(value);validate_runtime(value)
+                    r=hardware();r['openmp']['value']=value
+                    p=copy.deepcopy(self.p)
+                    p['build'].update(executable_sha256=value['executable_sha256'],openmp_sha256=value['sha256'])
+                    r['executable_sha256']['value']=value['executable_sha256']
+                    self.assertTrue(admit(p,r)['scientific_performance_allowed'])
+                    self.assertEqual(self.admission_cli(r,p).returncode,0)
+                    # Public inspector produces the same valid runtime form.
+                    cli=subprocess.run([sys.executable,'-B',str(ROOT/'benchmarks/python/campaign.py'),
+                        'inspect','--executable',str(exe),'--pid',str(child.pid)],capture_output=True,text=True,timeout=10)
+                    self.assertEqual(cli.returncode,0,cli.stderr)
+                    validate_runtime(json.loads(cli.stdout)['openmp']['value'])
+                    maps=read_text(f'/proc/{child.pid}/maps')
+                    extra='10000000-10001000 r-xp 00000000 08:01 99 /other/libgomp.so.1'
+                    def multiple(path):return maps+'\n'+extra if path.endswith('/maps') else read_text(path)
+                    self.assertIsNone(mapped_runtime(child.pid,exe,multiple))
+                    def deleted(path):return maps+'\n'+extra+' (deleted)' if path.endswith('/maps') else read_text(path)
+                    self.assertIsNone(mapped_runtime(child.pid,exe,deleted))
+                    incomplete='\n'.join(line for line in maps.splitlines() if not ('libgomp' in line and 'r-xp' in line))
+                    def missing(path):return incomplete if path.endswith('/maps') else read_text(path)
+                    self.assertIsNone(mapped_runtime(child.pid,exe,missing))
+                finally:
+                    child.communicate(b'x',timeout=5)
 
     def test_cli_validate_and_error(self):
         with tempfile.TemporaryDirectory() as tmp:

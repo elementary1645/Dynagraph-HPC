@@ -7,10 +7,12 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 
 from campaign_contract import fields, integer, plan_hash, validate_plan, digest
 from workloads import canonical_json
+from campaign_elf import collect_elf
 from campaign_provenance import (absolute_path, cpu_list, cpu_array, mounts_for,
     reconcile_cgroups, validate_cgroups, topology_ids, validate_runtime, process_identity, optional_observations)
 
@@ -88,6 +90,29 @@ def binary_identity(executable=None):
     return compiler, runtime
 
 
+def file_stamp(info):
+    return (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
+
+
+def elf_file(path):
+    """Metadata and digest from one descriptor; detect ordinary file replacement."""
+    with os.fdopen(os.open(path,os.O_RDONLY|os.O_NONBLOCK),'rb') as stream:
+        before=os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size>256*1024*1024:
+            raise ValueError('unsupported ELF file type/size')
+        evidence=collect_elf(stream)
+        stream.seek(0);digest=hashlib.sha256()
+        remaining=before.st_size
+        while remaining:
+            block=stream.read(min(65536,remaining))
+            if not block:raise ValueError('ELF file truncated during hashing')
+            digest.update(block);remaining-=len(block)
+        if stream.read(1):raise ValueError('ELF file grew during hashing')
+        if file_stamp(before)!=file_stamp(os.fstat(stream.fileno())) or file_stamp(before)!=file_stamp(Path(path).stat()):
+            raise ValueError('ELF file changed during collection')
+    return evidence,digest.hexdigest(),before
+
+
 def mapped_runtime(pid, executable, read=read_text):
     """Observe an existing process, recording reconstructible mapping evidence."""
     if executable is None:return None
@@ -96,25 +121,32 @@ def mapped_runtime(pid, executable, read=read_text):
         before,maps=read(f'/proc/{pid}/stat'),read(f'/proc/{pid}/maps')
         start=process_identity(before,pid)
         if not maps:return None
-        wanted=file_hash(executable)
+        executable_elf,wanted,executable_info=elf_file(executable)
         if file_hash(f'/proc/{pid}/exe')!=wanted:return None
         lines=[];paths=set()
         for line in maps.splitlines():
             parts=line.split(None,5)
-            if len(parts)==6 and re.fullmatch(r'libgomp\.so\.[0-9.]+',Path(parts[5]).name):
+            if len(parts)!=6:continue
+            path=parts[5].removesuffix(' (deleted)')
+            if re.fullmatch(r'libgomp\.so\.[0-9.]+',Path(path).name):
+                if path!=parts[5]:return None
                 lines.append(line);paths.add(parts[5])
         if len(paths)!=1:return None
         path=paths.pop();absolute_path(path)
         actual=Path(f'/proc/{pid}/root')/path.lstrip('/')
-        info=actual.stat()
-        result=dict(path=path,sha256=file_hash(actual),soname='libgomp.so.1',
+        elf,runtime_hash,info=elf_file(actual)
+        result=dict(path=path,sha256=runtime_hash,soname='libgomp.so.1',
                     linkage='observed-process-mapping',executable_sha256=wanted,pid=pid,
+                    evidence_version=3,page_size=os.sysconf('SC_PAGE_SIZE'),
+                    elf=elf,executable_elf=executable_elf,
                     process_stat=before,process_start_ticks=start,mappings=lines,
                     file_identity=dict(device_major=os.major(info.st_dev),device_minor=os.minor(info.st_dev),
                                        inode=info.st_ino,size=info.st_size,mtime_ns=info.st_mtime_ns))
         validate_runtime(result)
         final=actual.stat()
-        if (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns)!=(final.st_dev,final.st_ino,final.st_size,final.st_mtime_ns):return None
+        if file_stamp(info)!=file_stamp(final):return None
+        final_executable=Path(executable).stat()
+        if file_stamp(executable_info)!=file_stamp(final_executable):return None
         if (process_identity(read(f'/proc/{pid}/stat'),pid)!=start or
                 read(f'/proc/{pid}/maps')!=maps or file_hash(f'/proc/{pid}/exe')!=wanted):return None
         return result
@@ -188,6 +220,7 @@ def inspect(executable=None, read=read_text, affinity=None, binaries=True, pid=N
         frequency=observation(frequency, 'sysfs cpufreq; missing fields remain null'),
         limitations=['No exclusivity attestation', 'No actual OpenMP team observed',
                     'No benchmark executed', 'Hidden cgroup ancestors and host scheduling unverified',
+                    'Direct ELF dependency and mapped load geometry do not prove active OpenMP execution or symbol binding',
                     'Runtime mappings are snapshots; build flags require separate verified evidence']+([group_error] if group_error else []))
 
 

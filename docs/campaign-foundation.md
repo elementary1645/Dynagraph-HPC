@@ -286,3 +286,94 @@ any future file access. Legitimate Unicode is retained. No NFC/NFD normalization
 is performed: different code-point sequences are different hashed references on
 the supported POSIX platform. Future staging must still check symlinks/aliases;
 this policy does not certify normalization behavior of other filesystems.
+
+## Phase 6B-1R2 runtime evidence v3
+
+N1/N2 remediation replaces the observed runtime record with an explicitly versioned
+`evidence_version=3` form. Campaign-plan/trial-manifest v1 and hardware/admission v2
+remain unchanged. Candidate-library records remain diagnostic only. Old observed
+runtime records lack mandatory v3 evidence and reject scientific admission; they
+are never inferred/upgraded. Development mode still admits harness use while
+recording scientific failures and denying scientific eligibility. Recapture runtime
+provenance for scientific use. Cgroup, topology, Unicode and Phase 5C archive
+contracts retain their previous meaning.
+
+### Precisely supported linkage
+
+Here, observed runtime linkage means **a direct `DT_NEEDED` entry for
+`libgomp.so.1` in the matching process executable, plus a unique observed library
+with that actual ELF `DT_SONAME`, whose complete file-backed `PT_LOAD` page images
+match its process VMAs at one relocation bias**. Both the main executable and
+library must be supported ELF images. The main executable must have an executable
+entry and a canonical absolute glibc `ld-linux-x86-64.so.2` interpreter. The runtime
+is an ET_DYN library without an interpreter. Filename matching discovers candidates;
+it never establishes library identity. No `dlopen`, candidate execution, shell
+interpolation or candidate-directed tool invocation is used by this collector.
+
+This is a deliberately narrow supported subset: Linux procfs, ELF64 little-endian
+x86-64, glibc interpreter, and a 4096-byte kernel page size explicitly recorded from
+`sysconf(SC_PAGE_SIZE)`. Other architectures/classes/encodings/page sizes, indirect
+or dlopen-only dependencies, static linkage, missing SONAMEs, multiple candidate
+paths, deleted/replaced files, overlapping load-page images, and ambiguous or
+incomplete supported evidence fail closed. Readable-only file mappings cannot
+satisfy executable segment coverage. An additional differently named interposed
+runtime, symbol resolution, lazy binding, or actual active execution of OpenMP
+functions is not established by this supported relationship.
+
+### Collection and offline validation
+
+The standard-library-only `campaign_elf.py` parses bounded raw ELF metadata.
+Each observed record adds page_size, elf and executable_elf to its previous
+PID/stat/start/mappings/file-identity fields. Each ELF object has exactly file_size,
+header, program_headers, dynamic, strings and interpreter. Byte fields are canonical
+lowercase hexadecimal excerpts from the file; offsets are derived again from the
+ELF headers and dynamic records rather than trusted extracted segment/SONAME labels.
+No entire binary is embedded. Collected hashes cover the complete files.
+
+The collector reads metadata and computes each digest using one regular-file
+descriptor, comparing device/inode/size/mtime/ctime and the path identity around
+collection. File size is capped at 256 MiB for collection. ELF evidence limits are
+128 program headers and 64 KiB each for dynamic/string metadata. ELF headers,
+program/section table bounds, load ranges/flags/alignment, dynamic termination,
+string references, SONAME, dependency and interpreter records are checked. Metadata
+must resolve inside unique file-backed load segments, and overlapping supplied
+excerpts must contain identical bytes. RELRO must reside inside a writable load.
+Process identity, maps, executable hash and file identities are rechecked as well.
+
+The pure admission validator reparses those excerpts without opening paths. It
+preserves procfs offsets and permissions, requires ordered nonoverlapping aligned
+VMAs, and checks offset plus length against the page-rounded file size. Arithmetic
+is checked against uint64 overflow. Actual data must start within the file; the
+last mapped page may contain legitimate file padding. Zero-filled anonymous BSS
+tails are outside the file-backed record and are not certified.
+
+For each file-backed load, virtual-page and file-page offsets determine one shared
+relocation bias. Virtual addresses need not equal file offsets. Every recorded VMA
+must belong to a load and every file-backed load page must be covered, including
+all executable pages. Read/execute permissions must match; writable permission may
+be removed only inside the page range protected by GNU RELRO. Private mappings,
+split VMAs, RELRO splits, different virtual/file offsets, final-page padding and
+ordinary nonzero relocation biases are supported. Unsupported overlapping load
+pages reject rather than guessing loader overwrite order.
+
+The design follows the ELF ABI's [program header and load alignment rules](https://gabi.xinuos.com/elf/07-pheader.html)
+and [dynamic linking records](https://gabi.xinuos.com/elf/08-dynamic.html).
+
+### Trust boundary and tests
+
+Supplied reports and metadata excerpts can still be fabricated. Offline validation
+checks their consistency; it cannot recompute a whole-file hash from excerpts or
+authenticate the host. A matching DT_NEEDED declaration and mapped load geometry
+are not proof of loader symbol binding, executed OpenMP instructions, actual team
+size, ownership, exclusivity, build flags or future stability. File/process rechecks
+are non-atomic observations and do not defeat a hostile host. Existing scientific
+qualification remains qualification on supplied evidence, never host attestation.
+
+Regression tests retain F1–F4 and add the original N1/N2 red cases, malformed ELF
+headers/tables/SONAMEs, executable coverage and permissions, page evidence,
+overflow, bounds, linkage/version migration, and valid split/padded/relocated
+layouts. A trusted, newly compiled idle helper directly linked with OpenMP supplies
+a real positive procfs fixture. It only queries the runtime's configured maximum
+and waits on stdin; it executes no graph query, parallel region or performance
+campaign. The collector never starts an inspected executable. Validation commands,
+actual outcomes and preserved failures are recorded in the research log.
