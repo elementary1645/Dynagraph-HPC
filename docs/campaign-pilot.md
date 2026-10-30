@@ -1,4 +1,4 @@
-# Phase 6B-2A development pilot
+# Phase 6B-2A development pilot (R1 hardening)
 
 The `pilot` command executes an explicitly selected subset of an existing Phase
 6B-1 trial manifest. This is development harness validation. Every trial has
@@ -85,7 +85,9 @@ Selected trials run serially. A failure or unverified result stops later launche
 remaining selections receive `not-run` records in manifest order.
 
 Each child uses an argument list, explicit trial working directory, null stdin,
-private POSIX session and bounded pipe capture. Timeout covers inherited pipes,
+private POSIX session and bounded pipe capture. The v2 argv uses `./runner` and
+fixed relative workload paths within that explicit trial cwd, so complete command
+reconciliation also works after evidence is relocated. Timeout covers inherited pipes,
 including a child that exits while a descendant retains stdout. The process group
 is killed and the direct child reaped on completion, failure, timeout, output
 limit or keyboard interruption. Exit codes and negative-returncode signals are
@@ -103,7 +105,24 @@ memory. Resource isolation and executable build attestation remain deferred.
 Every executable trial first runs the existing `verify --verification full`
 protocol for its selected policy, delta and worker request. The existing
 `verify_preflight` gate validates complete update counts, fresh Dijkstra checks,
-small-graph Bellman–Ford coverage, final weights and output structure. Inputs and
+small-graph Bellman–Ford coverage, final weights and output structure. R1 adds an
+independent Python final-state reconciliation after that existing gate. It parses
+the immutable graph and trace, replays the ordered updates with the existing
+endpoint ledger (including expected-old-weight checks), and checks final weights
+and the final-graph hash. Synchronous edge-list Bellman–Ford computes reference
+distances using previous-round labels, independently of production graph engines
+and reported distances. Every label must match, with `null` for unreachable
+vertices, exact vector length and an independently checked source. Python integers
+avoid intermediate overflow; the bounded graph/uint32 weights fit finite uint64
+shortest paths. The method is `python-synchronous-bellman-ford-v1`, following the
+existing test-only Python oracle without importing test modules at runtime.
+
+This gate runs freshly for every diagnostic, warmup and measured selection, and
+is reapplied offline to successful evidence. Missing references or mismatches
+fail closed. It supplements the unchanged C++ per-update Dijkstra/Bellman–Ford
+checks; it does not replace them. Timed workers retain their existing final-state
+checks and output format; Python does not claim to inspect distance vectors that
+the timing protocol does not expose. Inputs and
 executable bytes are rehashed around each child. No correctness gate is weakened.
 
 Diagnostic selections perform that full verification only. Warmup and measured
@@ -141,11 +160,11 @@ not depend on machine paths or wall time.
 | --- | --- |
 | `plan.json`, `trial-manifest.json` | Unchanged Phase 6B-1 v1 canonical inputs |
 | `hardware.json`, `admission.json` | Existing v2 snapshot and recomputed development admission |
-| `execution-manifest.json` | `dynagraph-pilot-execution` v1: campaign/plan/manifest hashes, selected full trial rows, effective limits, development and affinity policy |
-| `TRIAL_ID/record.json` | `dynagraph-pilot-trial` v1, closed required fields listed below |
+| `execution-manifest.json` | `dynagraph-pilot-execution` v2: campaign/plan/manifest hashes, selected full trial rows, effective limits, development and affinity policy |
+| `TRIAL_ID/record.json` | `dynagraph-pilot-trial` v2, closed required fields listed below |
 | `TRIAL_ID/workload/*`, `runner` | Staged immutable-input identities; raw staged bytes retained |
 | `TRIAL_ID/N-verify.stdout`, `.stderr`, `N-time.stdout`, `.stderr` | Bounded raw child streams, including failed/partial output |
-| `result-index.json` | `dynagraph-pilot-index` v1: execution-manifest hash, start/end, ordered record references, complete/failed status, false measurement eligibility |
+| `result-index.json` | `dynagraph-pilot-index` v2: execution-manifest hash, start/end, ordered record references, complete/failed status, false measurement eligibility |
 | `sha256.json` | Relative filename to SHA-256 inventory of every evidence file except itself |
 
 A trial record requires schema/version, campaign ID, canonical plan and manifest
@@ -155,15 +174,46 @@ requested plan affinity, observed **parent** affinity, effective OpenMP environm
 `observed_team_size=null`, unavailable execution observations, UTC start/end,
 status/reason/message, correctness `{checked,outcome,oracle}`, false measurement
 eligibility, child process receipts and an artifact hash map. Each receipt requires
-argv, UTC start/end, returncode, signal, reason, truncation flag and stdout/stderr
-references. Unknown top-level schema fields reject during verification.
+complete argv, UTC start/end, returncode, signal, reason, truncation flag,
+per-stream limit and stdout/stderr references, byte sizes and SHA-256 hashes. Unknown top-level schema fields reject during verification.
 
 Read `result-index.json`, then its ordered `records` references. Inspect each
 record's `trial.phase`, `correctness`, `reason`, `processes` and `artifacts`.
 `verify-pilot` checks the complete file inventory, rejects symlinks, recomputes
 admission and deterministic selection, reconciles identities and reapplies the
 preflight/worker validators to successful retained output without executing it.
-It never executes an archived runner. Hashes detect accidental alteration; a
+Every process receipt, including failed runs, must match the complete expected
+argv reconstructed from the plan, trial and deterministic recipe source. Both
+stream references must have their exact expected names; duplicate/extra aliases
+reject. Both files must exist as regular files with matching sizes and hashes in
+the receipt, trial artifact map and complete inventory. Receipt stream limits
+must equal the execution-manifest limit, and actual byte counts must fit.
+Requested affinity must equal the plan allocation, and the three recorded OpenMP
+controls must equal the v2 execution contract. Observed parent affinity remains
+separate; no child placement or team is inferred. Exit codes, signals, truncation,
+correctness outcomes and trial/index status are reconciled. No process may follow
+a failed process; after a failed/unverified trial, later selections must be not-run.
+
+All pilot metadata, including the initial sha256.json, is read using nonblocking,
+regular-file-only descriptors with bounded reads. Parent directories are walked
+using directory descriptors with O_NOFOLLOW; the opened leaf is also O_NOFOLLOW
+and checked by fstat before reading. FIFOs, sockets, devices, directories and
+symlinks reject with controlled CLI failures. The same reader covers plan,
+manifest, admission, hardware, index, records and staged bundle metadata. Same-user
+concurrent mutation of a whole evidence tree is not an authenticated snapshot.
+Capture I/O diagnostics use only remaining stderr capacity; omitted diagnostic
+bytes set truncation while preserving capture-error and process-group cleanup.
+
+R1 requires pilot execution/trial/index schema version 2. Version 1 is rejected;
+no automatic migration or reinterpretation is performed, including for historical
+contradictory evidence. Recapture a new explicitly selected pilot in a new output
+directory. Phase 6B-1 plan/manifest v1, hardware/admission v2 and runtime provenance
+v3 remain unchanged. Correctness.oracle records the independent Python method
+alongside full preflight and, where applicable, worker validation. `checked=true`
+with outcome=failed means gate validation was attempted and failed, not that all
+oracle stages completed.
+
+The verifier never executes an archived runner. Hashes detect accidental alteration; a
 report and its inventory can both be fabricated. They are not authentication.
 
 The snapshot uses the existing read-only collector without external compiler
@@ -178,7 +228,10 @@ actual team. No snapshot proves active execution, exclusivity or future stabilit
 ## Validation and Phase 6B-2B deferrals
 
 Run `python3 -B tests/test_campaign_pilot.py` after building Release. The suite
-uses synthetic failures and a tiny real-worker control, never the full campaign.
+uses synthetic failures and tiny real-worker controls, never the full campaign.
+The Unix-socket metadata fixture requires socket-binding permission; run the
+focused suite through the approved outside-sandbox path when the local sandbox
+denies it. No dependencies are installed for these tests.
 Set `DYNAGRAPH_PILOT_TEST_RUNNER` to an explicit built benchmark to test another
 build. The new focused suite stays separate from the unchanged Phase 5C default
 CTest/archive contract; run it explicitly with the existing focused regressions.

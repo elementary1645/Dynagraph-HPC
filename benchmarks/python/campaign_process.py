@@ -55,7 +55,11 @@ def capture(command, cwd, environment, timeout, output_limit):
     except OSError as error:
         result['reason'] = 'launch-error' if process is None else 'capture-error'
         # Diagnostics are bounded just like child output.
-        buffers['stderr'].extend(str(error).encode('utf-8', errors='replace')[:output_limit])
+        diagnostic = str(error).encode('utf-8', errors='replace')
+        remaining = max(0, output_limit-len(buffers['stderr']))
+        buffers['stderr'].extend(diagnostic[:remaining])
+        if len(diagnostic) > remaining:
+            result['truncated'] = True
     finally:
         if process is not None:
             try:

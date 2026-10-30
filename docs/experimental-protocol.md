@@ -2,7 +2,10 @@
 
 ## Status
 
-Current scope is Phase 6B-2A [bounded development pilot execution](campaign-pilot.md).
+Current scope is Phase 6B-2A-R1 [pilot correctness and evidence hardening](campaign-pilot.md).
+R1 adds independent Python final-distance reconciliation, complete process
+receipt checks and safe metadata reads. Pilot evidence now requires version 2;
+older pilot evidence remains historical and is not automatically upgraded.
 The explicit authorization supersedes earlier execution deferrals only for this
 small development harness. Phase 6B-1 plans, deterministic identities, admission
 and ELF protections remain unchanged. Every pilot result is measurement-ineligible.

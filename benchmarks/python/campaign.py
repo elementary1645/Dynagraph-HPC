@@ -32,11 +32,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command in ('pilot', 'verify-pilot'):
-            from campaign_pilot import run_pilot, verify_pilot
+            from campaign_pilot import run_pilot, verify_pilot, read_json as pilot_json
             if args.command == 'verify-pilot':
                 result = verify_pilot(args.output)
             else:
-                result = run_pilot(validate_plan(read_json(args.plan)), read_json(args.manifest),
+                result = run_pilot(validate_plan(pilot_json(args.plan)), pilot_json(args.manifest),
                     args.root, args.output, args.trial_id, execute=args.execute_development,
                     max_trials=args.max_trials, wall_seconds=args.wall_seconds,
                     timeout=args.timeout, output_limit=args.output_limit)
@@ -55,7 +55,7 @@ def main(argv=None):
         sys.stdout.buffer.write(canonical_json(result))
         return 1 if ((args.command == 'admit' and not result['admitted']) or
                      (args.command == 'pilot' and result['status'] != 'complete')) else 0
-    except (ValueError, OSError, RecursionError) as error:
+    except (ValueError, OSError, RecursionError, KeyError, TypeError) as error:
         print('Campaign rejected: '+str(error), file=sys.stderr)
         return 2
 

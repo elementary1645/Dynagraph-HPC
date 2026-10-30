@@ -3739,3 +3739,137 @@ Scientific execution, larger workloads, placement/resource isolation, resume,
 retry, full matrices, analysis/visualization and inference remain Phase 6B-2B or
 later work requiring separate authorization. Stop after the authorized local
 commit; no push, merge or pull request.
+
+## Phase 6B-2A-R1 correctness and evidence hardening
+
+Started at e1e1f52b5ec0dc7b6b5ed3b16997a2d7982e7026, clean, on the existing
+feature/phase6b2-execution-harness branch. The explicit R1 request authorizes
+remediation, bounded tests, fresh full local validation and one local commit;
+no push, merge, PR, complete campaign, dependency installation or scientific run.
+
+Before implementation, reran /tmp/dynagraph-6b2a-audit/reproduce.py with correctness,
+verifier, capture and fifo. All findings reproduced: the faulty distance
+123456789 instead of 29 was certified success; rehashed command/stderr/affinity/
+stream-limit contradictions were accepted; cap 128 produced 192 stderr bytes;
+the FIFO verifier needed external timeout cleanup. Added red regressions first:
+four tests produced nine failed assertions/subtests and one FIFO timeout error.
+The red log is retained separately; no historical fixture was rewritten.
+
+P1 root cause: inherited verify_preflight checked distance structure and source,
+then trusted the executable's remaining check flags. Added campaign_oracle.py:
+reuse graph/trace parsing and ordered expected-old ledger replay, compare final
+weights/hash, then synchronous edge-list Bellman–Ford over the actual replayed
+final graph. This follows tests/test_workload_loader.py's independent Python
+oracle, kept local to the bounded pilot rather than importing a test module or
+changing Phase 5C's existing validator. Every distance, including null unreachable
+labels, must agree. Every selected trial class receives its own preflight/oracle;
+the existing timed worker final-state and per-update C++ checks remain unchanged.
+
+P2 root cause: argv[1] and inventory consistency did not bind full commands or
+required streams. Pilot execution/trial/index schema v2 adds stream sizes, hashes
+and effective limits. Shared fixed-relative argv reconstruction binds the complete
+command to the plan/trial/recipe source and works after relocation. Every receipt,
+including failures, must reconcile both streams, exact names, inventory hashes,
+sizes, affinity, OpenMP controls, exit/signal/truncation and status. Failed runs
+remain integrity-verifiable as failures; later process/trial launches are rejected.
+Older pilot v1 evidence is preserved and rejected, never automatically upgraded.
+Plan/manifest v1, hardware/admission v2 and runtime provenance v3 are unchanged.
+
+P3 root cause: error text was appended with a fresh full-cap allowance. Diagnostics
+now consume remaining stderr capacity only, with truncation marked when omitted;
+capture-error classification and group cleanup persist even at zero free space.
+P4 root cause: generic read_json opened the initial inventory before file-type
+checks. All pilot metadata now uses a bounded nonblocking descriptor reader,
+O_NOFOLLOW directory walks and leaf opens, and regular-file fstat before reading.
+FIFOs, sockets, devices, directories, symlinks and oversized metadata reject.
+
+Expanded regressions cover all trial classes, rehashed contradictions, reachable/
+unreachable distance corruption, source/length/weights/ordered replay, missing
+references, zero cycles, relocated evidence, failure reconciliation, limits
+0/1/64/128/1048576, saturated diagnostics, simultaneous streams with read errors,
+and nonregular metadata via API/CLI. The first socket fixture failed with EPERM
+inside the sandbox; the approved outside-sandbox suite exercised the real socket
+case and passed. This is recorded as an environment restriction, not a code pass.
+Final validation outcomes follow below after fresh execution.
+
+### Phase 6B-2A-R1 final fresh verification
+
+Actual commands:
+
+```sh
+python3 -B tests/test_campaign_pilot.py
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b2ar1-repair
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2ar1-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2ar1-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2ar1-sanitize-unsandboxed
+```
+
+Pilot regressions ran through the approved outside-sandbox path to cover the Unix
+socket fixture: 47/47 passed (baseline 32 plus 15 new methods and adversarial
+subtests). Campaign 85/85, archive 59/59, diagnostic 3/3 and infrastructure 17/17
+passed. Python AST checks covered 52 files; bash -n passed all six workflow run
+blocks, substituting GitHub expressions only for local syntax checking. Git diff
+checks passed. No hosted workflow execution is claimed.
+
+Fresh Debug and Release each built and passed 31/31 required CTest tests; Release
+smoke and all nine intended negative smoke controls passed. Approved outside-
+sandbox ASan+UBSan built and passed 31/31, with leak detection enabled:
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. Installed pinned dependencies/Agg
+passed without installation. These are local correctness/harness checks, not
+scientific execution, hosted-CI success, TSan acceptance or race freedom.
+
+All three drivers generated fresh archives and SHA-256 sidecars, then reopened
+them. Copied the pairs and non-build raw evidence into ignored
+results/validation/phase6b2ar1. A copied trusted kit under isolated Python
+-I -S -B independently verified each copied archive/sidecar: debug-full-v1,
+release-smoke-v1 (smoke=true), sanitize-full-v1, each verified/passed/31.
+All three gates share source inventory
+5279f49674d85530da059130f4c1cf63d3b345e9ab638fc9506f00b0286fe82b.
+Implementation/test hashes still match implementation-sha256.json; only this
+final outcome text was appended after the gates. Raw focused/red/independent
+logs, kit, archive receipts and verification-summary.json are retained there.
+
+Reran the original bounded reproducers after remediation. The distance fault now
+exits 1, trial failed/correctness-failed, checked=true/outcome=failed, with the
+independent oracle method recorded. Offline verification correctly reports that
+intact evidence's execution_status=failed. Capture cap 128 now yields 128 stderr
+bytes, preserving capture-error and truncation. FIFO verification promptly exits
+2. The old P2 reproducer's original v1 bundles are rejected at the explicit schema
+gate. Separately derived a fresh v2 independent CLI pilot and mutation matrix:
+valid measured selection passed; argv, missing stream reference, affinity, cap,
+exit, signal, correctness, eligibility and schema contradictions all exited 2.
+Distance/source mutations with fully refreshed receipt and inventory hashes also
+reject in the regression suite, exercising the semantic gates beyond hash checks.
+Copied the fresh valid pilot, then verified it at its new location: complete,
+measurement_eligible=false, schema v2. No archived executable was run by verification.
+
+The 104-trial original manifest is byte-identical to retained Phase 6B-1 evidence:
+plan SHA-256 f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24,
+manifest SHA-256 f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+Checked all 6,527 captured prior non-build evidence file hashes plus the retained
+911-entry R3 preservation map: zero mismatches. The historical Phase 6B-1 and
+6B-1R failed sanitizer archive/sidecar pairs independently remain
+integrity-verified/failed/command-failed. Historical evidence was not rewritten.
+
+Nine intended files: AGENTS.md, campaign.py, campaign_pilot.py,
+campaign_process.py, new campaign_oracle.py, test_campaign_pilot.py,
+campaign-pilot.md, experimental-protocol.md and this research log.
+Protected-path comparison against e1e1f52 confirms unchanged production SSSP,
+APIs, timing brackets, heuristics, workload/configuration goldens, dependency
+pins, workflow, CMake/CTest registration, experiment_records.py, workload code,
+Phase 5C contracts and Phase 6B-1 hardware/provenance/ELF protections.
+
+No unresolved validation failure. Remaining limits: unauthenticated/fabricable
+supplied evidence, trusted executable behavior, synchronous filesystem overhead
+outside launch budgets, no hostile-process sandbox or OS memory isolation,
+unobserved child affinity/runtime/team/exclusivity and no execution-time stability
+proof. The independent Python oracle checks each trial's preflight final vector;
+timing workers keep their original C++ final checks and do not expose a second
+Python-checked timed vector. Larger/scientific campaigns, placement/resource
+isolation, richer execution observations, resume/retry, analysis/visualization,
+inference and performance claims remain separately authorized 6B-2B or later work.
+Stop after the local remediation commit. Do not push, merge or create a PR.
