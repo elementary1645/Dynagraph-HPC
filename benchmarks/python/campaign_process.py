@@ -1,10 +1,27 @@
 """Bounded POSIX pilot subprocesses; no shell, retries or executable discovery."""
 from datetime import datetime, timezone
+from contextlib import contextmanager
 import os
 import selectors
 import signal
 import subprocess
 import time
+
+
+@contextmanager
+def termination_as_interrupt():
+    """CLI/main-thread scope only: reuse interruption cleanup on SIGTERM."""
+    requested = False
+    def interrupted(signum, frame):
+        nonlocal requested
+        if not requested:
+            requested = True
+            raise KeyboardInterrupt('SIGTERM')
+    previous = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def timestamp():

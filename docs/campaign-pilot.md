@@ -1,5 +1,8 @@
 # Phase 6B-2A development pilot (R1 hardening)
 
+Phase 6B-2B-1 adds a separate [recovery journal and read-only inspection](campaign-recovery.md).
+Pilot evidence stays v2; no resume or retry command is provided.
+
 The `pilot` command executes an explicitly selected subset of an existing Phase
 6B-1 trial manifest. This is development harness validation. Every trial has
 `measurement_eligible=false`, including verified measured-phase trials. Scientific

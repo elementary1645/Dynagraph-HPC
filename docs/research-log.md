@@ -3873,3 +3873,130 @@ Python-checked timed vector. Larger/scientific campaigns, placement/resource
 isolation, richer execution observations, resume/retry, analysis/visualization,
 inference and performance claims remain separately authorized 6B-2B or later work.
 Stop after the local remediation commit. Do not push, merge or create a PR.
+
+## Phase 6B-2B-1 recovery contracts and execution journal
+
+Started clean at 71b7ec7c8cadd25c83f43d73464cef2d47ad9fc2 on
+feature/phase6b2b-recovery-provenance. The explicit request authorizes a local
+implementation/validation/commit only. Actual resume/retry, scientific execution,
+resource isolation, analysis and inference remain deferred. No push, PR, merge
+or dependency installation. Prior phase evidence retains its historical meaning.
+
+Added campaign_journal.py with separate journal schema v1, leaving pilot evidence
+v2 unchanged. An exclusive new journal directory contains canonical immutable
+sequence files with SHA-256 transition identities and a previous-entry hash chain.
+The creation entry binds plan/manifest/execution identities, ordered selected
+trials, limits, effective OpenMP request identities, hardware/admission identities,
+development classification and evidence schema. A launch-intent transition is
+published before child creation; terminal transitions bind an atomically committed
+trial record's exact path/hash/reason. Invalid order, duplicate transitions,
+unknown fields, torn committed bytes, nonregular metadata and unsupported versions
+fail closed. Unpublished temporary files are never accepted as transitions.
+
+Recovered completion uses extracted shared pilot_context/verify_trial_evidence
+functions from the existing v2 verifier, including the independent Bellman–Ford
+and full worker gates. No parallel weaker correctness verifier or schema upgrade.
+Full final v2 verification is required whenever the final inventory exists.
+A missing journal terminal leaves an indeterminate trial even if its record
+independently verifies complete; that evidence fact is reported separately.
+Terminal journal claims with missing/changed/failed evidence reject. Prior valid
+completed terminals can be inspected before final run-index/inventory publication,
+with overall incomplete status. Inspection is read-only and never resumes or
+signals a process. Old v2 evidence without a journal still passes verify-pilot;
+inspect-recovery requires a committed journal identity and never migrates history.
+
+Persistence uses the existing write/flush/fsync/exclusive-link/directory-fsync
+primitive. Exclusive directory creation and per-sequence no-replace publication
+prevent silent competing-writer overwrites. Journal write errors stop launches
+and final publication. Atomic visibility does not claim survival under arbitrary
+hardware/filesystem failure or distributed-writer consensus. SIGTERM in the CLI
+uses the existing interruption/group-cleanup path through a scoped handler; API
+callers retain signal-policy ownership. Abrupt death cannot execute cleanup and
+may leave children live; inspection reports indeterminate, never infers liveness.
+
+Initial validation: 28 recovery tests and existing pilot 47/47 passed. Added four
+boundary tests for pending state, missing/noncanonical sequence fields, duplicate
+writer transitions and real Unix-socket rejection. Focused suites run outside the
+socket-restricted sandbox to exercise sockets. Tests explicitly clean up owned
+child groups after controlled SIGKILL; they execute only tiny bounded fixtures.
+Final validation commands/outcomes are recorded below after fresh execution.
+
+### Phase 6B-2B-1 final fresh validation
+
+Actually executed the following commands. Recovery and pilot focused suites used
+the approved outside-sandbox path for actual Unix-socket fixtures; no installation.
+
+```sh
+python3 -B tests/test_campaign_journal.py
+python3 -B tests/test_campaign_pilot.py
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b2b1-repair
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2b1-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2b1-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2b1-sanitize-unsandboxed
+```
+
+Fresh focused results: recovery journal 32/32, pilot 47/47, campaign 85/85,
+archive 59/59, diagnostics 3/3 and infrastructure 17/17. Python AST parsing covered
+54 files; all six workflow shell blocks passed bash -n after local expression
+substitution. Git diff checks passed. Protected-path comparison against 71b7ec7
+confirmed unchanged algorithms/APIs, timing brackets, heuristics, workload goldens,
+pins, CMake/CTest registration, workflow, Phase 5C tools/contracts, independent
+oracle and Phase 6B-1 hardware/provenance/ELF protections. Existing pilot tests were
+not edited. Shared verification extraction preserved all v2 gates and identities.
+
+Fresh Debug, Release and approved outside-sandbox ASan+UBSan each built and passed
+31/31 required CTest tests. Release smoke and all nine negative smoke controls
+passed. Leak detection remained enabled via
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. Installed pinned dependency/Agg
+checks passed without installation. No hosted CI, TSan acceptance, race freedom
+or scientific performance/scaling result is claimed.
+
+Each driver generated fresh archives and SHA-256 sidecars and independently
+reopened them. Copied all three pairs and non-build evidence into ignored
+results/validation/phase6b2b1. A copied trusted repository verifier kit, run under
+isolated Python -I -S -B with --verify/--sidecar, verified debug-full-v1,
+release-smoke-v1 and sanitize-full-v1: each verified/passed/31, Release smoke=true.
+All gates captured source inventory
+135590e6d53964450dd48892358ace8891594ad62a336a82d93fc67880f4872c.
+Implementation/test bytes match implementation-sha256.json; only this outcome
+text was appended after the gates. Raw focused logs, command receipts, kit,
+archives, sidecars, compatibility.json and verification-summary.json are retained.
+
+A separate controlled CLI run selected one measured-phase development trial with
+an actual executable digest in a disposable plan/bundle. Pilot, verify-pilot and
+inspect-recovery all exited 0. Inspection reported settled, three committed
+entries, completed journal state and verified-complete evidence, with false
+measurement eligibility and no observed-team inference. Copied that evidence to
+its retained location and re-inspected it successfully. CLI commands and raw JSON
+are in cli-checks.json; the complete development-only control is in cli-pilot.
+Tests additionally exercised SIGTERM (interrupted terminal), SIGKILL (indeterminate,
+no inferred child liveness), journal I/O failure, missing final publication and
+successful evidence without a terminal transition. Owned test child groups were
+explicitly cleaned up after abrupt parent death.
+
+The original representative manifest remains byte-identical to retained evidence:
+104 trials, plan SHA-256
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24,
+manifest SHA-256
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+All 7,144 captured prior non-build evidence file hashes and the retained 911-entry
+R3 preservation map match. Historical Phase 6B-1 and 6B-1R failed sanitizer archive
+pairs independently remain integrity-verified/failed/command-failed. No historical
+evidence was rewritten or reclassified as successful.
+
+Ten intended files: AGENTS.md, campaign.py, campaign_pilot.py,
+campaign_process.py, new campaign_journal.py, new test_campaign_journal.py,
+new campaign-recovery.md, campaign-pilot.md, experimental-protocol.md and this log.
+No unresolved validation failures. Residual limits include unauthenticated and
+non-atomic observations, content identity rather than a unique global run nonce,
+local POSIX hard-link/fsync assumptions, no arbitrary hardware-failure durability,
+no liveness/ownership inference after abrupt parent death, synchronous filesystem
+overhead outside launch budgets and no OS memory/security sandbox. Read-only
+inspection never repairs or resumes; actual resume/retry behavior, stronger
+process/resource ownership, scientific execution and later inference remain
+separately authorized Phase 6B-2B-2 or later work. Stop after the local commit;
+no push, PR or merge.

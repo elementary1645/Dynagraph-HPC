@@ -439,6 +439,8 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
                      development_only=True, measurement_eligible=False,
                      affinity_policy='inherit; requested plan affinity recorded, not applied')
     put(output, 'execution-manifest.json', execution)
+    from campaign_journal import Journal
+    journal = Journal.create(output)
     records = [];halted = False
     for trial in selected:
         trial_deadline = min(deadline, time.monotonic()+timeout)
@@ -476,6 +478,8 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
                     if remaining <= 0:
                         record['reason'] = 'budget-exhausted' if time.monotonic()>=deadline else 'timeout'
                         return None
+                    if not record['processes']:
+                        journal.transition(trial['trial_id'], 'launched')
                     process, streams = capture(command(plan, trial, bundle['source'], kind),
                                                 directory, env, remaining, output_limit)
                     for name, data in streams.items():
@@ -518,6 +522,8 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
         except OracleUnavailable as error:
             record.update(reason='unverified',status='unverified',message=str(error),
                           correctness=dict(checked=False,outcome='unavailable',oracle=None))
+        except Journal.Error:
+            raise
         except (ValueError, OSError, KeyError, TypeError, RecursionError) as error:
             record['message'] = str(error)[:2048]
         record['end'] = timestamp()
@@ -527,6 +533,7 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
                                for p in sorted(directory.rglob('*')) if p.is_file()}
         validate_trial(record)
         put(directory, 'record.json', record)
+        journal.finish(record)
         records.append(record)
         halted = halted or record['reason'] != 'success'
     index = dict(schema='dynagraph-pilot-index', schema_version=2,
@@ -538,6 +545,52 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
                  for p in sorted(output.rglob('*')) if p.is_file()}
     put(output, 'sha256.json', inventory)
     return index
+
+
+def pilot_context(directory):
+    """Shared v2 plan/execution/admission validation, without a final index."""
+    plan = validate_plan(read_json(directory/'plan.json'));manifest = read_json(directory/'trial-manifest.json')
+    execution = read_json(directory/'execution-manifest.json')
+    fields(execution, 'schema schema_version campaign_id plan_sha256 manifest_sha256 selected_trials limits '
+           'development_only measurement_eligible affinity_policy', 'pilot execution manifest')
+    if (execution['schema']!='dynagraph-pilot-execution' or type(execution['schema_version']) is not int or
+            execution['schema_version']!=2 or execution['development_only'] is not True or
+            execution['measurement_eligible'] is not False):
+        raise ValueError('invalid pilot execution schema')
+    limits = execution['limits'];fields(limits,'max_trials wall_seconds timeout_seconds stream_bytes','pilot limits')
+    bounds(plan,limits['max_trials'],limits['wall_seconds'],limits['timeout_seconds'],limits['stream_bytes'])
+    selected = select(plan,manifest,[t['trial_id'] for t in execution['selected_trials']],limits['max_trials'])
+    if canonical_json(selected)!=canonical_json(execution['selected_trials']):
+        raise ValueError('pilot selection order mismatch')
+    if (execution['plan_sha256']!=plan_hash(plan) or execution['manifest_sha256']!=sha256(canonical_json(manifest)) or
+            execution['campaign_id']!=plan['campaign_id']):
+        raise ValueError('pilot execution identity mismatch')
+    hardware = read_json(directory/'hardware.json')
+    if canonical_json(admit(plan,hardware))!=canonical_json(read_json(directory/'admission.json')):
+        raise ValueError('pilot admission mismatch')
+    return plan, manifest, execution, selected, hardware
+
+
+def verify_trial_evidence(directory, trial, plan, execution, hardware, inventory):
+    """The same full per-trial gate used by final and recovery verification."""
+    name = trial['trial_id']+'/record.json'
+    record = validate_trial(read_json(directory/name))
+    if (canonical_json(record['trial'])!=canonical_json(trial) or record['plan_sha256']!=execution['plan_sha256'] or
+            record['manifest_sha256']!=execution['manifest_sha256'] or record['hardware_sha256']!=sha256(canonical_json(hardware)) or
+            record['campaign_id']!=plan['campaign_id'] or record['executable_sha256']!=plan['build']['executable_sha256'] or
+            canonical_json(record['workload'])!=canonical_json(next(w for w in plan['workloads'] if w['id']==trial['workload_id']))):
+        raise ValueError('pilot record identity mismatch')
+    base = Path(name).parent
+    for artifact,identity in record['artifacts'].items():
+        if inventory.get((base/artifact).as_posix())!=identity:
+            raise ValueError('pilot result artifact identity mismatch')
+    actual_artifacts = {p.relative_to(directory/base).as_posix() for p in (directory/base).rglob('*') if p.is_file()}
+    if actual_artifacts != set(record['artifacts'])|{'record.json'}:
+        raise ValueError('incomplete pilot artifact index')
+    reconcile_processes(directory/base,record,plan,execution,inventory)
+    if record['status']=='success':
+        verify_success(directory/base,record,plan)
+    return record
 
 
 def verify_pilot(directory):
@@ -558,25 +611,7 @@ def verify_pilot(directory):
         digest(expected)
         if sha256(regular_bytes(contained(directory,name), MAX_EXECUTABLE)) != expected:
             raise ValueError('pilot artifact digest mismatch: '+name)
-    plan = validate_plan(read_json(directory/'plan.json'));manifest = read_json(directory/'trial-manifest.json')
-    execution = read_json(directory/'execution-manifest.json')
-    fields(execution, 'schema schema_version campaign_id plan_sha256 manifest_sha256 selected_trials limits '
-           'development_only measurement_eligible affinity_policy', 'pilot execution manifest')
-    if (execution['schema']!='dynagraph-pilot-execution' or type(execution['schema_version']) is not int or
-            execution['schema_version']!=2 or execution['development_only'] is not True or
-            execution['measurement_eligible'] is not False):
-        raise ValueError('invalid pilot execution schema')
-    limits = execution['limits'];fields(limits,'max_trials wall_seconds timeout_seconds stream_bytes','pilot limits')
-    bounds(plan,limits['max_trials'],limits['wall_seconds'],limits['timeout_seconds'],limits['stream_bytes'])
-    selected = select(plan,manifest,[t['trial_id'] for t in execution['selected_trials']],limits['max_trials'])
-    if canonical_json(selected)!=canonical_json(execution['selected_trials']):
-        raise ValueError('pilot selection order mismatch')
-    if (execution['plan_sha256']!=plan_hash(plan) or execution['manifest_sha256']!=sha256(canonical_json(manifest)) or
-            execution['campaign_id']!=plan['campaign_id']):
-        raise ValueError('pilot execution identity mismatch')
-    hardware = read_json(directory/'hardware.json')
-    if canonical_json(admit(plan,hardware))!=canonical_json(read_json(directory/'admission.json')):
-        raise ValueError('pilot admission mismatch')
+    plan, manifest, execution, selected, hardware = pilot_context(directory)
     index = read_json(directory/'result-index.json')
     fields(index,'schema schema_version execution_manifest_sha256 start end status measurement_eligible records','pilot index')
     time_range(index['start'],index['end'])
@@ -588,28 +623,14 @@ def verify_pilot(directory):
     records = []
     halted = False
     for trial,name in zip(selected,expected_records):
-        record = validate_trial(read_json(directory/name));records.append(record)
-        if (canonical_json(record['trial'])!=canonical_json(trial) or record['plan_sha256']!=execution['plan_sha256'] or
-                record['manifest_sha256']!=execution['manifest_sha256'] or record['hardware_sha256']!=sha256(canonical_json(hardware)) or
-                record['campaign_id']!=plan['campaign_id'] or record['executable_sha256']!=plan['build']['executable_sha256'] or
-                canonical_json(record['workload'])!=canonical_json(next(w for w in plan['workloads'] if w['id']==trial['workload_id']))):
-            raise ValueError('pilot record identity mismatch')
-        base = Path(name).parent
-        for artifact,identity in record['artifacts'].items():
-            if inventory.get((base/artifact).as_posix())!=identity:
-                raise ValueError('pilot result artifact identity mismatch')
-        actual_artifacts = {p.relative_to(directory/base).as_posix() for p in (directory/base).rglob('*') if p.is_file()}
-        if actual_artifacts != set(record['artifacts'])|{'record.json'}:
-            raise ValueError('incomplete pilot artifact index')
-        reconcile_processes(directory/base,record,plan,execution,inventory)
+        record = verify_trial_evidence(directory,trial,plan,execution,hardware,inventory)
+        records.append(record)
         if (datetime.fromisoformat(record['start'])<datetime.fromisoformat(index['start']) or
                 datetime.fromisoformat(record['end'])>datetime.fromisoformat(index['end'])):
             raise ValueError('pilot trial timestamp context mismatch')
         if halted and record['reason']!='not-run':
             raise ValueError('trial executed after earlier failure')
         halted = halted or record['reason']!='success'
-        if record['status']=='success':
-            verify_success(directory/base,record,plan)
     status = 'complete' if all(r['status']=='success' for r in records) else 'failed'
     if index['status']!=status:
         raise ValueError('pilot completion mismatch')

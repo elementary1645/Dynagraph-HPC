@@ -2,23 +2,23 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2A-R1 pilot correctness and evidence
-  hardening (P1–P4) of the bounded deterministic development execution harness on feature/phase6b2-execution-harness, based on e1e1f52. Independent final-distance checks, complete process-evidence
-  reconciliation, bounded capture-error diagnostics and safe metadata reads are authorized.
-  Explicit trial selection and execution opt-in are required. Implementation,
-  bounded harness tests, fresh local validation and a local commit are authorized.
-  Preserve the completed Phase 6B-1/R/R2/R3 planning, admission and ELF repairs.
-  Do not execute the full campaign, push, merge or create a PR. All pilot results
-  remain development-only and measurement-ineligible. Scientific execution,
-  analysis, visualization, inference and performance claims remain deferred.
+- Current authorized scope: Phase 6B-2B-1 recovery contracts and execution
+  journal on feature/phase6b2b-recovery-provenance, based on 71b7ec7.
+  Implementation, bounded lifecycle/crash tests, fresh local validation and a local
+  commit are authorized. Preserve pilot v2, R1 correctness/evidence protections,
+  Phase 6B-1 scientific admission and all completed historical evidence.
+  Inspection is read-only. Actual resumption, automatic retries, scientific
+  campaigns and resource isolation remain deferred to separately authorized work.
+  Do not push, merge or create a PR. All results remain development-only and
+  measurement-ineligible; no analysis, inference or performance claims.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-2A-R1 implementation/local verification and the authorized commit;
-  Phase 6B-2B and later scientific execution/inference remain deferred. Preserve historical Phase 5
+- Stop after Phase 6B-2B-1 implementation/local verification and the authorized commit;
+  Phase 6B-2B-2 and later scientific execution/inference remain deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
