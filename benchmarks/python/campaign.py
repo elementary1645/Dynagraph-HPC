@@ -31,9 +31,24 @@ def main(argv=None):
     check.add_argument('--output', required=True, type=Path)
     recovery = sub.add_parser('inspect-recovery', allow_abbrev=False)
     recovery.add_argument('--output', required=True, type=Path)
+    resume = sub.add_parser('resume-pilot', allow_abbrev=False)
+    resume.add_argument('--output', required=True, type=Path)
+    resume.add_argument('--execute-development', action='store_true')
+    resume.add_argument('--authorize-resume', action='store_true')
+    resume_check = sub.add_parser('inspect-resume', allow_abbrev=False)
+    resume_check.add_argument('--output', required=True, type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == 'inspect-recovery':
+        if args.command in ('resume-pilot', 'inspect-resume'):
+            from campaign_resume import resume_pilot, inspect_resume
+            if args.command == 'inspect-resume':
+                result = inspect_resume(args.output)
+            else:
+                from campaign_process import termination_as_interrupt
+                with termination_as_interrupt():
+                    result = resume_pilot(args.output, execute=args.execute_development,
+                                          authorize=args.authorize_resume)
+        elif args.command == 'inspect-recovery':
             from campaign_journal import inspect_recovery
             result = inspect_recovery(args.output)
         elif args.command in ('pilot', 'verify-pilot'):
@@ -62,6 +77,8 @@ def main(argv=None):
         sys.stdout.buffer.write(canonical_json(result))
         return 1 if ((args.command == 'admit' and not result['admitted']) or
                      (args.command == 'pilot' and result['status'] != 'complete') or
+                     (args.command == 'resume-pilot' and result['execution_status'] != 'complete') or
+                     (args.command == 'inspect-resume' and result['status'] != 'settled') or
                      (args.command == 'inspect-recovery' and result['status']!='settled')) else 0
     except KeyboardInterrupt:
         print('Campaign interrupted before final evidence publication', file=sys.stderr)

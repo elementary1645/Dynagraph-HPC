@@ -1,9 +1,8 @@
 # Phase 6B-2B-1 recovery journal
 
 New development pilots automatically create a separate recovery journal alongside
-unchanged pilot schema v2 evidence. This phase implements examination and strict
-classification only. There is no resume, retry, repair, scientific execution or
-resource-isolation command. All classifications remain measurement-ineligible.
+unchanged pilot schema v2 evidence. Phase 6B-2B-2 adds the explicit conservative resume subset below. No automatic
+retry, repair, scientific execution or resource-isolation command is provided. All classifications remain measurement-ineligible.
 
 ## Read-only inspection
 
@@ -218,3 +217,89 @@ Phase 6B-2B-2 actual resume/retry decisions, liveness ownership/attestation,
 scientific execution, resource isolation, larger campaigns, analysis and inference
 remain deferred and require separate authorization. No hosted-CI, race-freedom,
 TSan acceptance or performance claim follows from journal validation.
+
+## Phase 6B-2B-2: explicit safe resume v1
+
+Only new pilots using `execution-owner.json` / `directory-flock-v1` are resumable.
+Ownership binds the original output path, device and inode: copied or relocated
+evidence remains verifiable but cannot bypass the original writer lock to resume.
+The writer holds an exclusive nonblocking lock on the output directory inode
+through final publication. Resume holds that same lock throughout preflight and
+execution. This requires a trusted local POSIX filesystem implementing directory
+`flock`; it coordinates cooperating writers, not malicious filesystem mutation.
+Legacy evidence without this protocol remains inspectable and verifiable but is
+rejected for resume: absence of a live writer cannot otherwise be established.
+No PID, parent death, stale PID file or liveness guess authorizes execution or
+signals another process.
+
+```sh
+python3 -B benchmarks/python/campaign.py resume-pilot \
+  --output /tmp/dynagraph-pilot-output \
+  --execute-development --authorize-resume
+python3 -B benchmarks/python/campaign.py inspect-resume \
+  --output /tmp/dynagraph-pilot-output.resume-v1
+```
+
+Both flags are required. Ordinary pilot, verify-pilot and inspect-recovery never
+resume. The original recorded input root is required; all pending inputs and the
+binary are checked against original hashes before any child starts. The plan,
+manifest, ordered selection, journal chain, terminal references, stream hashes,
+full correctness evidence and independent Bellman–Ford oracle are reverified.
+A corrupt or contradictory state rejects the entire operation. Pending prepared
+but incomplete trial directories are conservatively indeterminate and rejected.
+Failed trials are never retried. Interrupted or launched-without-terminal trials
+are blocked because old descendants may survive. Fully verified completed trials
+are reused without touching their evidence bytes, timestamps or provenance.
+No all-complete no-op attempt is created.
+
+The original directory and journal v1 are immutable during resume. A sibling
+`OUTPUT.resume-v1` is reserved with exclusive mkdir and never reopened for writing.
+It contains canonical immutable `00000000.json` (authorized) and optional
+`00000001.json` (finished), using resume-event schema v1 with sequence, previous
+entry hash and SHA-256 entry identity. The authorized payload uses resume schema
+v1 and binds original absolute location, execution identity, chain head, plan and
+manifest hashes, full original inventory plus final-inventory hash if present,
+ordered selection, original limits, ownership protocol, explicit authorizations,
+reused/pending IDs, attempt sequence 1 and development-only classification.
+The terminal event binds the attempt identity, fresh pilot inventory and verified
+recovery outcome. Both use existing no-replace link/file-fsync/directory-fsync
+publication. Parent fsync makes the reservation durable before child execution.
+Unpublished temporary bytes never count as committed events.
+
+`pilot/` is an ordinary pilot v2 / journal v1 execution containing only pending
+IDs in original order, with fresh observed hardware/provenance. It uses the same
+runner, command construction, limits, verifier and oracle. Reused trials are
+explicitly labelled original; newly executed trials are labelled resume.
+No reuse overhead enters C++ benchmark timing. Every result remains
+`measurement_eligible=false`; no team-size, CPU placement or exclusivity claim
+is introduced. The original 104-trial expansion and all scientific admission
+contracts remain unchanged.
+
+Budget policy `fresh-attempt-including-preflight-v1` explicitly grants one fresh
+bounded wall budget equal to the original recorded limit, starting before resume
+preflight. This does not consume or reinterpret the old monotonic clock. Input
+checks, publication/fsync and launch setup consume the new fixed budget. The
+absolute cap flows into the existing runner and process layer; neither resets
+nor compensates for I/O. Original per-trial, stream and total selection caps apply.
+Known-expired budgets authorize no new process. Userspace scheduling/native spawn
+latency remains a practical real-time limitation. Process-group cleanup and CLI
+SIGTERM/KeyboardInterrupt handling remain in force.
+
+`inspect-resume` is bounded and read-only. It checks both chains, original snapshot,
+fresh context/limits/selection and existing v2 per-trial evidence. Exit 0 means a
+settled transaction; inspect `execution_status` for complete versus failed.
+Exit 1 means incomplete publication; exit 2 means rejected/corrupt/unavailable.
+The execution command exits 1 for a failed or incomplete outcome. If terminal
+publication fails, inspection retains verified new completions but reports an
+incomplete transaction. Missing initial authorization is rejected, never inferred.
+
+Repeated attempts are deliberately unsupported. Any reservation, even empty,
+blocks another resume. After a crash or SIGTERM, inspect original and resume
+journals to distinguish reused completion, newly verified completion, pending,
+failed/interrupted and indeterminate launch. Do not delete a reservation to force
+retry: descendants may still run. A second authorization cannot override this
+barrier. Relocation of resume transactions is unsupported because original
+location and sibling identity are bound. Stronger process ownership, safe repeated
+resume, retries and resource isolation require future separately authorized work.
+These integrity hashes do not authenticate a malicious producer or guarantee
+arbitrary hardware-failure durability.
