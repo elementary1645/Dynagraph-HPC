@@ -1,5 +1,8 @@
 # Phase 6B-2A development pilot (R1 hardening)
 
+Phase 6B-2B-1 adds a separate [recovery journal and read-only inspection](campaign-recovery.md).
+Pilot evidence stays v2; no resume or retry command is provided.
+
 The `pilot` command executes an explicitly selected subset of an existing Phase
 6B-1 trial manifest. This is development harness validation. Every trial has
 `measurement_eligible=false`, including verified measured-phase trials. Scientific
@@ -77,8 +80,10 @@ requires a new output directory; partial evidence is never reused or overwritten
 | Workload | development split | 128 vertices, 4096 edges, 256 updates |
 
 The monotonic wall budget starts before snapshot collection and preparation.
-Before launch, the smaller remaining campaign/trial deadline is used. No new
-process starts after either deadline. Filesystem reads, hashing, atomic writes,
+The smaller absolute campaign/trial deadline governs every launch. Remaining time
+is recomputed after durable journal publication, and the process layer checks
+again immediately before process creation. A known-expired budget authorizes no
+new launch; arbitrary OS descheduling prevents a strict userspace real-time guarantee. Filesystem reads, hashing, atomic writes,
 process cleanup and final evidence publication are synchronous and can extend
 elapsed invocation time beyond the launch budget; this is not a real-time service.
 Selected trials run serially. A failure or unverified result stops later launches;

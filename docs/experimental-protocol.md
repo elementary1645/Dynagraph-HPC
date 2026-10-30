@@ -2,10 +2,13 @@
 
 ## Status
 
-Current scope is Phase 6B-2A-R1 [pilot correctness and evidence hardening](campaign-pilot.md).
-R1 adds independent Python final-distance reconciliation, complete process
-receipt checks and safe metadata reads. Pilot evidence now requires version 2;
-older pilot evidence remains historical and is not automatically upgraded.
+Current scope is Phase 6B-2B-1-R1 [deadline enforcement remediation](campaign-recovery.md).
+Every child launch rechecks the unchanged monotonic deadline after durable journal
+publication and at the process boundary. Known-expired budgets authorize no child;
+this does not claim real-time scheduling under arbitrary OS descheduling.
+The journal adds crash-consistent transition publication and read-only recovery
+classification while preserving the completed R1 correctness/evidence protections
+and pilot schema v2. Actual resumption and scientific execution remain deferred.
 The explicit authorization supersedes earlier execution deferrals only for this
 small development harness. Phase 6B-1 plans, deterministic identities, admission
 and ELF protections remain unchanged. Every pilot result is measurement-ineligible.
