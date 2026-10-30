@@ -10,7 +10,7 @@ from artifacts import generate, verify, validate_manifest
 from campaign_contract import (digest, expand, fields, integer, path_text,
                                plan_hash, load_bytes, safe_path, validate_plan)
 from campaign_hardware import admit, inspect
-from campaign_process import capture, timestamp
+from campaign_process import capture, timestamp, LaunchDeadlineExpired
 from campaign_oracle import METHOD, reconcile
 from campaign_provenance import cpu_array
 from experiment_records import loads, read_jsonl, validate_worker, verify_preflight
@@ -473,15 +473,26 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
                 bundle, inputs = stage_inputs(root, directory, workload, executable, plan['build']['executable_sha256'])
                 cfg = config(plan, trial)
                 def launch(kind):
-                    integrity(directory, inputs)
-                    remaining = trial_deadline-time.monotonic()
-                    if remaining <= 0:
-                        record['reason'] = 'budget-exhausted' if time.monotonic()>=deadline else 'timeout'
+                    def expired(now):
+                        record['reason'] = 'budget-exhausted' if now>=deadline else 'timeout'
                         return None
+                    integrity(directory, inputs)
+                    if time.monotonic() >= trial_deadline:
+                        return expired(time.monotonic())
                     if not record['processes']:
                         journal.transition(trial['trial_id'], 'launched')
-                    process, streams = capture(command(plan, trial, bundle['source'], kind),
-                                                directory, env, remaining, output_limit)
+                    arguments = command(plan, trial, bundle['source'], kind)
+                    now = time.monotonic()
+                    remaining = trial_deadline-now
+                    if remaining <= 0:
+                        return expired(now)
+                    try:
+                        process, streams = capture(arguments, directory, env, remaining, output_limit,
+                                                   deadline=trial_deadline)
+                    except LaunchDeadlineExpired:
+                        # An intent entry is not proof of a started process.
+                        # Do not manufacture streams, a receipt or an exit code.
+                        return expired(time.monotonic())
                     for name, data in streams.items():
                         reference = f'{len(record["processes"])}-{kind}.{name}'
                         atomic_bytes(directory/reference, data);process[name] = reference

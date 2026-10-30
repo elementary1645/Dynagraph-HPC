@@ -144,6 +144,45 @@ hashes. This shares the full per-trial semantic gates rather than trusting file
 existence or creating a weaker correctness validator. A whole self-consistent
 bundle can still be fabricated without an external trust anchor.
 
+## R1 deadline ordering at the launch boundary
+
+One absolute monotonic overall deadline is created before preparation and is
+never reset or extended for journal I/O. Each trial has its own absolute timeout
+cap; the earlier of these two deadlines governs every preflight and timing child.
+
+Launch ordering is now:
+
+1. Verify staged identities and check expiry before publishing launch intent.
+2. Durably publish required launch intent for the first child attempt.
+3. Construct the fixed argv, read the monotonic clock again, and recompute the
+   remaining budget against the unchanged earlier deadline.
+4. If positive, call the process layer with only this fresh timeout and the same
+   absolute deadline. No further application journal or filesystem I/O occurs
+   between this final check and the call.
+5. The process layer checks its effective absolute deadline after selector setup,
+   immediately before Popen, and uses it while waiting/draining pipes as well.
+
+A userspace clock check cannot guarantee a strict real-time launch boundary under
+arbitrary OS descheduling or native process-creation latency. The guarantee is
+that a known-expired budget never intentionally authorizes a new launch. Fsync,
+cleanup and evidence publication can still extend invocation duration; they never
+replenish the child launch budget.
+
+If the budget expires after durable intent but before process creation, the v2
+record has budget-exhausted (overall) or timeout (trial), no new process receipt,
+no invented return code or stdout/stderr, and false measurement eligibility.
+Existing preflight evidence is retained if only the later timing launch expires.
+A valid terminal failed journal transition is published where possible; later
+selected trials remain not-run/pending. Inspection reports failed, never
+verified-complete. If terminal publication fails, durable intent plus partial
+failure evidence remains indeterminate/incomplete. Launch intent continues to
+mean an attempted authorization, not proof that an OS process started.
+
+Pilot schema v2 and journal v1 already represent these states; no migration or
+version change is required. Older evidence is not rewritten or reinterpreted as
+proof of compliance with this corrected runtime deadline ordering. The independent
+correctness gate, process-group cleanup and bounded capture remain unchanged.
+
 ## Interruption and limits
 
 Timeout, output/capture errors, launch failure and KeyboardInterrupt retain the

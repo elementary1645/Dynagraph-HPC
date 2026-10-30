@@ -207,13 +207,13 @@ class PilotTests(unittest.TestCase):
         self.assertNotIn('GOMP_CPU_AFFINITY',env);self.assertEqual(env['OMP_NUM_THREADS'],'2')
 
     def test_shared_per_trial_deadline(self):
-        with patch('campaign_pilot.capture',return_value=self.response()),patch('campaign_pilot.check_preflight'),patch('campaign_pilot.time.monotonic',side_effect=[0,0,0,0,11,11]):
+        with patch('campaign_pilot.capture',return_value=self.response()),patch('campaign_pilot.check_preflight'),patch('campaign_pilot.time.monotonic',side_effect=[0,0,0,0,0,11,11]):
             self.run_case([self.ids[4]])
         self.assertEqual(self.record()['reason'],'timeout')
 
     def test_truncated_stream_records_failure(self):
         response=self.response(b'x'*16,'output-limit');response[0]['truncated']=True
-        def fresh(*args):
+        def fresh(*args,**kwargs):
             response[0].update(start=timestamp(),end=timestamp());return response
         with patch('campaign_pilot.capture',side_effect=fresh):self.run_case(output_limit=16)
         self.assertEqual(self.record()['reason'],'output-limit')
@@ -266,8 +266,8 @@ class R1Tests(unittest.TestCase):
 
     def test_r1_live_corrupt_distance_all_phases(self):
         real=capture
-        def faulty(command,*args):
-            process,streams=real(command,*args)
+        def faulty(command,*args,**kwargs):
+            process,streams=real(command,*args,**kwargs)
             if command[1]=='verify':
                 report=json.loads(streams['stdout']);report['final_distances'][1]=123456789
                 streams['stdout']=canonical_json(report)

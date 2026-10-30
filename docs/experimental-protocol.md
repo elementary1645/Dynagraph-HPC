@@ -2,7 +2,10 @@
 
 ## Status
 
-Current scope is Phase 6B-2B-1 [recovery contracts and execution journal](campaign-recovery.md).
+Current scope is Phase 6B-2B-1-R1 [deadline enforcement remediation](campaign-recovery.md).
+Every child launch rechecks the unchanged monotonic deadline after durable journal
+publication and at the process boundary. Known-expired budgets authorize no child;
+this does not claim real-time scheduling under arbitrary OS descheduling.
 The journal adds crash-consistent transition publication and read-only recovery
 classification while preserving the completed R1 correctness/evidence protections
 and pilot schema v2. Actual resumption and scientific execution remain deferred.

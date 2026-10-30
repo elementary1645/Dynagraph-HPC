@@ -28,7 +28,11 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat(timespec='microseconds')
 
 
-def capture(command, cwd, environment, timeout, output_limit):
+class LaunchDeadlineExpired(Exception):
+    """No process was created: the launch-layer deadline check expired."""
+
+
+def capture(command, cwd, environment, timeout, output_limit, *, deadline=None):
     """Bound each stream in memory and kill the process group on every exit path.
 
     Timeout includes draining inherited pipes. Children retaining pipes cannot
@@ -36,12 +40,17 @@ def capture(command, cwd, environment, timeout, output_limit):
     """
     started = timestamp()
     begin = time.monotonic()
+    stop = begin+timeout if deadline is None else min(begin+timeout, deadline)
     buffers = {'stdout': bytearray(), 'stderr': bytearray()}
     result = dict(command=command, start=started, end=None, returncode=None,
                   signal=None, reason='exited', truncated=False)
     process = None
     try:
         with selectors.DefaultSelector() as selector:
+            # Setup may consume the caller's remaining budget. Do no further
+            # journal/file I/O after this check and before process creation.
+            if time.monotonic() >= stop:
+                raise LaunchDeadlineExpired('process launch deadline expired')
             process = subprocess.Popen(command, cwd=cwd, env=environment,
                                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, start_new_session=True)
@@ -50,7 +59,7 @@ def capture(command, cwd, environment, timeout, output_limit):
                 os.set_blocking(pipe.fileno(), False)
                 selector.register(pipe, selectors.EVENT_READ, name)
             while selector.get_map() or process.poll() is None:
-                remaining = timeout - (time.monotonic() - begin)
+                remaining = stop - time.monotonic()
                 if remaining <= 0:
                     result['reason'] = 'timeout'
                     break

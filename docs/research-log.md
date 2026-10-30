@@ -4000,3 +4000,112 @@ inspection never repairs or resumes; actual resume/retry behavior, stronger
 process/resource ownership, scientific execution and later inference remain
 separately authorized Phase 6B-2B-2 or later work. Stop after the local commit;
 no push, PR or merge.
+
+## Phase 6B-2B-1-R1 deadline enforcement remediation
+
+Started clean at e2d84b79553858f0a7a467358331f6f59bf5e09e on the existing
+feature/phase6b2b-recovery-provenance branch. The explicit request authorizes
+this targeted implementation, bounded validation and a local commit only;
+no push/merge/PR, dependency installation, automatic resume or retry.
+
+Reran the original /tmp/dynagraph-6b2b1-audit/deadline_fsync.py before editing:
+a 1.2-second journal directory fsync delay with one-second overall/trial budgets
+launched at 1.2288 seconds with stale timeout 0.9750 seconds; the pilot reported
+complete and recovery reported settled/verified-complete. Retained the baseline
+log. Added a red marker-child regression first; it failed because a child actually
+started after expiry. The fixture writes a launch marker before exec of the
+trusted small benchmark, not merely a synthetic reported-timeout assertion.
+
+Root cause: remaining time was read before journal publication and reused after
+synchronous publication/fsync, potentially authorizing an already-expired launch.
+The pilot now computes fixed argv before its final clock check, rereads monotonic
+time after publication, and passes only the fresh remaining budget with the same
+absolute min(overall deadline, trial deadline). Both preflight and timing launches
+use this function. No deadline is extended or reset. The process layer additionally
+checks after selector setup immediately before Popen and uses the same absolute
+cap when draining/waiting. It raises an internal LaunchDeadlineExpired exception
+when it knows no process was created; the caller records no invented process
+receipt, exit code or streams. Known-expired budgets become explicit overall
+budget-exhausted or per-trial timeout failures and halt subsequent trials.
+
+A durably published launch intent is not proof of an actual process start. The
+existing v2 record and journal v1 already represent failed-without-process evidence.
+Terminal failures publish normally where possible; a terminal-write failure leaves
+indeterminate/incomplete evidence. No evidence schema change, automatic upgrade
+or historical evidence reinterpretation. Userspace checks cannot promise a strict
+real-time boundary against arbitrary OS descheduling/native spawn latency; the
+contract prevents known-expired authorizations and has no unbounded application
+journal/filesystem work after the final process-layer check.
+
+Fourteen new deterministic deadline tests cover timely, exact and exceeded journal
+publication, delayed directory fsync, fresh tiny/minimum budgets, both deadline
+orderings, expiry before intent and after intent, expiry in launch-layer setup,
+expiry between preflight and timing, failure publication, actual marker absence,
+no later launch, safe recovery classifications and normal successful execution.
+Existing synthetic capture wrappers accept the optional absolute-deadline keyword;
+checks/assertions remain intact. The existing shared-deadline mock includes the
+additional post-publication clock sample. No production/timing/oracle change.
+
+Reran the original reproducer after the fix: it reported zero launches, pilot
+failed and recovery failed/budget-exhausted. Its final assertion intentionally
+expects the old bug and therefore now fails; preserved that unmodified-reproducer
+log separately. A copy with only those obsolete final assertions changed to expect
+no launches/failure is /tmp/dynagraph-6b2b1r1-reproducer.py. It passes and retains
+the same real directory-fsync injection. Final commands/outcomes follow below.
+
+Fresh final validation (2026-10-30):
+
+- `python3 -B tests/test_campaign_journal.py`: 46/46; pilot: 47/47;
+  campaign: 85/85; archive: 59/59; diagnostic controls: 3/3.
+- `python3 -B tools/validation/test_repair.py --output
+  /tmp/dynagraph-phase6b2b1r1-repair`: 17/17 infrastructure regressions.
+- `python3 -B tools/validation/ci_verify.py --mode debug --python
+  /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output
+  /tmp/dynagraph-phase6b2b1r1-debug`: 31/31 CTest.
+- The same driver with `--mode release --smoke --output
+  /tmp/dynagraph-phase6b2b1r1-release`: 31/31 CTest, smoke and all nine
+  negative smoke controls passed.
+- The same driver outside the sandbox with `--mode sanitize --output
+  /tmp/dynagraph-phase6b2b1r1-sanitize-unsandboxed`: ASan+UBSan 31/31,
+  leak detection enabled, halt-on-error enabled. Existing pinned analysis
+  environment and Agg checks passed; no dependencies installed.
+- Python AST parsing: 54 files; `bash -n`: six workflow run blocks
+  (workflow expressions replaced only for local shell syntax validation).
+  `git diff --check` passed.
+
+All three fresh profiles report unchanged source during execution and source
+inventory SHA-256
+`a1ef55ec369458d5e679d6d6a15f9cf177a021491dee0751fa9366f084c9d54a`.
+Copied all three archives and SHA-256 sidecars, then verified with the trusted
+copied offline kit under `python3 -I -S -B`: debug-full-v1,
+release-smoke-v1 and sanitize-full-v1 all passed. Historical Phase 6B-1 and
+6B-1R failed archives remain integrity-verified failed-run-v1, never promoted
+to passing results. Prior evidence maps: 7,759 captured retained files and the
+911-entry R3 map both have zero mismatches. Large generated evidence remains
+ignored under results/validation/phase6b2b1r1; verification-summary.json and
+individual receipts preserve commands and outcomes.
+
+Regenerated all 104 trials byte-identically: plan SHA-256
+`f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24`;
+manifest SHA-256
+`f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a`.
+Normal one-trial CLI pilot, verify-pilot and inspect-recovery all returned zero;
+relocated evidence remained settled, with measurement eligibility false.
+Pilot v2 and journal v1 remain unchanged. Protected algorithms, timing brackets,
+admission/archive contracts, workload goldens and independent oracle are unchanged.
+
+Nine intended files: AGENTS.md; campaign_pilot.py; campaign_process.py;
+test_campaign_journal.py; test_campaign_pilot.py; campaign-recovery.md;
+campaign-pilot.md; experimental-protocol.md; this research log. Only this final
+outcome documentation was appended after the full gates; implementation/test
+SHA-256 receipts remain unchanged. No unresolved validation failures; the
+unmodified reproducer's obsolete bug-expecting assertion is documented above.
+No hosted CI, performance or race-freedom claim is made. The prior TSan
+LIKELY TOOL/RUNTIME LIMITATION classification remains unchanged.
+
+Residual limits: arbitrary OS descheduling/native spawn latency can cross a
+real-time boundary after a userspace check; existing local POSIX publication
+and durability assumptions remain. Automatic resume/retry, stronger resource
+isolation/ownership, Phase 6B-2B-2 execution, scientific experiments and inference
+remain deferred pending separate authorization. Stop after the local commit and
+report; no push, merge or PR.

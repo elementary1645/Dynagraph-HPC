@@ -164,7 +164,7 @@ class JournalTests(unittest.TestCase):
 
     def test_capture_failure(self):
         real=__import__('campaign_process').capture
-        def fail(command,cwd,env,timeout,limit):
+        def fail(command,cwd,env,timeout,limit,**kwargs):
             result,streams=real(['/does/not/exist'],cwd,env,timeout,limit)
             result.update(command=command,reason='capture-error',returncode=-9,signal=9)
             return result,streams
@@ -274,6 +274,157 @@ class JournalTests(unittest.TestCase):
                     if pid is not None:
                         try:os.killpg(pid,signal.SIGKILL)
                         except ProcessLookupError:pass
+
+
+class DeadlineTests(unittest.TestCase):
+    setUp = JournalTests.setUp
+    refresh = JournalTests.refresh
+
+    def marker_fixture(self):
+        self.marker=self.root/'launch-marker'
+        reference=self.inputs/'bin/reference';reference.write_bytes(self.binary.read_bytes());reference.chmod(0o700)
+        self.binary.write_text('#!/usr/bin/python3\nimport os,sys\nwith open('+repr(str(self.marker))+',"a") as f:f.write(sys.argv[1]+"\\n")\nos.execv('+repr(str(reference))+',['+repr(str(reference))+',*sys.argv[1:]])\n')
+        self.refresh()
+
+    def delayed(self,delay,wall=1,trial=1,terminal_failure=False,fsync=False,launch_delay=0,count=2):
+        self.marker_fixture();clock=[0.0];original=Journal._publish
+        original_fsync=os.fsync;injected=[False]
+        def publish(journal,kind,payload):
+            if terminal_failure and kind=='transition' and payload['to_state']=='failed':
+                raise Journal.Error('injected terminal write failure')
+            original(journal,kind,payload)
+            if not fsync and kind=='transition' and payload['to_state']=='launched':clock[0]+=delay
+        def directory_fsync(fd):
+            if fsync and not injected[0] and (self.output/DIRECTORY/'00000001.json').exists():
+                import stat
+                if stat.S_ISDIR(os.fstat(fd).st_mode) and Path(os.readlink(f'/proc/self/fd/{fd}'))==self.output/DIRECTORY:
+                    injected[0]=True;clock[0]+=delay
+            return original_fsync(fd)
+        from campaign_process import capture as real_capture
+        self.budgets=[]
+        def boundary(command,cwd,env,timeout,limit,**kwargs):
+            self.budgets.append((timeout,kwargs['deadline']))
+            clock[0]+=launch_delay
+            return real_capture(command,cwd,env,timeout,limit,**kwargs)
+        ids=[t['trial_id'] for t in self.manifest['trials'][:count]]
+        with patch('campaign_pilot.time.monotonic',side_effect=lambda:clock[0]),patch.object(Journal,'_publish',publish),patch('campaign_pilot.os.fsync',side_effect=directory_fsync),patch('campaign_pilot.capture',side_effect=boundary):
+            result=run_pilot(self.plan,self.manifest,self.inputs,self.output,ids,execute=True,max_trials=2,wall_seconds=wall,timeout=trial)
+        return result
+
+    def assert_no_launch(self):
+        self.assertFalse(self.marker.exists(),'child actually started after deadline')
+        r=inspect_recovery(self.output)
+        self.assertFalse(any(t['classification']=='verified-complete' for t in r['trials']))
+        record=json.loads((self.output/self.tid/'record.json').read_bytes())
+        self.assertEqual(record['processes'],[])
+        self.assertEqual(record['correctness'],dict(checked=False,outcome='not-checked',oracle=None))
+        self.assertEqual(r['trials'][0]['classification'],'failed')
+        self.assertEqual(r['trials'][1]['classification'],'pending')
+        self.assertFalse(r['measurement_eligible'])
+        return record
+
+    def test_publication_exceeds_deadline(self):
+        result=self.delayed(1.2)
+        self.assertEqual(result['status'],'failed');record=self.assert_no_launch()
+        self.assertEqual(record['reason'],'budget-exhausted')
+
+    def test_publication_consumes_exact_deadline(self):
+        self.delayed(1.0);self.assert_no_launch()
+
+    def test_directory_fsync_expires_deadline(self):
+        self.delayed(1.2,fsync=True);self.assert_no_launch()
+
+    def test_per_trial_deadline_shorter_than_overall(self):
+        self.delayed(1.2,wall=5,trial=1)
+        self.assertEqual(self.assert_no_launch()['reason'],'timeout')
+
+    def test_overall_deadline_shorter_than_trial(self):
+        self.delayed(1.2,wall=1,trial=5)
+        self.assertEqual(self.assert_no_launch()['reason'],'budget-exhausted')
+
+    def test_failure_publication_leaves_indeterminate(self):
+        with self.assertRaises(Journal.Error):self.delayed(1.2,terminal_failure=True)
+        self.assertFalse(self.marker.exists())
+        self.assertFalse((self.output/'result-index.json').exists())
+        r=inspect_recovery(self.output)
+        self.assertEqual(r['trials'][0]['classification'],'indeterminate')
+        self.assertNotEqual(r['trials'][0]['evidence_status'],'verified-complete')
+
+    def test_before_deadline_normal_success(self):
+        result=self.delayed(.1,wall=5,trial=2)
+        self.assertEqual(result['status'],'complete');self.assertTrue(self.marker.exists())
+        self.assertTrue(all(t['classification']=='verified-complete' for t in inspect_recovery(self.output)['trials']))
+
+
+    def test_expiry_before_launch_layer_process_creation(self):
+        self.delayed(.5,launch_delay=.5)
+        self.assertEqual(len(self.budgets),1)
+        self.assertEqual(self.assert_no_launch()['reason'],'budget-exhausted')
+
+    def test_small_remaining_budget_is_fresh(self):
+        self.delayed(.999999,count=1)
+        self.assertTrue(self.marker.exists())
+        self.assertGreater(self.budgets[0][0],0)
+        self.assertLess(self.budgets[0][0],.000002)
+        self.assertEqual(self.budgets[0][1],1)
+
+    def test_fresh_timeout_is_minimum_of_existing_deadlines(self):
+        self.delayed(.2,wall=5,trial=1,count=1)
+        self.assertAlmostEqual(self.budgets[0][0],.8)
+        self.assertEqual(self.budgets[0][1],1)
+        self.assertTrue(self.marker.exists())
+
+    def test_expiry_before_journal_launch_intent(self):
+        self.marker_fixture();clock=[0.0]
+        from campaign_pilot import stage_inputs
+        def stage(*args):
+            value=stage_inputs(*args);clock[0]=1;return value
+        ids=[t['trial_id'] for t in self.manifest['trials'][:2]]
+        with patch('campaign_pilot.time.monotonic',side_effect=lambda:clock[0]),patch('campaign_pilot.stage_inputs',side_effect=stage):
+            run_pilot(self.plan,self.manifest,self.inputs,self.output,ids,execute=True,max_trials=2,wall_seconds=1,timeout=1)
+        self.assert_no_launch()
+        event=json.loads((self.output/DIRECTORY/'00000001.json').read_bytes())
+        self.assertEqual(event['payload']['from_state'],'pending')
+        self.assertEqual(event['payload']['to_state'],'failed')
+
+    def test_process_layer_rejects_known_expired_absolute_deadline(self):
+        from campaign_process import capture, LaunchDeadlineExpired
+        marker=self.root/'low-level-marker'
+        code='from pathlib import Path;Path('+repr(str(marker))+').write_text("started")'
+        with patch('campaign_process.subprocess.Popen') as popen:
+            with self.assertRaises(LaunchDeadlineExpired):
+                capture([sys.executable,'-c',code],self.root,dict(os.environ),1,1024,deadline=time.monotonic()-1)
+            popen.assert_not_called()
+        self.assertFalse(marker.exists())
+
+    def test_process_layer_checks_after_selector_setup(self):
+        import selectors
+        from campaign_process import capture, LaunchDeadlineExpired
+        selector=selectors.DefaultSelector();clock=[0.0]
+        class DelayedSetup:
+            def __enter__(inner):clock[0]=1;return selector.__enter__()
+            def __exit__(inner,*args):return selector.__exit__(*args)
+        with patch('campaign_process.time.monotonic',side_effect=lambda:clock[0]),patch('campaign_process.selectors.DefaultSelector',return_value=DelayedSetup()),patch('campaign_process.subprocess.Popen') as popen:
+            with self.assertRaises(LaunchDeadlineExpired):
+                capture(['/does/not/run'],self.root,dict(os.environ),1,1024,deadline=1)
+            popen.assert_not_called()
+
+    def test_expiry_between_preflight_and_timing(self):
+        self.marker_fixture();clock=[0.0]
+        from campaign_pilot import check_preflight
+        def checked(*args):
+            value=check_preflight(*args);clock[0]=1;return value
+        t=next(t for t in self.manifest['trials'] if t['phase']=='measured')
+        ids=[t['trial_id'],self.manifest['trials'][t['sequence']+1]['trial_id']]
+        with patch('campaign_pilot.time.monotonic',side_effect=lambda:clock[0]),patch('campaign_pilot.check_preflight',side_effect=checked):
+            result=run_pilot(self.plan,self.manifest,self.inputs,self.output,ids,execute=True,max_trials=2,wall_seconds=1,timeout=1)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(self.marker.read_text().splitlines(),['verify'])
+        record=json.loads((self.output/t['trial_id']/'record.json').read_bytes())
+        self.assertEqual(len(record['processes']),1)
+        self.assertEqual(record['reason'],'budget-exhausted')
+        recovered=inspect_recovery(self.output)
+        self.assertEqual([r['classification'] for r in recovered['trials']],['failed','pending'])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
