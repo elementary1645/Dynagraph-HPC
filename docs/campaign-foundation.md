@@ -1,5 +1,9 @@
 # Phase 6B-1 campaign foundation
 
+This section describes the preserved Phase 6B-1 read-only foundation. The separately
+authorized Phase 6B-2A `pilot` command is documented in [the pilot runbook](campaign-pilot.md);
+it does not change these planning, manifest or admission contracts.
+
 Phase 6B-1R repairs the independent acceptance findings. Campaign-plan and trial
 manifest versions remain 1. Hardware reports and admission outputs now require
 version 2; incomplete version-1 hardware records are rejected, never silently

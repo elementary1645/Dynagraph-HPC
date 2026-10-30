@@ -1,5 +1,9 @@
 # DynaGraph-HPC
 
+Phase 6B-2A adds an explicit, bounded development pilot harness. See the
+[pilot runbook, evidence schemas and limits](docs/campaign-pilot.md). It preserves
+Phase 6B-1 trial identities and keeps every result measurement-ineligible.
+
 Phase 5C-3B-3R repairs the audit-blocked archive gate with mandatory evidence
 profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256 sidecars.
 See [full validation and isolated build runbook](docs/reproducibility-validation.md).

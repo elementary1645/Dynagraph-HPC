@@ -2,11 +2,15 @@
 
 ## Status
 
-Current scope is Phase 6B-1 [campaign foundation](campaign-foundation.md): strict
-plans, deterministic trial manifests and hardware qualification only, following
-the Phase 6A design audit and explicit implementation authorization. Earlier Phase 6
-deferrals below are historical and are superseded only for this subphase. No
-performance experiment, inference, tuning or timing-boundary change is authorized.
+Current scope is Phase 6B-2A-R1 [pilot correctness and evidence hardening](campaign-pilot.md).
+R1 adds independent Python final-distance reconciliation, complete process
+receipt checks and safe metadata reads. Pilot evidence now requires version 2;
+older pilot evidence remains historical and is not automatically upgraded.
+The explicit authorization supersedes earlier execution deferrals only for this
+small development harness. Phase 6B-1 plans, deterministic identities, admission
+and ELF protections remain unchanged. Every pilot result is measurement-ineligible.
+Scientific execution, complete campaigns, analysis, visualization, inference,
+tuning and timing-boundary changes remain deferred.
 
 Current authorized infrastructure scope is Phase 5C-3B-3R: intended-diagnostic
 controls, portable evidence archives and independent offline verification. The
