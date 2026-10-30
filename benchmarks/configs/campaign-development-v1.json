@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "campaign_id": "development-chain-foundation",
+  "panel": "service-control",
+  "measurement_level": "engine-update-service-v1",
+  "timing_mode": "full-trace",
+  "workloads": [
+    {
+      "id": "chain-v1-example",
+      "recipe": {
+        "schema_version": 1,
+        "workload_id": "chain-v1-example",
+        "split": "development",
+        "seeds": {
+          "graph": "1",
+          "weight": "2",
+          "source": "3",
+          "trace": "4"
+        },
+        "graph": {
+          "family": "chain",
+          "vertices": 8
+        },
+        "weights": {
+          "kind": "positive_uniform",
+          "min": 16,
+          "max": 32
+        },
+        "source": {
+          "kind": "explicit",
+          "vertex": 0
+        },
+        "trace": {
+          "count": 12,
+          "schedule": [
+            "strict",
+            "repeat",
+            "equal"
+          ],
+          "max_decrement": 2
+        }
+      },
+      "recipe_sha256": "45a8785d6bdb6718f960d7aaf19eaa6fab084de6856b868a46922e5b51d4cc64",
+      "graph_sha256": "e7338d8f282737a360ae0f65fd731f7c576187e624e5fb94904246a08336ea6c",
+      "trace_sha256": "5e2355594505cdc6536fe11de6fd7ba158578105715c2b9b32445925e72c9d38",
+      "bundle": "workloads/chain"
+    }
+  ],
+  "configurations": [
+    {
+      "id": "one",
+      "workers": 1,
+      "delta": 16
+    },
+    {
+      "id": "two",
+      "workers": 2,
+      "delta": 16
+    }
+  ],
+  "policies": [
+    "dijkstra",
+    "delta-stepping",
+    "incremental",
+    "heuristic"
+  ],
+  "no_effect": "shared_fast_path",
+  "heuristic": {
+    "small_graph_edges": 4096,
+    "repair_max_degree": 32,
+    "parallel_min_edges": 65536
+  },
+  "sessions": [
+    "development-session"
+  ],
+  "blocks": 4,
+  "warmups": 2,
+  "diagnostics": 1,
+  "order_seed": 7,
+  "order_version": "campaign-balanced-four-v1",
+  "build": {
+    "revision": "8b05c2b2dc1212176eb70cf24559b0bf1ccd53bd",
+    "build_type": "Release",
+    "executable": "bin/dynagraph_bench",
+    "executable_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "compiler_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "openmp_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "flags_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "uninstrumented": true
+  },
+  "hardware": {
+    "mode": "development",
+    "allocated_cpus": [
+      0,
+      1
+    ],
+    "min_physical_cores": 1,
+    "allow_smt": true,
+    "allow_virtualization": true,
+    "min_available_memory_bytes": 4096,
+    "require_frequency_evidence": false,
+    "exclusive": false,
+    "reservation": ""
+  },
+  "limits": {
+    "max_trials": 1000,
+    "timeout_seconds": 60,
+    "max_memory_bytes": 4096,
+    "max_output_bytes": 1048576
+  },
+  "expected_evidence": [
+    "plan.json",
+    "trial-manifest.json",
+    "hardware.json",
+    "admission.json",
+    "records.jsonl",
+    "stdout",
+    "stderr",
+    "exit.json",
+    "sha256.json"
+  ],
+  "comparisons": [
+    {
+      "kind": "worker-scaling",
+      "numerator": "two",
+      "baseline": "one"
+    }
+  ]
+}

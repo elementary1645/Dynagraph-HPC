@@ -481,3 +481,10 @@ Direct `dynagraph_bench time` never attests external integrity/preflight complet
 See the [timing contract](docs/benchmark-timing.md) for exact CLI, boundaries,
 schema, metadata provenance, failures, quotas and hardware limitations. Codespaces
 and sanitizer runs validate the harness; they provide no scaling evidence.
+
+## Campaign planning foundation
+
+Phase 6B-1 adds [strict campaign plans and hardware admission](docs/campaign-foundation.md)
+without benchmark execution. Validate the development example with
+`python3 -B benchmarks/python/campaign.py validate --plan benchmarks/configs/campaign-development-v1.json`.
+Run its standalone regressions with `python3 -B tests/test_campaign.py`.
