@@ -4109,3 +4109,143 @@ and durability assumptions remain. Automatic resume/retry, stronger resource
 isolation/ownership, Phase 6B-2B-2 execution, scientific experiments and inference
 remain deferred pending separate authorization. Stop after the local commit and
 report; no push, merge or PR.
+
+## Phase 6B-2B-2 safe development resume
+
+Started clean on feature/phase6b2b2-safe-resume at expected merged base
+ab2548d09d0ae68e7b84b7bf0be8705f00dba966. Read existing pilot v2, journal v1,
+process, oracle, admission/provenance and recovery contracts before implementing.
+The new explicit authorization supersedes the earlier resume deferral only for
+this bounded development subset; local commit authorized, no push/merge/PR.
+
+Conservative design chosen before implementation: fully reverify and reuse
+completed trials, execute never-launched pending trials, reject failed,
+interrupted, launched/indeterminate and contradictory states. Legacy writers
+lacked ownership locking, so legacy evidence remains verifiable but cannot safely
+resume. New pilots hold a cooperative local-POSIX directory flock through final
+publication and publish execution-owner v1 input-root metadata. Resume locks the
+same inode and validates all pending input identities before any child starts.
+No PID probing or stale PID authorizes retry, and no unrelated process is killed.
+
+A single sibling OUTPUT.resume-v1 reservation holds immutable canonical resume
+v1 authorization/terminal events with sequential hash linkage, binding the
+original execution, head, snapshot, selected order, limits, authorizations and
+attempt sequence 1. The original directory and all committed historical evidence
+remain untouched. New pending execution is an ordinary pilot v2/journal v1
+under pilot/, reusing the existing command constructor, full verifier and bounded
+independent Bellman–Ford oracle. Original/new provenance and reuse are distinct.
+Publication uses existing exclusive link/file fsync/directory fsync plus parent
+fsync before execution. Any reservation permanently blocks another attempt,
+including empty/torn attempts. Repeated interruption is inspectable but repeated
+resume is deliberately rejected pending stronger process ownership guarantees.
+
+Budget policy fresh-attempt-including-preflight-v1 explicitly grants one original-
+limit wall budget beginning before preflight. Its fixed monotonic deadline flows
+through authorization fsync, pilot setup, launch intent and the existing immediate
+process-layer check. Per-trial, total-selection and stream limits are unchanged;
+no fsync compensation or deadline reset. New pilot ownership publication also
+consumes its overall budget. Userspace OS scheduling/native spawn latency remains
+a practical real-time limitation. All results remain measurement-ineligible.
+
+The initial 31 resume tests and integrated journal tests passed. Initial sandbox
+runs could not bind Unix sockets, so those controls are rerun outside the sandbox.
+A synthetic failed-receipt fixture initially contradicted its exit code; corrected
+that fixture to represent a genuine nonzero exit. A pilot mock exhausted its
+clock samples after an unnecessary duplicate initialization sample; removed the
+extra clock read and preserved original mock assertions. Added three further
+controls for per-trial expiry, rehashed invalid command binding and real SIGTERM
+cleanup. Full fresh validation commands and outcomes follow after completion.
+
+Final review identified a copied-directory ownership bypass in the first draft:
+a new directory inode could accept a lock while the original writer was active.
+Bound the new ownership marker to output absolute path, device and inode, and
+added an independent copied-original rejection test. Relocation remains supported
+for ordinary v2 verification, but resume requires the original directory identity.
+Fresh final gates supersede the draft-source build results below; no draft result
+is claimed as validation of the final implementation. The journal suite is a
+direct Python entry point, not a CTest registration; it also imports resume tests.
+
+Draft Debug and Release drivers each passed 31/31 (Release smoke and negative
+controls also passed), but predate the ownership-copy fix and are not final-source
+acceptance evidence. The concurrent draft sanitizer leg recorded dijkstra TIMEOUT
+(30/31 passed); its failed-run archive is retained without promotion. No production
+algorithm was changed. Final-source drivers run sequentially to avoid simultaneous
+build/test contention, retaining the initial failure and all fresh outcomes.
+
+Final fresh validation (2026-10-30), after the ownership-copy fix:
+
+- `python3 -B tests/test_campaign_resume.py`: 35/35 resume controls.
+- `python3 -B tests/test_campaign_journal.py`: 81/81 (46 existing journal/
+  deadline controls plus those 35 resume controls); direct Python suite.
+- `python3 -B tests/test_campaign_pilot.py`: 47/47, assertions unchanged.
+- `python3 -B tests/test_campaign.py`: 85/85;
+  `python3 -B tools/validation/test_archive.py`: 59/59;
+  `python3 -B tools/validation/test_negative_diagnostics.py`: 3/3.
+- `python3 -B tools/validation/test_repair.py --output
+  /tmp/dynagraph-phase6b2b2-repair`: 17/17 infrastructure controls.
+- Sequential final drivers outside the sandbox:
+  `python3 -B tools/validation/ci_verify.py --mode debug --python
+  /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output
+  /tmp/dynagraph-phase6b2b2-final-debug`: 31/31 CTest;
+  same command with `--mode release --smoke --output
+  /tmp/dynagraph-phase6b2b2-final-release`: 31/31, smoke and all nine negative
+  controls passed; same command with `--mode sanitize --output
+  /tmp/dynagraph-phase6b2b2-final-sanitize`: ASan+UBSan 31/31.
+  Sanitizer receipts show detect_leaks=1:halt_on_error=1 and UBSan halt/stacktrace.
+  Existing pinned environment/Agg gates passed; no dependency installation.
+- AST parsing: 57 Python files. `git diff --check` passed.
+
+All three final profiles report source unchanged and the same inventory SHA-256:
+`a09f7fdc1503453418dc7f0fc99157bd7d269f93c1a900e16fc366272964630c`.
+All three final tar archives and SHA-256 sidecars passed independent isolated
+`python3 -I -S -B` verification using the copied trusted offline kit: debug-full-v1,
+release-smoke-v1 and sanitize-full-v1. Draft Debug/Release archives remain clearly
+separate from final acceptance; the draft sanitizer timeout archive verifies as
+failed-run-v1, never passing. Earlier failed sanitizer classifications remain
+unchanged. Large artifacts/raw receipts are ignored in
+results/validation/phase6b2b2; final-offline.json and verification-summary.json
+retain exact commands and outcomes. Source/test hash receipts match final code;
+only this outcome documentation and an AST-identical correction to the journal
+test-discovery comment were changed after full validation. The latter corrects
+CTest wording to direct Python suite; post-gate-comment.json records both hashes.
+
+Final end-to-end fixture: `python3 -B /tmp/dynagraph-phase6b2b2-demo-final.py`.
+It invokes an initial pilot whose parent uses os._exit(89) immediately after the
+first completed terminal transition. Subsequent CLI inspect-recovery exits 1
+(incomplete original); resume-pilot with both authorizations, inspect-resume and
+verify-pilot for the fresh child execution all exit 0. Exactly three marker
+launches occur across the original and resume: one original completion reused,
+two pending trials executed once. Final demo's 53-file SHA-256 sidecar verifies
+independently. The earlier draft demo is retained separately and is not the final
+ownership-protocol demonstration.
+
+The original 104-trial expansion remains byte-identical. Plan SHA-256:
+`f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24`;
+manifest SHA-256:
+`f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a`.
+The 8,379-entry preservation map and historical 911-entry R3 map have zero
+mismatches. Protected production, timing, heuristics, workload/admission/archive
+contracts, independent oracle, process-layer R1 checks, dependency pins, CMake and
+CI workflows are unchanged. Pilot v2 and journal v1 remain unchanged; new owner,
+resume-authorization/event and resume-inspection contracts are separately v1.
+
+Eleven intended files: AGENTS.md; campaign.py; campaign_pilot.py; new
+campaign_ownership.py and campaign_resume.py; test_campaign_journal.py; new
+test_campaign_resume.py; campaign-pilot.md; campaign-recovery.md;
+experimental-protocol.md; this log. No unresolved final validation failures.
+Residual limitations: local cooperative flock semantics; trusted producer and
+filesystem assumptions (hashes do not authenticate malicious writers); original
+path/device/inode required; legacy or relocated evidence cannot resume; any
+reservation blocks repeated resume; no proof of orphan ownership for interrupted
+or unresolved launches; userspace scheduling/native spawn latency; existing
+POSIX link/fsync durability assumptions rather than arbitrary hardware guarantees.
+Atomic visibility of a valid linked event remains the existing journal model;
+pre-link terminal publication failure leaves an incomplete transaction, while a
+read-only inspector cannot infer historical fsync acknowledgements from bytes.
+
+All results remain development-only and measurement-ineligible. Hosted CI is not
+claimed from local results. TSan acceptance/race freedom remains unmet with the
+historical LIKELY TOOL/RUNTIME LIMITATION classification preserved. Scientific
+campaigns/inference, retries, safe repeated resume, unresolved-process recovery,
+stronger resource ownership/isolation, CPU placement and tuning remain deferred.
+Stop after the authorized local commit/report; no push, merge or PR.

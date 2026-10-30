@@ -414,7 +414,29 @@ def verify_success(directory, record, plan):
 
 
 def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-              wall_seconds=60, timeout=10, output_limit=262144):
+              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None):
+    # New pilots reserve once and hold ownership through final publication.
+    # Historical pilots without this protocol remain inspectable, not resumable.
+    from campaign_ownership import directory_lock, owner, OWNER
+    select(plan, manifest, trial_ids, max_trials)
+    bounds(plan, max_trials, wall_seconds, timeout, output_limit)
+    if execute is not True:
+        raise ValueError('--execute-development is required to launch a pilot')
+    root = Path(root).resolve(strict=True)
+    output = Path(output).absolute()
+    output.mkdir(parents=True, exist_ok=False)
+    attempt_deadline = time.monotonic()+wall_seconds
+    if _deadline is not None:
+        attempt_deadline = min(attempt_deadline, _deadline)
+    with directory_lock(output):
+        put(output, OWNER, owner(root, output))
+        return _run_pilot(plan, manifest, root, output, trial_ids, execute=execute,
+                          max_trials=max_trials, wall_seconds=wall_seconds, timeout=timeout,
+                          output_limit=output_limit, _deadline=attempt_deadline)
+
+
+def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
+               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None):
     selected = select(plan, manifest, trial_ids, max_trials)
     bounds(plan, max_trials, wall_seconds, timeout, output_limit)
     if execute is not True:
@@ -424,9 +446,9 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
     root = Path(root).resolve(strict=True)
     path_text(str(root));output = Path(output).absolute();path_text(str(output))
     # Reserve the output once. Existing/partial evidence is never overwritten.
-    output.mkdir(parents=True, exist_ok=False)
     output = output.resolve()
-    started = timestamp();deadline = time.monotonic()+wall_seconds
+    started = timestamp()
+    deadline = time.monotonic()+wall_seconds if _deadline is None else _deadline
     put(output, 'plan.json', plan);put(output, 'trial-manifest.json', manifest)
     hardware = inspect(binaries=False)
     admission = admit(plan, hardware)

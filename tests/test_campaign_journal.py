@@ -427,4 +427,7 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual([r['classification'] for r in recovered['trials']],['failed','pending'])
 
 
+# Include resume contracts in the direct journal regression entry point.
+from test_campaign_resume import ResumeTests
+
 if __name__=='__main__':unittest.main(verbosity=2)

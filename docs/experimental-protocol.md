@@ -2,13 +2,17 @@
 
 ## Status
 
-Current scope is Phase 6B-2B-1-R1 [deadline enforcement remediation](campaign-recovery.md).
+Current scope is Phase 6B-2B-2 [safe development resume](campaign-recovery.md).
+Explicit dual authorization permits verified completion reuse and execution of
+never-launched pending trials only. A single immutable sibling transaction binds
+the original execution and grants a fresh bounded attempt budget. Failed,
+interrupted, unresolved, legacy-unowned and repeated attempts are rejected.
 Every child launch rechecks the unchanged monotonic deadline after durable journal
 publication and at the process boundary. Known-expired budgets authorize no child;
 this does not claim real-time scheduling under arbitrary OS descheduling.
 The journal adds crash-consistent transition publication and read-only recovery
 classification while preserving the completed R1 correctness/evidence protections
-and pilot schema v2. Actual resumption and scientific execution remain deferred.
+and pilot schema v2. Scientific execution, retries, broader recovery and resource isolation remain deferred.
 The explicit authorization supersedes earlier execution deferrals only for this
 small development harness. Phase 6B-1 plans, deterministic identities, admission
 and ELF protections remain unchanged. Every pilot result is measurement-ineligible.
