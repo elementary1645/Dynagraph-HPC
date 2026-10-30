@@ -2,23 +2,22 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-1R3 hardening of ELF alignment and load-memory
-  overlap findings N3/N4, preserving the Phase 6B-1R2 runtime/linkage and mapping
-  repairs N1/N2 and the completed Phase 6B-1R
-  cgroup ancestry, complete topology/NUMA and Unicode-path repairs, with adversarial
-  tests, fresh validation and a local commit on the existing feature branch.
-  Preserve Phase 6B-1 campaign planning and read-only admission scope.
-  The explicit Phase 6B-1 request supersedes the earlier Phase 6 deferral only
-  for this foundation. Commit the validated work on its dedicated feature branch;
-  do not push, merge or create a PR. No performance experiments are authorized.
+- Current authorized scope: Phase 6B-2A bounded deterministic development pilot
+  execution harness on feature/phase6b2-execution-harness, based on abd6413.
+  Explicit trial selection and execution opt-in are required. Implementation,
+  bounded harness tests, fresh local validation and a local commit are authorized.
+  Preserve the completed Phase 6B-1/R/R2/R3 planning, admission and ELF repairs.
+  Do not execute the full campaign, push, merge or create a PR. All pilot results
+  remain development-only and measurement-ineligible. Scientific execution,
+  analysis, visualization, inference and performance claims remain deferred.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-1R3 implementation/local verification and the authorized commit;
-  later Phase 6 execution/inference remains deferred. Preserve historical Phase 5
+- Stop after Phase 6B-2A implementation/local verification and the authorized commit;
+  Phase 6B-2B and later scientific execution/inference remain deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.

@@ -3642,3 +3642,100 @@ unauthenticated supplied excerpts, non-atomic snapshots, uncertified anonymous
 contents, unverified symbol binding/active execution, ownership/build provenance
 and execution-time stability. Later execution/inference remains deferred. Stop
 after the authorized local commit for independent review; no push, merge or PR.
+
+## Phase 6B-2A deterministic development pilot implementation
+
+Authorized base: abd641381e9df6b25ed217dd43686d4f66028b82 on
+feature/phase6b2-execution-harness, initially clean. The explicit Phase 6B-2A
+request authorizes implementation, bounded development harness verification and a
+local commit only. No push, PR, merge, full campaign or scientific experiment.
+No dependency installation, production/timing/heuristic/workload-golden changes,
+Phase 5C contract changes or workflow/default-test registration changes.
+
+Added campaign_process.py (POSIX bounded pipes/process groups) and
+campaign_pilot.py (selection, staging, correctness, v1 records/index, atomic
+publication and offline evidence verification); extended campaign.py with pilot
+and verify-pilot. Existing manifest generation/admission and artifact/full
+preflight/worker validators are reused. The new focused test_campaign_pilot.py
+covers synthetic failures and three tiny selected real-worker phase controls.
+The runbook campaign-pilot.md specifies schemas, exact bounds, preparation,
+verification, trust boundaries, unsupported cases and 6B-2B deferrals. Updated
+AGENTS, README, experimental protocol and the foundation cross-reference.
+
+The first 28-test focused run passed. Added shared trial/campaign deadline,
+environment and truncation coverage: 32 tests passed. These are correctness and
+harness controls; captured timing is never scientific measurement evidence.
+Every pilot result has measurement_eligible=false, actual team size null, and
+explicit development admission. Unsupported large workloads have unavailable
+bounded oracles and are not executed. Requested affinity is recorded separately
+from observed parent affinity; no placement or physical-core exclusivity claim.
+
+Validation commands and final outcomes are recorded below after fresh execution.
+
+### Phase 6B-2A final fresh validation
+
+Actually executed:
+
+```sh
+python3 -B tests/test_campaign_pilot.py
+python3 -B tests/test_campaign.py
+python3 -B tools/validation/test_archive.py
+python3 -B tools/validation/test_negative_diagnostics.py
+python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase6b2a-repair
+python3 -B tools/validation/ci_verify.py --mode debug --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2a-debug
+python3 -B tools/validation/ci_verify.py --mode release --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2a-release --smoke
+python3 -B tools/validation/ci_verify.py --mode sanitize --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python --output /tmp/dynagraph-phase6b2a-sanitize-unsandboxed
+```
+
+Final focused outcomes: pilot 32/32 (including real worker controls for diagnostic,
+warmup and measured selections); campaign 85/85; archive 59/59; diagnostics 3/3;
+infrastructure 17/17. Python AST parsing and git diff --check passed. Installed
+pinned analysis dependencies/Agg passed without installation. Fresh Debug,
+Release and approved outside-sandbox ASan+UBSan each built and passed 31/31 default
+CTest tests. Release smoke and all nine intended negative smoke controls passed.
+Sanitizer receipt retains ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. No hosted CI or TSan acceptance,
+race freedom or scientific performance validation is claimed.
+
+The three gate archives and SHA-256 sidecars were copied into ignored
+results/validation/phase6b2a/archives, with raw non-build evidence beside them.
+Fresh isolated Python -I -S -B verification using a copied trusted offline kit
+returned verified/passed/31 for debug-full-v1, release-smoke-v1 and
+sanitize-full-v1; Release smoke=true. All gates share source inventory
+`d4cc392dda4eafb03b8d228ce4080e3f9eaf01790ed75696635907771bf55537`.
+Implementation/test digests match implementation-sha256.json after the gates;
+only this final outcome text was appended afterward. Focused outcomes and manifest
+compatibility are recorded in results/validation/phase6b2a/summary.json.
+
+A separate successful CLI control used a copy of the fresh Debug benchmark and
+one explicitly selected measured-phase trial, followed by verify-pilot. Both
+exited 0; result measurement_eligible=false, actual team size unavailable. It is
+retained in results/validation/phase6b2a/cli-pilot. This fixture's plan intentionally
+substitutes the actual executable hash into the development example; it is not
+Release build attestation. Its deterministic execution-manifest SHA-256 is
+477c5e5cd361eded967f62a08c8b6380cf41363a9900f460f8539f664c4ecdd9.
+The result-index SHA-256 is
+f269800adf007752968ef8b219502d0c7ff89cfe91c9250bba58fdf7eca0ab45;
+that index includes nondeterministic timestamps and is not a scheduling identity.
+
+The original representative Phase 6B-1 manifest remains byte-identical to retained
+evidence: 104 trials, plan SHA-256
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24,
+manifest SHA-256
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+Protected-path comparison against abd6413 confirms unchanged algorithms, APIs,
+benchmark timing, heuristic thresholds, workload/configuration goldens, dependency
+pins, CMake/CTest registration, CI workflow, campaign plan/admission/ELF contracts
+and Phase 5C validation tooling. Historical Phase 5 evidence remains untouched.
+
+Ten intended files: AGENTS.md, README.md, campaign.py, new campaign_pilot.py and
+campaign_process.py, campaign-foundation.md, new campaign-pilot.md,
+experimental-protocol.md, this research log and new test_campaign_pilot.py.
+No unresolved validation failure. Known limits include synchronous filesystem/
+publication overhead beyond launch deadlines, inherited child affinity, no
+execution-time team/runtime/exclusivity observation, no OS memory isolation,
+trusted executable/process-group scope and unauthenticated evidence hashes.
+Scientific execution, larger workloads, placement/resource isolation, resume,
+retry, full matrices, analysis/visualization and inference remain Phase 6B-2B or
+later work requiring separate authorization. Stop after the authorized local
+commit; no push, merge or pull request.
