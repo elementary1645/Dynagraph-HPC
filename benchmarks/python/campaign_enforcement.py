@@ -1,5 +1,6 @@
 """Linux self-affinity barrier v1. Local receipts are not authenticated attestation."""
 import copy
+import errno
 import os
 from pathlib import Path
 import selectors
@@ -12,7 +13,7 @@ from campaign_contract import fields, digest, integer, load_bytes
 from campaign_provenance import cpu_array, cpu_list, process_identity, validate_cgroups
 from campaign_hardware import cgroup_ancestry
 from campaign_runtime import read_metadata, time_range
-from campaign_process import timestamp
+from campaign_process import timestamp, defer_cleanup_signals
 from workloads import canonical_json, sha256
 
 POLICY = 'linux-self-affinity-barrier-v1; development-only'
@@ -140,7 +141,7 @@ class Barrier:
     """Own pipes/descriptors until cleanup; workload release is one explicit byte."""
     def __init__(self, request, command, cwd, environment, stop):
         self.request=request;self.command=command;self.cwd=cwd;self.environment=environment
-        self.stop=stop;self.value=receipt(request);self.fds=[];self.pid=None;self.process=None
+        self.stop=stop;self.value=receipt(request);self.fds=[];self._fd_identity={};self.pid=None;self.process=None
 
     def boundary(self):
         if time.monotonic()>=self.stop:raise TimeoutError('affinity enforcement deadline expired')
@@ -148,15 +149,18 @@ class Barrier:
     def spawn(self):
         self.boundary();preflight(self.request['cpus'],self.request['binding']['workers']);self.boundary()
         self.value['lifecycle'].append('validated')
-        target=os.open(str(Path(self.cwd)/self.command[0]),os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW)
-        self.fds.append(target);self.target=target
+        with defer_cleanup_signals():
+            target=os.open(str(Path(self.cwd)/self.command[0]),os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW)
+            self.own(target);self.target=target
         if not stat.S_ISREG(os.fstat(target).st_mode):raise EnforcementError('executable must be regular')
         with os.fdopen(os.dup(target),'rb') as stream:
             raw=stream.read(64*1048576+1)
         os.lseek(target,0,os.SEEK_SET)
         if len(raw)>64*1048576 or sha256(raw)!=self.request['binding']['executable_sha256']:
             raise EnforcementError('pinned executable identity mismatch before child launch')
-        ar,aw=os.pipe();self.fds.extend((ar,aw));gr,gw=os.pipe();self.fds.extend((gr,gw))
+        with defer_cleanup_signals():
+            ar,aw=os.pipe();self.own(ar);self.own(aw)
+            gr,gw=os.pipe();self.own(gr);self.own(gw)
         self.ack=ar;self.gate=gw
         helper=Path(__file__).with_name('campaign_affinity_child.py')
         argv=[sys.executable,'-I','-S','-B',str(helper),str(aw),str(gr),str(target),
@@ -164,24 +168,27 @@ class Barrier:
               repr(self.stop),*self.command]
         self.boundary();self.value['lifecycle'].append('application_pending');self.boundary()
         self.process=subprocess.Popen(argv,cwd=self.cwd,env=self.environment,stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,
-                                 pass_fds=(aw,gr,target))
+                                     stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,
+                                     pass_fds=(aw,gr,target))
         process=self.process;self.pid=process.pid
-        for fd in (aw,gr):os.close(fd);self.fds.remove(fd)
+        for fd in (aw,gr):self.close_fd(fd)
         return process
 
     def verify_and_release(self, process):
         self.boundary();raw=bytearray();os.set_blocking(self.ack,False)
         with selectors.DefaultSelector() as sel:
             sel.register(self.ack,selectors.EVENT_READ)
-            while not raw.endswith(b'\n'):
+            while True:
                 self.boundary()
                 if not sel.select(min(0.05,max(0,self.stop-time.monotonic()))):continue
                 data=os.read(self.ack,65536)
-                if not data:raise EnforcementError('child exited before acknowledgement')
+                if not data:break
                 raw.extend(data)
                 if len(raw)>65536:raise EnforcementError('acknowledgement size limit')
-        self.boundary();a=load_bytes(bytes(raw));self.value['acknowledgement']=a
+        self.boundary();a=load_bytes(bytes(raw))
+        if bytes(raw)!=canonical_json(a):
+            raise EnforcementError('one canonical acknowledgement followed by EOF required')
+        self.value['acknowledgement']=a
         ticks=validate_ack(a,process.pid,self.request['cpus'],self.request['binding']['executable_sha256'])
         self.value['lifecycle'].append('applied');self.boundary()
         o=observe(process.pid);self.value['observation']=o
@@ -208,15 +215,44 @@ class Barrier:
         self.boundary()
         if os.write(self.gate,b'G')!=1:raise EnforcementError('workload release failed')
         self.value=candidate
-        os.close(self.gate);self.fds.remove(self.gate)
+        self.close_fd(self.gate)
 
     def fail(self, state, error):
         self.value.update(state=state,error=str(error)[:2048])
         self.value['lifecycle'].append(state)
 
+    @staticmethod
+    def fd_identity(fd):
+        info=os.fstat(fd)
+        return info.st_dev,info.st_ino,stat.S_IFMT(info.st_mode),info.st_rdev
+
+    def own(self, fd):
+        self._fd_identity[fd]=self.fd_identity(fd)
+        self.fds.append(fd)
+
+    def close_fd(self, fd):
+        # Mask handler delivery across both ownership transfer and the syscall.
+        # Never retry a close: Linux may already have released/reused its number.
+        with defer_cleanup_signals():
+            if fd not in self._fd_identity:return
+            identity=self._fd_identity.pop(fd)
+            self.fds.remove(fd)
+            try:
+                if self.fd_identity(fd)!=identity:
+                    raise OSError(errno.ESTALE,'refusing to close a reused barrier descriptor')
+                os.close(fd)
+            except OSError as error:
+                if error.errno!=errno.EBADF:raise
+
     def close(self):
-        for fd in self.fds:os.close(fd)
-        self.fds=[]
+        errors=[]
+        with defer_cleanup_signals():
+            for fd in tuple(self.fds):
+                try:self.close_fd(fd)
+                except BaseException as error:errors.append(error)
+            if errors:
+                for extra in errors[1:]:errors[0].add_note('Additional descriptor cleanup failure: '+repr(extra))
+                raise errors[0]
 
 
 def verify(value, expected, cpus, process, runtime_snapshot=None):

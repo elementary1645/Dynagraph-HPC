@@ -60,3 +60,47 @@ python3 -B tests/test_campaign_enforcement.py
 Fixtures use synthetic visible cgroups with real self-affinity and process identity
 syscalls; a separate native cgroup smoke runs where supported. No scientific
 campaign, heuristic/timing change or performance claim is part of this runbook.
+
+## R1: signal-safe cleanup and complete acknowledgement framing
+
+The acceptance audit found two defects in 1450d47. A SIGTERM between closing a
+release descriptor and untracking its integer caused an EBADF during subsequent
+cleanup; barrier cleanup ran before kill/reap and could leave a workload alive.
+The reader also accepted the first newline without waiting for EOF, allowing a
+delayed contradictory second message to be discarded from a completed pilot.
+
+R1 defers SIGINT/SIGTERM across descriptor acquisition/ownership transitions and
+kill/reap/close, then delivers the original pending interruption. Descriptors are
+untracked before a single close attempt; repeated cleanup is idempotent. EBADF
+means the descriptor is already closed. A changed fstat identity is reported and
+the reused descriptor is left untouched. Other close errors are reported, never
+blindly retried: the kernel may already have released the integer. This ownership
+model assumes externally serialized descriptor access; it cannot authenticate
+arbitrary concurrent same-process descriptor manipulation.
+
+Process-group SIGKILL and a bounded two-second wait run before barrier closure or
+receipt sealing. Every remaining owned descriptor is attempted even if another
+close fails. Cleanup failures remain visible; an original exception/interruption
+is preserved with the secondary failure chained. A pending termination delivered
+at mask restoration cannot bypass reaping. Kernel-level uninterruptible execution
+or failed OS termination cannot be certified away; wait failures are errors and
+cannot produce a successful completion. SIGKILL/abrupt parent death retains the
+existing post-GO possible-orphan limitation; pre-GO pipe EOF never authorizes work.
+
+The acknowledgement reader now waits for EOF within the same monotonic process
+budget, with a strict 65,536-byte cap. Exactly one canonical JSON message plus its
+single newline is required. Duplicate messages, delayed failure messages, extra
+whitespace, trailing bytes, incomplete JSON and oversized streams reject. A valid
+prefix with its writer held open does not authorize GO; deadline expiry kills the
+process group. The existing child already closes its acknowledgement writer before
+waiting for GO; its protocol and receipt schema do not need a version change.
+Only explicit child control descriptors are inherited, and parent-side writer
+copies are closed before reading. An unexpectedly inherited writer can delay EOF
+only until the deadline, never grant authorization.
+
+A receipt may retain truthful verified/released facts if interruption occurred
+just after GO. The process outcome must still be interrupted/failed, with no
+completed trial or unsafe resume reuse. Pre-GO invalid streams produce neither GO
+nor a verified-success receipt. All measurement/scientific-authority flags remain
+false. No admission promotion, retry, team instrumentation or isolation is added.
+See the research log for exact before/after independent fixtures and final results.

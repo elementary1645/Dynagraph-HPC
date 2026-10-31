@@ -4719,3 +4719,126 @@ placement controls, workload-region instrumentation, isolation and scientific
 execution/admission remain deferred. TSan acceptance remains unmet with its
 historical LIKELY TOOL/RUNTIME LIMITATION classification unchanged. Stop after
 the authorized local commit/report; no push, PR or merge.
+
+## Phase 6B-2B-3B-2-R1 — IPC and process-cleanup remediation
+
+Targeted remediation authorized at clean branch feature/phase6b2b3b2-resource-enforcement,
+HEAD 1450d471ae169cf463a46a9002ea539d5241554e. Read AGENTS.md, enforcement/child,
+process, pilot/resume, tests and runbook, and reviewed the three independent audit
+fixtures. Captured all three baseline runs before editing. No delegation or new
+dependencies. Only the two reproduced root causes and their tests/docs are in scope.
+
+Baseline signal-close-probe.py: real SIGTERM after release-fd close produced EBADF,
+left the workload alive after 1.2 seconds against a 1-second timeout, and allowed
+a delayed marker. Baseline duplicate-ack-probe.py: exited/verified/released with a
+marker despite a delayed contradictory second acknowledgement. Baseline
+duplicate-pilot-probe.py: complete pilot, complete offline verification, marker
+count 1. Exact scripts, stdout and outcomes are retained under
+/tmp/phase6b2b3b2-r1 (baseline-*.log); original audit fixture sources are unchanged.
+
+R1 masks handler delivery over descriptor ownership transitions and kill/reap,
+untracks before one close attempt, tolerates already-closed descriptors, and
+refuses to close an integer with a mismatching descriptor identity. It continues
+closing other owned descriptors and reports unrelated failures without retrying
+potentially reused integers. Process cleanup precedes barrier cleanup/sealing and
+uses wait(timeout=2). The primary error/interruption is preserved with secondary
+cleanup failure chained. The EOF reader retains the monotonic deadline and 64 KiB
+cap and requires one canonical JSON acknowledgement/newline, rejecting all trailing
+content. The existing child already closes its writer before GO. No wire/evidence
+schema, policy flag, pilot/resume/journal semantics or scientific flag is changed.
+
+After remediation the original signal fixture reports error=null, SIGTERM sent,
+no live workload and no delayed marker. The two original duplicate fixtures reject
+the stream but their old reporting statements raise TypeError when they index the
+now-null acknowledgement. Reporting-only temporary copies preserve the fault and
+marker behavior and handle that null: acknowledgement result capture-error/
+rejected/released=false/marker=false; full pilot failed, offline execution failed,
+marker count 0 and measurement_eligible=false. Original script failures and adapted
+outputs are both retained; an exit code alone was not used to claim acceptance.
+
+Initial expanded tests exposed fixture errors: cleanup-stage termination was
+scheduled after the fixture had naturally written its marker, a test attempted to
+bind a mocked method, and the held-writer delay did not exceed the pilot deadline.
+A later exit fixture also raced a valid EOF against imminent child exit; it now
+waits for actual child termination before the parent consumes EOF. Corrected
+fixture setup only: short execution budget, explicit owned-fd cleanup, deterministic
+child exit, and held-writer durations beyond the bounded pilot budget. All initial logs remain
+retained. A final signal-inheritance check also found that masking Popen passed
+the temporary SIGINT/SIGTERM mask into the child. Restricted deferral to descriptor
+ownership and teardown; a new test verifies the original child/parent mask.
+One preliminary signal-stage run timed out before reaching its injected callback
+under concurrent validation load. Replaced that short-startup-budget fixture with
+a controlled callback transition, lengthened the delayed-marker window, and added
+owned-child fallback cleanup to fixtures. Final new-suite, regression, native,
+archive and preservation results
+follow after frozen-source verification. No push, PR or merge is authorized.
+
+Final local R1 acceptance (2026-10-31):
+
+- Enforcement suite: 45/45. The stabilized fixture suite passed twice in
+  enforcement-deterministic-{first,second}.log. The full Python matrix passed:
+  enforcement 45, resources 28, runtime 20, resume 36, journal 82, pilot 47,
+  campaign 85, archive 59, diagnostics 3, infrastructure 17 (422 total).
+  Production implementation hashes match the full-matrix snapshot; the later
+  fixture-only stabilization was independently rerun. Exact Python argv and exit
+  codes are retained in final-tests/results.json, with all initial failures and
+  reruns preserved. Tests use bounded owned processes and fallback reaping even
+  on assertion failures. No new tests were added to the pinned CTest registration.
+- New coverage includes the exact real-SIGTERM close/untrack boundary, repeated
+  close, already-closed and reused descriptors, no closure of a signal handler's
+  reused fd, unrelated close failures, bounded wait arguments, receipt-seal failure,
+  original exception/interruption chaining and SIGTERM at ACK/verification/pre-GO/
+  execution/cleanup stages. Child/parent signal masks are preserved. All 13 invalid
+  IPC variants are exercised at capture and pilot/recovery/resume gates; no GO,
+  verified-success receipt, completed trial or unsafe reuse is accepted. A valid
+  canonical message delivered in partial writes followed by EOF remains valid.
+- All three independent original fixtures were rerun against the final code.
+  Signal fixture exit 0: no error, no live workload and no delayed marker after
+  1.2 seconds. Original duplicate fixtures exit 1 only in their successful-ACK
+  reporting assumption (TypeError on null); reporting-only adapted copies exit 0
+  and prove rejected/released=false/marker=false and failed pilot/offline status,
+  zero trial markers and false eligibility. Original fixture source SHA-256 values
+  were checked unchanged; final-reproducer-*.log and reproducer-results.json retain
+  actual exit codes and outputs. The adapters change reporting/output locations,
+  not the producer fault, resource checks or workload.
+- Fresh sequential ci_verify.py debug, release (--smoke) and sanitize profiles
+  using the existing .venv-analysis/bin/python: 31/31 CTest each; release smoke
+  and negative controls passed. Exact commands are in stable-native-results.json;
+  outputs /tmp/phase6b2b3b2-r1/stable-MODE. No dependency installation. Runs outside
+  the sandbox support existing socket fixtures and LeakSanitizer. Sanitizer options
+  detect_leaks=1:halt_on_error=1 and halt_on_error=1:print_stacktrace=1 were recorded.
+  All three stable profiles captured unchanged source inventory
+  e07905ef50e5e7bfe7eb2269fb52151fdfd9e3154cb2aa045014a568b87c60eb.
+  Earlier profiles and source-inventory rejection during the inheritance correction
+  are diagnostic runs, not the final acceptance snapshot. Only this outcome entry
+  postdates the stable source snapshots.
+- Three new portable archives/sidecars were reopened by the trusted verifier and
+  independently checked for archive SHA-256, bounded regular members, every member
+  size/digest and final implementation/test bytes: debug 195 payloads, release 695,
+  sanitize 195. The six historical 3B-1/3B-2 archives and sidecars also verify.
+  Evidence, exact independent scripts, initial failures, adapters and final receipts
+  are retained under ignored results/validation/phase6b2b3b2-r1; builds stay in /tmp.
+- Historical inventories (9,796, 9,654 and 911 entries, overlapping) plus the new
+  pre-edit 98-file recent-phase map have zero mismatches. Original 104-trial
+  manifest remains byte-identical. Plan identity SHA-256:
+  f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+  manifest SHA-256:
+  f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+- Python AST parsing and git diff --check passed. Six intended files: AGENTS.md,
+  campaign_enforcement.py, campaign_process.py, test_campaign_enforcement.py,
+  resource-enforcement.md and this log. Child launcher, resource/runtime schemas,
+  pilot/resume/journal code, algorithms, timing, goldens, CMake/CI and dependencies
+  are unchanged. No unresolved local validation failure remains. No hosted-CI or
+  race-freedom claim is made; the TSan gate remains unmet with its historical
+  LIKELY TOOL/RUNTIME LIMITATION classification preserved.
+
+R1 closes both acceptance findings without granting scientific authority. A truthful
+pre-exec verified/released fact survives a later interruption, while the process
+and journal gates prohibit successful completion. EOF is a pre-GO requirement for
+new executions; existing v1 receipts and immutable historical evidence remain
+readable. Kernel termination failures remain explicit errors; abrupt death after
+GO retains the existing possible-orphan limitation. Local receipts do not establish
+external authenticity, stable placement, exclusive ownership, uncontended execution,
+actual OpenMP teams or scientific eligibility. No retries or scientific campaign
+execution were introduced. Stop after the authorized local commit/report; no push,
+PR, merge or later phase execution.

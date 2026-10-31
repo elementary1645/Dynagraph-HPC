@@ -5,6 +5,7 @@ import os
 import selectors
 import signal
 import subprocess
+import sys
 import time
 
 
@@ -22,6 +23,24 @@ def termination_as_interrupt():
         yield
     finally:
         signal.signal(signal.SIGTERM, previous)
+
+
+@contextmanager
+def defer_cleanup_signals():
+    """Defer SIGINT/SIGTERM over ownership transitions and kill/reap, not execution.
+
+    A pending signal is delivered on mask restoration; callers still handle the
+    original interruption after resources are settled. Linux enforcement requires
+    pthread_sigmask; default non-Linux capture retains a portable cleanup path.
+    """
+    previous = None
+    if hasattr(signal, 'pthread_sigmask'):
+        previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+    try:
+        yield
+    finally:
+        if previous is not None:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 def timestamp():
@@ -45,6 +64,7 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
     result = dict(command=command, start=started, end=None, returncode=None,
                   signal=None, reason='exited', truncated=False)
     process = None
+    interruption = None
     barrier = None
     if enforcement is not None:
         from campaign_enforcement import Barrier
@@ -92,7 +112,8 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
                         break
                 if result['reason'] == 'output-limit':
                     break
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as error:
+        interruption = error
         result['reason'] = 'interrupted'
         if barrier is not None and not barrier.value['released']:
             barrier.fail('interrupted', 'termination during affinity enforcement')
@@ -103,12 +124,15 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
         if barrier is not None and not barrier.value['released']:barrier.fail('indeterminate', error)
     except ValueError as error:
         if barrier is None:raise
+        process = process or barrier.process
         result['reason'] = 'capture-error' if process is not None else 'launch-error'
         if not barrier.value['released']:barrier.fail('rejected', error)
         diagnostic = str(error).encode('utf-8')
         buffers['stderr'].extend(diagnostic[:output_limit])
         result['truncated'] = len(diagnostic)>output_limit
     except OSError as error:
+        if barrier is not None:
+            process = process or barrier.process
         result['reason'] = 'launch-error' if process is None else 'capture-error'
         if barrier is not None and not barrier.value['released']:
             barrier.fail('indeterminate', error)
@@ -119,23 +143,54 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
         if len(diagnostic) > remaining:
             result['truncated'] = True
     finally:
-        if barrier is not None:
-            process = process or barrier.process
-            barrier.close()
-            from campaign_enforcement import seal
-            result['_enforcement'] = seal(barrier.value)
-        if process is not None:
+        primary = sys.exc_info()[1]
+        cleanup_errors = []
+        def attempt(action):
+            try:
+                action()
+            except BaseException as error:
+                cleanup_errors.append(error)
+        def terminate_group():
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            process.wait()
-            result['returncode'] = process.returncode
-            if process.returncode < 0:
-                result['signal'] = -process.returncode
-            for name in buffers:
-                getattr(process, name).close()
+        try:
+            with defer_cleanup_signals():
+                if barrier is not None:
+                    process = process or barrier.process
+                # Close/seal failures cannot bypass termination or reaping.
+                if process is not None:
+                    attempt(terminate_group)
+                    attempt(lambda: process.wait(timeout=2))
+                    result['returncode'] = process.returncode
+                    if process.returncode is not None and process.returncode < 0:
+                        result['signal'] = -process.returncode
+                    for name in buffers:
+                        attempt(getattr(process, name).close)
+                if barrier is not None:
+                    attempt(barrier.close)
+        except KeyboardInterrupt as error:
+            # Pending SIGTERM/SIGINT was delivered only after kill/reap/close.
+            interruption = error
+            result['reason'] = 'interrupted'
+            if barrier is not None and not barrier.value['released'] and barrier.value['state']=='requested':
+                barrier.fail('interrupted', error)
+        if barrier is not None:
+            from campaign_enforcement import seal
+            def record_enforcement():
+                result['_enforcement'] = seal(barrier.value)
+            attempt(record_enforcement)
         result['end'] = timestamp()
+        if cleanup_errors:
+            first = cleanup_errors[0]
+            for extra in cleanup_errors[1:]:
+                first.add_note('Additional cleanup failure: '+repr(extra))
+            if primary is not None:
+                raise primary from first
+            if interruption is not None:
+                raise interruption from first
+            raise first
     if result['reason'] == 'exited' and result['returncode'] != 0:
         result['reason'] = 'signal' if result['signal'] else 'nonzero-exit'
     return result, {name: bytes(data) for name, data in buffers.items()}
