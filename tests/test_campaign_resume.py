@@ -331,5 +331,22 @@ class ResumeTests(unittest.TestCase):
         with patch('subprocess.Popen',side_effect=AssertionError('executed')),patch('campaign_resume.put',side_effect=AssertionError('write')):inspect_resume(self.attempt)
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()})
 
+    def test_runtime_origin_reuse_and_new_attempt(self):
+        self.initial();before=self.snapshot()
+        original_record=json.loads((self.out/self.ids[0]/'record.json').read_bytes())
+        original_observation=json.loads((self.out/self.ids[0]/'0-verify.runtime.json').read_bytes())
+        result=self.resume()
+        self.assertEqual(before,self.snapshot())
+        self.assertEqual(original_observation['origin'],dict(kind='original',attempt_id=None))
+        self.assertFalse(original_record['measurement_eligible'])
+        for tid in self.ids[1:]:
+            observation=json.loads((self.attempt/'pilot'/tid/'0-verify.runtime.json').read_bytes())
+            self.assertEqual(observation['origin'],dict(kind='resume',attempt_id=result['attempt_id']))
+            self.assertNotEqual(observation['execution_id'],original_observation['execution_id'])
+            self.assertFalse(observation['measurement_eligible'])
+        target=self.attempt/'pilot'/self.ids[1]/'0-verify.runtime.json'
+        observation['schema_version']=99;target.write_bytes(canonical_json(observation))
+        with self.assertRaises(ValueError):inspect_resume(self.attempt)
+
 
 if __name__=='__main__':unittest.main(verbosity=2)

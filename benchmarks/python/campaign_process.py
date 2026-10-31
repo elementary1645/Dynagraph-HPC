@@ -32,7 +32,7 @@ class LaunchDeadlineExpired(Exception):
     """No process was created: the launch-layer deadline check expired."""
 
 
-def capture(command, cwd, environment, timeout, output_limit, *, deadline=None):
+def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, runtime_observer=None):
     """Bound each stream in memory and kill the process group on every exit path.
 
     Timeout includes draining inherited pipes. Children retaining pipes cannot
@@ -58,7 +58,15 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None):
                 pipe = getattr(process, name)
                 os.set_blocking(pipe.fileno(), False)
                 selector.register(pipe, selectors.EVENT_READ, name)
-            while selector.get_map() or process.poll() is None:
+            if runtime_observer is not None:
+                try:
+                    result['_runtime_snapshot'] = runtime_observer(process.pid)
+                except (ValueError, OSError, UnicodeError) as error:
+                    result['reason'] = 'capture-error'
+                    diagnostic = ('runtime observation rejected: '+str(error)).encode('utf-8')
+                    buffers['stderr'].extend(diagnostic[:output_limit])
+                    result['truncated'] = len(diagnostic) > output_limit
+            while result['reason'] == 'exited' and (selector.get_map() or process.poll() is None):
                 remaining = stop - time.monotonic()
                 if remaining <= 0:
                     result['reason'] = 'timeout'
