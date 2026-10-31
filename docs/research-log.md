@@ -4513,3 +4513,113 @@ or race-freedom claim is made; the unmet TSan acceptance gate and its historical
 LIKELY TOOL/RUNTIME LIMITATION classification remain. Later instrumentation,
 scientific execution/inference, retries and isolation remain deferred. Stop after
 the authorized local commit/report; no push, PR or merge.
+
+## Phase 6B-2B-3B-1 — resource-control contracts
+
+Explicit contract-first implementation/local-commit authorization received on
+feature/phase6b2b3b-resource-controls at expected base
+894cfba9c49fb94ca60494c6b93d24cf17f5be53, with a clean index and working tree.
+Read AGENTS.md and inspected campaign v1, pilot v2, bounded process execution,
+runtime v1 (including the accepted nested-state R1), hardware/topology validation,
+journal v1 and safe-resume v1. Updated the local scope gate for this phase.
+
+Selected separate v1 controls/receipt/admission/envelope schemas rather than
+changing execution formats or mutating old evidence. New campaign_resources.py
+provides bounded pure validators and deterministic assessment; inspect-resources
+and verify-resources are read-only campaign CLI branches. Existing gates verify
+the original trial before context derivation. Context is rebuilt from fixed
+evidence files; supplied sidecar hashes cannot substitute different observations.
+Before/after inventories reject ordinary inspection-time evidence mutation.
+No process control, affinity syscall, cgroup write, privilege change, benchmark
+launch, retry or scientific certification is introduced by these interfaces.
+
+Requests, optional supplied application receipts and effective observations are
+separate. Applied claims require matching bounded receipts, process identity,
+CPU arrays, errno/outcome and temporal consistency; no receipt is fabricated or
+claimed authenticated. Online CPUs, visible quota/cpuset, physical core/SMT and
+optional NUMA retain source/scope/time limitations. Worker teams and independent
+exclusivity/contention/isolation facts remain unavailable and cannot be invented.
+
+Known required failures produce rejected; missing required evidence produces
+indeterminate; passing functional/selected controls produce development_only.
+Eligible is reserved but explicitly rejected in v1. Every decision remains
+measurement-ineligible, scientific-performance-disallowed and execution-unauthorized.
+Reason codes carry local evidence pointers/digests. Immutable assessments allow
+only initial or exactly identical reverification, with no automatic promotion.
+Details, reason registry and read-only commands are in experimental-protocol.md.
+
+Initial deterministic resource tests passed (26 methods), followed by a new
+inspection-mutation boundary control. Fixtures use synthetic layouts and existing
+bounded functional pilot helpers, not this Codespace's CPU layout. Integration
+covers offline verification, rehashed sidecars, original/resume bindings, legacy
+v2 evidence, pending/no-receipt rejection and bounded special-file input.
+Fresh full regression/build/archive/preservation outcomes follow after the stable
+source gates. Production algorithms, timing, heuristics, workload/configuration
+bytes, process deadlines, journal/resume semantics and dependency pins are unchanged.
+No delegation or dependency installation; no push, PR or merge. Later enforcement,
+instrumentation and scientific execution remain deferred.
+
+Final contract review identified a completion boundary needing explicit modeling:
+a successful record without a committed journal terminal must not become a
+development-only completion. Context now carries nullable trial_success based on
+the recovery classification; indeterminate stays indeterminate with reason
+TRIAL_COMPLETION_UNAVAILABLE. A regression removes the terminal from a valid
+completed-prefix fixture and verifies read-only indeterminate assessment.
+
+Final fresh verification for Phase 6B-2B-3B-1 (2026-10-31):
+
+- Resource suite: 28/28 in `resources-final-stable.log`. The initial full driver
+  recorded 27/27 before the completion-boundary control was added; separate fresh
+  stable runs passed all 28. All native profiles captured the final implementation
+  and 28-test source. Runtime: 20/20; safe-resume: 36/36; journal: 82/82; pilot:
+  47/47; campaign: 85/85; archive: 59/59; diagnostic controls: 3/3; infrastructure:
+  17/17 (`/tmp/phase6b2b3b1-repair`). Exact argv and raw outputs are retained in
+  ignored `results/validation/phase6b2b3b1`. These are direct Python suites, not
+  additions to the pinned CTest registration set.
+- Sequential fresh `tools/validation/ci_verify.py` debug, release (`--smoke`) and
+  sanitize profiles, using the existing .venv-analysis interpreter and outputs
+  `/tmp/phase6b2b3b1-MODE`: 31/31 CTest each. Release smoke and all negative
+  controls passed. Runs used an environment outside the sandbox for existing
+  Unix-socket fixtures and LeakSanitizer; ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
+  and UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 are in the successful receipt.
+  No dependencies installed. Each profile reports source unchanged and inventory
+  SHA-256 24f19c8c1a037316b5f79530106c1212f5dc126fc09ca41100a400c1ed307d8c.
+- All three portable archives and sidecars were copied to the ignored evidence
+  directory and independently reopened by the trusted verifier. A separate bounded
+  standard-library checker independently checked sidecar SHA-256 and every member
+  size/digest: debug-full-v1 191 payload files, release-smoke-v1 691,
+  sanitize-full-v1 191, each plus its archive manifest. Archived resource module,
+  CLI and tests match final implementation bytes. Only this final outcome entry
+  postdates the stable source snapshots.
+- A read-only CLI demo derived a development_only assessment from retained pilot
+  evidence and independently verified its sidecar. Scientific-purpose assessment
+  was indeterminate. Both have all eligibility/authority flags false. No archived
+  runner or scientific workload executed for this demo, and original evidence was
+  not rewritten. Integration controls separately preserve original bytes while
+  verifying resumed/legacy evidence, semantic rehash rejection, receipt failures,
+  premature eligible claims, immutable transitions and indeterminate completion.
+- The pre-edit 9,796-file historical snapshot and older 9,654-/911-entry maps have
+  zero mismatches (overlapping maps, not additive counts). Original 104-trial
+  expansion remains byte-identical: plan SHA-256
+  f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+  manifest SHA-256 f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+- Parsed all 63 tracked/new Python sources; `git diff --check` passed. Six intended
+  files: AGENTS.md, campaign.py, new campaign_resources.py and
+  test_campaign_resources.py, experimental-protocol.md and this research log.
+  Protected production, configuration, timing, runtime R1, process, journal, pilot
+  and resume files are byte-identical to the base. No unresolved local validation
+  failure remains. These are local checks, not hosted-CI results.
+
+All new JSON uses the existing 1 MiB/depth-32/node-50,000 metadata cap; CPU arrays
+are bounded nonempty sorted unique integer sets, with existing CPU-range and
+cgroup ancestry limits. Supporting sidecar pointers are local data references,
+not executable paths or arbitrary external dereferences. Supplied application
+receipts are consistency-checked claims, not trusted syscall attestation. Absent
+application evidence never becomes proof of enforcement. Physical isolation,
+stable placement, uncontended execution, worker teams and scientific eligibility
+remain unproven. No privileged or nonprivileged resource manipulation is added.
+TSan acceptance remains unmet with its historical LIKELY TOOL/RUNTIME LIMITATION
+classification preserved. Phase 6B-2B-3B-2 enforcement lifecycle/receipt production,
+stronger independent ownership controls and separate workload instrumentation
+remain deferred, as do scientific execution/inference, retries and tuning. Stop
+after the authorized local commit/report; no push, PR or merge.

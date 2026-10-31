@@ -37,9 +37,28 @@ def main(argv=None):
     resume.add_argument('--authorize-resume', action='store_true')
     resume_check = sub.add_parser('inspect-resume', allow_abbrev=False)
     resume_check.add_argument('--output', required=True, type=Path)
+    for name in ('inspect-resources','verify-resources'):
+        resources = sub.add_parser(name, allow_abbrev=False)
+        resources.add_argument('--output', required=True, type=Path)
+        resources.add_argument('--trial-id', required=True)
+        resources.add_argument('--process-index', type=int, default=0)
+        if name=='inspect-resources':
+            resources.add_argument('--purpose', choices=('development','scientific'), default='development')
+        else:
+            resources.add_argument('--evidence', required=True, type=Path)
+            resources.add_argument('--previous', type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command in ('resume-pilot', 'inspect-resume'):
+        if args.command in ('inspect-resources','verify-resources'):
+            from campaign_resources import resource_context, bundle, verify_bundle
+            from campaign_pilot import read_json as evidence_json
+            context = resource_context(args.output,args.trial_id,args.process_index)
+            if args.command=='inspect-resources':
+                result = bundle(context,args.purpose)
+            else:
+                result = verify_bundle(evidence_json(args.evidence),context,
+                                       evidence_json(args.previous) if args.previous else None)
+        elif args.command in ('resume-pilot', 'inspect-resume'):
             from campaign_resume import resume_pilot, inspect_resume
             if args.command == 'inspect-resume':
                 result = inspect_resume(args.output)
