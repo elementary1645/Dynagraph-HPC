@@ -4623,3 +4623,99 @@ classification preserved. Phase 6B-2B-3B-2 enforcement lifecycle/receipt product
 stronger independent ownership controls and separate workload instrumentation
 remain deferred, as do scientific execution/inference, retries and tuning. Stop
 after the authorized local commit/report; no push, PR or merge.
+
+## Phase 6B-2B-3B-2 — affinity enforcement and process-bound receipts
+
+Implementation authorized at clean branch feature/phase6b2b3b2-resource-enforcement,
+base 7a95b9d3bc5691e83742a6a607fa72898cd18a15. Read repository instructions and
+reviewed resource v1, runtime v1, bounded process execution, pilot v2, journal v1,
+resume v1, topology/cgroup validators and protocol before edits. Updated the scope
+gate under the user's explicit authorization; no delegation or dependencies.
+
+Implemented explicit unprivileged Linux child self-affinity, a private acknowledgement
+and GO barrier, descriptor-pinned executable checks and independent parent checks
+of child identity/affinity/online/cgroup quota/cpuset. All enforcement is before
+benchmark exec, within existing monotonic process/attempt deadlines and cleanup.
+New affinity-enforcement v1 receipts bind original/resume execution and attempt,
+actual child acknowledgement, independent observation, release and canonical digest.
+Pilot/runtime/journal schema versions are retained; opt-in policy is bound through
+the execution manifest. Explicit enforced resume uses a separately validated v2
+header; legacy resume v1 remains unchanged. Originals and reused trials stay
+immutable. Scientific flags remain false; no ownership or worker-team claims.
+
+Initial bounded implementation tests exposed a test-fixture allocation mismatch,
+a resume context-variable integration error, a default-resume call-signature
+compatibility error and an omitted boundary check. These
+were corrected before stable verification. Early new-suite runs are retained in
+/tmp/phase6b2b3b2, including failures; they are not final acceptance results.
+Final regression/native/archive/preservation receipts and limitations follow below.
+No push, PR or merge; resource isolation, scientific execution/inference, trusted
+external attestation, worker-region instrumentation and automatic retries deferred.
+
+Final local acceptance for Phase 6B-2B-3B-2 (2026-10-31):
+
+- New enforcement suite: 28/28, including native self-affinity and native cgroup
+  smoke, failed syscalls, PID/start/executable mismatch, changed CPU/cgroup facts,
+  child exit, every barrier deadline, SIGTERM, actual parent-crash EOF, descriptor
+  cleanup, rehashed contradictions, absent-child forged success, strict boolean
+  opt-in before I/O, enforced pilot/resume and no duplicate execution. Initial
+  attempts also identified an original-attempt binding omission and truthy flag
+  coercion; both were corrected and covered before the final gate. Original
+  receipts now have non-null attempt IDs derived from execution and directory
+  ownership, while resumed receipts use their authorized resume attempt ID.
+- Final direct Python suites, all passed: enforcement 28, resources 28, runtime 20,
+  resume 36, journal 82, pilot 47, campaign 85, archive 59, diagnostics 3 and
+  infrastructure 17 (405 total). Commands are `python3 -B tests/test_campaign_*.py`
+  for the seven campaign suites and `python3 -B tools/validation/test_archive.py`,
+  `test_negative_diagnostics.py`, `test_repair.py --output /tmp/phase6b2b3b2/gate-tests/repair`.
+  Exact argv/exit codes and raw logs are retained; the new suite follows existing
+  direct campaign testing conventions, with no change to pinned CTest registration.
+- Fresh sequential `tools/validation/ci_verify.py --python .venv-analysis/bin/python`
+  debug, release (`--smoke`) and sanitize profiles: 31/31 CTest each; release smoke
+  and negative controls passed. Outputs are `/tmp/phase6b2b3b2/gate-MODE`, with
+  exact absolute argv in gate-native-results.json. The existing interpreter was
+  used without dependency installation. Runs outside the sandbox support socket
+  fixtures and LeakSanitizer. Sanitizers used detect_leaks=1:halt_on_error=1 and
+  UBSan halt_on_error=1:print_stacktrace=1. All final profiles report unchanged
+  source inventory cbc1b6e6f07169a386438eb316646bffa0ce78fd2b01cd55a650c1d87b818dd1.
+- Earlier native runs that overlapped review corrections were rejected by source
+  inventory guards even though CTest passed. They are retained as non-acceptance
+  diagnostics, not represented as successful final profiles. The final gate uses
+  frozen implementation bytes. Only this final outcome entry postdates snapshots.
+- All three new portable archives/sidecars were independently checked for archive
+  SHA-256, bounded regular members, every member size/digest and final implementation
+  byte identity, then reopened by the trusted verifier. Historical debug/release/
+  sanitize archives and sidecars also verify. Evidence is retained under ignored
+  results/validation/phase6b2b3b2; build products remain outside Git.
+- A separate real CLI opt-in pilot used actual host-visible cgroups and affinity,
+  produced one verified process-bound receipt, and passed offline verification
+  without mutating pilot bytes. It executed one bounded diagnostic development
+  trial, not a scientific campaign. Most deterministic failure fixtures use
+  synthetic visible cgroups with real kernel affinity/process identity, so their
+  acceptance does not depend on a specific Codespace topology or quota.
+- Historical inventories of 9,796, 9,654 and 911 entries have zero mismatches
+  (overlapping maps). Original 104-trial manifest bytes are unchanged. Canonical
+  plan identity f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+  manifest SHA-256 f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+  Production sources/headers/apps, configurations/workload goldens, build/CI,
+  runtime provenance and journal implementation are byte-identical to the base.
+- All 66 Python sources parsed; git diff --check passed. Eleven intended files:
+  AGENTS.md; campaign.py, campaign_process.py, campaign_pilot.py, campaign_resume.py;
+  new campaign_enforcement.py and campaign_affinity_child.py; new enforcement tests;
+  experimental-protocol.md, this log and new resource-enforcement.md. No unresolved
+  local validation failure remains. These are local checks, not hosted-CI results.
+
+Pilot v2, journal v1 and runtime v1 remain intact; default resume v1 is preserved.
+Enforced resume v2 binds renewed authorization, with immutable original evidence,
+per-attempt new receipts, permanent reservations and no retry. Legacy resource
+assessment v1 remains conservative and does not convert new receipts into
+scientific admission. Receipt consistency is not external authentication; trusted
+local interpreter/libraries/files remain assumptions. A hostile same-UID writer
+can still change bytes or placement after final checks. Pre-exec leader affinity
+is not stable worker placement, actual OpenMP teams, exclusive ownership,
+uncontended execution or resource isolation. Hidden host constraints remain
+unverified; all scientific eligibility/authority flags are false. Continuous
+placement controls, workload-region instrumentation, isolation and scientific
+execution/admission remain deferred. TSan acceptance remains unmet with its
+historical LIKELY TOOL/RUNTIME LIMITATION classification unchanged. Stop after
+the authorized local commit/report; no push, PR or merge.

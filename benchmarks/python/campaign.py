@@ -23,6 +23,7 @@ def main(argv=None):
         pilot.add_argument('--'+name, required=True, type=Path)
     pilot.add_argument('--trial-id', action='append', required=True)
     pilot.add_argument('--execute-development', action='store_true')
+    pilot.add_argument('--enforce-affinity', action='store_true')
     pilot.add_argument('--max-trials', type=int, default=1)
     pilot.add_argument('--wall-seconds', type=int, default=60)
     pilot.add_argument('--timeout', type=int, default=10)
@@ -35,6 +36,7 @@ def main(argv=None):
     resume.add_argument('--output', required=True, type=Path)
     resume.add_argument('--execute-development', action='store_true')
     resume.add_argument('--authorize-resume', action='store_true')
+    resume.add_argument('--enforce-affinity', action='store_true')
     resume_check = sub.add_parser('inspect-resume', allow_abbrev=False)
     resume_check.add_argument('--output', required=True, type=Path)
     for name in ('inspect-resources','verify-resources'):
@@ -66,7 +68,8 @@ def main(argv=None):
                 from campaign_process import termination_as_interrupt
                 with termination_as_interrupt():
                     result = resume_pilot(args.output, execute=args.execute_development,
-                                          authorize=args.authorize_resume)
+                                          authorize=args.authorize_resume,
+                                          **(dict(enforce_affinity=True) if args.enforce_affinity else {}))
         elif args.command == 'inspect-recovery':
             from campaign_journal import inspect_recovery
             result = inspect_recovery(args.output)
@@ -80,7 +83,8 @@ def main(argv=None):
                     result = run_pilot(validate_plan(pilot_json(args.plan)), pilot_json(args.manifest),
                         args.root, args.output, args.trial_id, execute=args.execute_development,
                         max_trials=args.max_trials, wall_seconds=args.wall_seconds,
-                        timeout=args.timeout, output_limit=args.output_limit)
+                        timeout=args.timeout, output_limit=args.output_limit,
+                        **(dict(enforce_affinity=True) if args.enforce_affinity else {}))
         elif args.command == 'inspect':
             if args.executable is not None and not args.executable.is_file():
                 raise ValueError('inspected executable must be an existing file')

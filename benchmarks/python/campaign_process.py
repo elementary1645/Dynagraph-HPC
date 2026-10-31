@@ -32,7 +32,7 @@ class LaunchDeadlineExpired(Exception):
     """No process was created: the launch-layer deadline check expired."""
 
 
-def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, runtime_observer=None):
+def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, runtime_observer=None, enforcement=None):
     """Bound each stream in memory and kill the process group on every exit path.
 
     Timeout includes draining inherited pipes. Children retaining pipes cannot
@@ -45,15 +45,23 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
     result = dict(command=command, start=started, end=None, returncode=None,
                   signal=None, reason='exited', truncated=False)
     process = None
+    barrier = None
+    if enforcement is not None:
+        from campaign_enforcement import Barrier
+        barrier = Barrier(enforcement, command, cwd, environment, stop)
     try:
         with selectors.DefaultSelector() as selector:
             # Setup may consume the caller's remaining budget. Do no further
             # journal/file I/O after this check and before process creation.
             if time.monotonic() >= stop:
                 raise LaunchDeadlineExpired('process launch deadline expired')
-            process = subprocess.Popen(command, cwd=cwd, env=environment,
-                                       stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, start_new_session=True)
+            if barrier is None:
+                process = subprocess.Popen(command, cwd=cwd, env=environment,
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, start_new_session=True)
+            else:
+                process = barrier.spawn()
+                barrier.verify_and_release(process)
             for name in buffers:
                 pipe = getattr(process, name)
                 os.set_blocking(pipe.fileno(), False)
@@ -86,8 +94,24 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
                     break
     except KeyboardInterrupt:
         result['reason'] = 'interrupted'
+        if barrier is not None and not barrier.value['released']:
+            barrier.fail('interrupted', 'termination during affinity enforcement')
+    except TimeoutError as error:
+        if barrier is not None and barrier.process is None:
+            raise LaunchDeadlineExpired('enforcement setup exhausted launch deadline') from error
+        result['reason'] = 'timeout' if barrier is not None else ('launch-error' if process is None else 'capture-error')
+        if barrier is not None and not barrier.value['released']:barrier.fail('indeterminate', error)
+    except ValueError as error:
+        if barrier is None:raise
+        result['reason'] = 'capture-error' if process is not None else 'launch-error'
+        if not barrier.value['released']:barrier.fail('rejected', error)
+        diagnostic = str(error).encode('utf-8')
+        buffers['stderr'].extend(diagnostic[:output_limit])
+        result['truncated'] = len(diagnostic)>output_limit
     except OSError as error:
         result['reason'] = 'launch-error' if process is None else 'capture-error'
+        if barrier is not None and not barrier.value['released']:
+            barrier.fail('indeterminate', error)
         # Diagnostics are bounded just like child output.
         diagnostic = str(error).encode('utf-8', errors='replace')
         remaining = max(0, output_limit-len(buffers['stderr']))
@@ -95,6 +119,11 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
         if len(diagnostic) > remaining:
             result['truncated'] = True
     finally:
+        if barrier is not None:
+            process = process or barrier.process
+            barrier.close()
+            from campaign_enforcement import seal
+            result['_enforcement'] = seal(barrier.value)
         if process is not None:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
