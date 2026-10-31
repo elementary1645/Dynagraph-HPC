@@ -503,3 +503,19 @@ Debug, Release and ASan+UBSan each passed the complete 31-test default suite in
 sequential runs. Historical 27-test results and the original sanitizer timeout
 remain retained; see validation-parallel-failure.md and research-log.md for exact
 commands, outcomes and limitations. Race-detector acceptance remains unmet.
+
+## Phase 6B-2B-3A runtime evidence qualification
+
+The [runtime provenance runbook](runtime-provenance.md) distinguishes requested
+configuration, observed process configuration, observed OpenMP execution and
+scientific admission. Child PID/start identity, executable digest, affinity,
+visible quotas/cpusets and mapped libgomp are snapshots with explicit sources,
+intervals and scopes. Observer hardware topology/NUMA and compiler/build context
+must not be relabelled as workload-region observations. Teams and region counts
+remain unavailable because timed metrics are disabled. C++ timing definitions
+and algorithms are unchanged. Pilot/resume measurement_eligible remains false.
+Environment variables do not prove teams; teams do not prove physical-core
+exclusivity; affinity does not prove uncontended execution. GitHub Actions
+runners do not establish exclusive physical cores, and the current Codespace
+cannot support credible multicore scaling conclusions. Hashed evidence is not
+authenticated evidence. No automatic admission or scientific execution is added.

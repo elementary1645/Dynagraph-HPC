@@ -303,3 +303,13 @@ location and sibling identity are bound. Stronger process ownership, safe repeat
 resume, retries and resource isolation require future separately authorized work.
 These integrity hashes do not authenticate a malicious producer or guarantee
 arbitrary hardware-failure durability.
+
+## Phase 6B-2B-3A runtime observations
+
+New original pilots and new resume trials use the separate
+[runtime provenance v1 contract](runtime-provenance.md). Reused trials retain
+original observations byte-for-byte; new trials bind observations to the resume
+attempt ID. The existing pilot v2 and journal v1 formats and R1 launch ordering
+remain unchanged. Missing process observations do not imply execution failure or
+scientific eligibility; contradictory provenance rejects evidence verification.
+No observed OpenMP teams are claimed by this phase.

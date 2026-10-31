@@ -4249,3 +4249,267 @@ historical LIKELY TOOL/RUNTIME LIMITATION classification preserved. Scientific
 campaigns/inference, retries, safe repeated resume, unresolved-process recovery,
 stronger resource ownership/isolation, CPU placement and tuning remain deferred.
 Stop after the authorized local commit/report; no push, merge or PR.
+
+## Phase 6B-2B-3A — runtime observation and evidence contracts (2026-10-31)
+
+Authorized request supersedes the previous phase gate in AGENTS.md. Initial branch
+was feature/phase6b2b3-runtime-provenance, HEAD
+573982a648c30d7d8cc5521c96d9ae86891ecfdd, with a clean working tree. No delegation,
+dependency installation, push, merge or PR. Runtime collection and offline
+validation are implemented in campaign_runtime.py, with the optional bounded
+process observer in campaign_process.py and pilot/resume integration. New runtime
+contract/provenance schemas are separately v1; pilot v2, journal v1, runtime
+mapping v3, hardware v2 and resume v1 are preserved. The exact binding and
+compatibility rules are in docs/runtime-provenance.md.
+
+The observer records one post-spawn child PID/start identity and executable match,
+actual leader affinity, supported visible cgroup2 ancestry and libgomp mapping
+identity, namespace-visible online CPUs, OS and kernel. The journal-bound hardware
+snapshot retains topology/NUMA context; original build/compiler declarations and
+worker output remain separate from current-host observations. Every source has
+scope, availability, collection interval and explicit limitations. Unsupported or
+missing observations are not successful observations. Malformed supported facts,
+conflicting identities, evidence mutation and unsupported schemas reject.
+Original/resumed origin is explicit; reused trial evidence is byte-identical.
+The resume attempt ID binds new provenance to its authorization event.
+
+Inspection found that actual_threads_ is assigned inside delta-stepping's real
+parallel region, while timed metrics are disabled and timing metadata explicitly
+reports actual_workers unavailable. The CLI does not export workload-region team
+aggregates. No C++ instrumentation was added: team size and region count remain
+null, intended_workload_observed=false, and requested/observed comparison is
+unavailable. No test parallel region, linkage or environment request is treated as
+worker execution. All production source/headers/apps, CMake, pinned dependencies,
+workload/configuration files, archive code and CI workflows remain unchanged.
+
+Fresh local checks completed: new runtime suite 11 tests; pilot 47; journal 82;
+resume 36 (including original/new provenance preservation); campaign 85; archive
+59; diagnostic controls 3; infrastructure repair controls 17. Debug and Release
+configure/build and CTest each passed 31/31. ASan+UBSan build and CTest passed
+31/31 outside the sandbox, with leak detection and halt-on-error enabled. Release
+smoke passed with the existing .venv-analysis interpreter. Gate rejection and
+quoted-path/minimal/library/optional-registration compatibility controls passed.
+Commands/raw output are retained under ignored
+results/validation/phase6b2b3a; infrastructure fixture trees and JUnit reports are
+under /tmp/phase6b2b3a-*. Focused Python suites run directly, preserving the pinned
+CTest registrations. These are local results, not hosted-CI results.
+
+Initial drafts exposed sandbox-blocked Unix sockets and LeakSanitizer's ptrace
+restriction; final runs outside the sandbox passed. An initial smoke invocation
+with system Python rejected missing pinned matplotlib; the existing analysis
+environment passed, without installing anything. An exit-race probe found Linux
+EINVAL for terminating-process mountinfo; this now records source unavailability.
+The observation interval ends after all source reads. Early draft logs are kept
+separate from final successful logs, rather than overwritten as passing evidence.
+
+A retained one-trial development-only demo runs the compiled Release binary and
+passes offline verify-pilot. It is a newly derived fixture, not an execution of
+the original scientific/development manifest. The original 104-trial plan remains
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+manifest remains
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+The pre-edit 9,654-file historical evidence snapshot has zero SHA-256 mismatches.
+Original evidence and the R1 deadline ordering remain unchanged.
+
+Residual limitations: snapshots are non-atomic, unauthenticated and may perturb
+scheduling; fast exits/interpreters can leave child observations unavailable;
+Linux/libgomp/cgroup2 support is limited; hidden restrictions, worker affinity,
+contention and physical-core exclusivity are unverified. No scientific eligibility
+follows from environment variables, affinity, library mappings or correctness.
+Observed teams would not establish exclusive physical cores. GitHub Actions and
+this Codespace do not establish credible exclusive-core multicore scaling.
+measurement_eligible remains false everywhere. TSan acceptance remains unmet with
+the historical LIKELY TOOL/RUNTIME LIMITATION classification preserved.
+
+Phase 6B-2B-3B workload-region instrumentation, stronger runtime/process/resource
+ownership, repeated recovery and isolation remain deferred. Scientific campaigns,
+inference, performance claims, tuning and automatic admission require later
+explicit authorization. Stop after the authorized local commit and report.
+
+The first portable Release evidence run passed its 31 CTests and smoke stages but
+correctly rejected a concurrent research-log edit at the final source inventory
+gate; no passing archive was produced or claimed from that draft. A later exit
+probe also exposed disappearing cgroup mount evidence; this supported missing
+source is now explicitly unavailable, while malformed supported policies still
+reject. Final portable evidence is generated only with a stable source tree.
+
+Final stable-source portable gate passed:
+`.venv-analysis/bin/python -B tools/validation/ci_verify.py --python
+.venv-analysis/bin/python --mode release --smoke --output
+/tmp/phase6b2b3a-release-final`. It passed all 31 CTests, the real smoke pipeline,
+negative smoke controls and final source-inventory equality, then created and
+reopened a release-smoke-v1 archive. The standalone evidence_archive.py verifier
+with its SHA-256 sidecar reports passed/verified. A separate standard-library
+verifier independently checks the sidecar and all 689 archive members against
+the archive manifest, and all 19 retained demo pilot inventory entries. Archive,
+sidecar, independent verifier/results and fresh logs are retained in ignored
+results/validation/phase6b2b3a. Final stable runtime/pilot/journal/resume runs pass
+11/47/82/36 tests respectively. Historical preservation remains 9,654 files with
+zero mismatches; original plan/manifest hashes are unchanged. This final outcome
+entry is documentation-only and postdates the archive's source snapshot; runtime
+implementation and tests match the verified snapshot. No hosted-CI or scientific
+admission claim follows. Eleven intended files comprise AGENTS.md, four campaign
+Python modules, two test files and four documentation files. No unresolved local
+acceptance failure remains; residual limitations and deferred 6B-2B-3B work remain
+as stated above and in the runbook.
+
+### Interrupted-session recovery and final review (2026-10-31)
+
+Resumed on the requested branch at 573982a648c30d7d8cc5521c96d9ae86891ecfdd
+with all eleven implementation files already staged. Read AGENTS.md and reviewed
+every staged file; preserved the existing implementation and retained evidence.
+The collector, process observer, pilot artifacts/verification, resume origin
+binding, tests and runbook were already implemented. No unfinished code or
+integration gap was found in safe-resume authorization, journal terminal binding,
+deadline propagation, bounded cleanup or measurement eligibility.
+
+One offline-validation defect was corrected: a supplied snapshot could assert an
+executable match for a process whose retained stat already said zombie/dead,
+although collection clears such child observations. The verifier now rejects
+that contradiction. A new independent test covers Z/X/x and confirms that exited
+identity evidence remains valid with child facts explicitly unavailable. This is
+a verification-only tightening; no process execution, timing or algorithm changed.
+
+Fresh commands and outcomes are retained in ignored
+`results/validation/phase6b2b3a-resumed` (earlier logs were not overwritten):
+
+- `python3 -B tests/test_campaign_runtime.py`: final 12/12.
+- `python3 -B tests/test_campaign_resume.py`: final 36/36;
+  `tests/test_campaign_journal.py`: 82/82; `tests/test_campaign_pilot.py`: 47/47.
+  Initial sandbox runs failed only while creating Unix-socket fixtures; fresh
+  outside-sandbox runs passed, including final runs after the verifier fix.
+- `python3 -B tests/test_campaign.py`: 85/85;
+  `python3 -B tools/validation/test_archive.py`: 59/59;
+  `python3 -B tools/validation/test_negative_diagnostics.py`: 3/3;
+  `python3 -B tools/validation/test_repair.py --output
+  /tmp/phase6b2b3a-resumed-repair`: 17/17.
+- Fresh `ci_verify.py --python /workspaces/Dynagraph-HPC/.venv-analysis/bin/python
+  --mode debug --output /tmp/phase6b2b3a-resumed-debug`: 31/31, source unchanged.
+  The corresponding Release driver with `--mode release --smoke --output
+  /tmp/phase6b2b3a-resumed-release` passed 31/31, smoke, negative controls and
+  source equality. These driver snapshots precede the final verifier tightening.
+- After the tightening, `ctest --test-dir
+  /tmp/phase6b2b3a-resumed-debug/build --output-on-failure` and the corresponding
+  Release build each passed 31/31 again. Production/build files are unchanged.
+- The fresh sanitize driver built successfully, but sandbox CTest encountered
+  LeakSanitizer's explicit ptrace restriction. Final outside-sandbox command:
+  `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir
+  /tmp/phase6b2b3a-resumed-sanitize/build --output-on-failure`: 31/31 passed.
+  The failed sandbox driver remains failed evidence, not a passing profile.
+- All 61 tracked Python files parsed with `ast.parse`; staged and working-tree
+  `git diff --check` passed. Final implementation/test hashes are retained in
+  `final-source-sha256.json` beside the fresh logs.
+
+Reverified the retained runtime Release archive with `evidence_archive.py
+--verify ... --sidecar ...`; profile release-smoke-v1 passed. The retained
+independent standard-library checker also passed all 689 archive members and
+19 demo inventory entries. This historical archive predates the final verifier
+fix and this log entry; it is not claimed as a final-source archive. Final-source
+offline `campaign.py verify-pilot` passed both the runtime demo and the legacy
+Phase 6B-2B-2 resumed pilot. Read-only legacy recovery inspection still reports
+the expected incomplete original with one verified completion and two pending
+trials (exit 1), without inventing completion or executing archived runners.
+
+Rehashed the historical 9,654-file preservation map: zero mismatches. Regenerated
+all 104 trials and compared the canonical manifest bytes directly to the retained
+original: identical. Plan SHA-256 remains
+f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+manifest SHA-256 remains
+f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+No production source/header/app, CMake, configuration, archive infrastructure or
+CI workflow differs from the base. Eleven intended files remain in this commit.
+
+No unresolved final local test failure remains. All snapshot, platform, ownership,
+scientific-admission and TSan limitations above still apply. Actual OpenMP teams
+and workload-region counts remain unavailable; scientific eligibility remains
+false. Phase 6B-2B-3B and all scientific execution/inference, retries, resource
+isolation and tuning remain deferred. Stop after the authorized local commit;
+no hosted-CI claim, dependency installation, push, PR or merge.
+
+## Phase 6B-2B-3A-R1 — nested runtime state validation
+
+Targeted remediation explicitly authorized on
+feature/phase6b2b3-runtime-provenance at
+cad20c652110dfd5d16e4cda6a2476b46f777cff, with a clean index and working tree.
+Read AGENTS.md and inspected the runtime, pilot, resume, tests and runbook.
+Baseline command `python3 -B /tmp/phase6b2b3a-audit/reproduce.py nested-zombie`
+returned accepted=true, executable_match=true, outer_state=S, runtime_state=Z,
+runtime_status=observed. The outer lifecycle guard did not validate the separate
+stat retained inside observed OpenMP mapping evidence.
+
+The correction is confined to the runtime v1 snapshot boundary, after existing
+mapping-schema and PID/start/executable checks. Nested states Z/X/x now reject
+the complete record with `exited OpenMP mapping cannot bind child observations`.
+The existing process-stat schema still rejects missing, malformed and unsupported
+states. Different valid live-state letters remain accepted because the reads
+are non-atomic. No identical timestamps or complete stat strings are required.
+Unavailable facts and conservative recovery classifications are unchanged.
+Shared hardware/mapping schemas, pilot v2, journal v1 and resume v1 are unchanged.
+
+Added top-level runtime verification controls and rehashed pilot/recovery/resume
+integration controls. The latter supply explicitly synthetic mapping fixtures,
+refresh all applicable consistency hashes, and verify that semantic rejection
+occurs before resume reservation or pending execution. Their live controls first
+pass the same evidence gates. The new suite demonstrated the defect before the
+fix; the pre-fix resume control reached the stubbed execution path/reservation,
+not an actual additional child, and subsequent subcases saw the reserved path.
+Those red results are retained without being represented as passing evidence.
+
+No production algorithms, timing code, heuristics, workload/configuration files,
+build configuration, dependency pins, execution logic or journal contracts are
+modified. The audit's nonblocking null-success-snapshot ambiguity is outside this
+targeted correction. Snapshot authenticity, worker-team observation, resource
+ownership/exclusivity and scientific admission limitations remain in force.
+Fresh commands, final results and preservation checks follow below after the
+stable-source verification gates. No dependency installation or delegation;
+local commit authorized, no push, merge or PR.
+
+R1 final fresh validation completed (2026-10-31):
+
+- `python3 -B tests/test_campaign_runtime.py`: 20/20 (eight new test methods,
+  including lifecycle/identity subcases and fully rehashed integration evidence).
+  Resume: 36/36; journal: 82/82; pilot: 47/47; campaign: 85/85; archive: 59/59;
+  diagnostic controls: 3/3; infrastructure: 17/17 with output
+  `/tmp/phase6b2b3ar1-repair`. All are fresh direct Python runs. Suites ran outside
+  the sandbox to permit the existing Unix-socket fixtures.
+- Sequential `tools/validation/ci_verify.py` drivers using the existing
+  `/workspaces/Dynagraph-HPC/.venv-analysis/bin/python`, modes debug, release
+  (`--smoke`) and sanitize, outputs `/tmp/phase6b2b3ar1-MODE`: 31/31 CTest each.
+  Release smoke and all negative smoke controls passed. Sanitizer ran outside
+  the sandbox with ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1; its command receipt passed.
+  No dependencies installed. All three profiles report source unchanged with
+  inventory SHA-256 c7523e582ad51b10ff15f42f57620d51b87e0f5f08f16b3fb80665ff9a3dfff9.
+- Each driver produced and reopened its passing portable archive. Copied archives
+  and sidecars into ignored `results/validation/phase6b2b3ar1`. A separate bounded
+  standard-library checker independently verified each SHA-256 sidecar and every
+  member size/digest: debug-full-v1 189 payload files, release-smoke-v1 689,
+  sanitize-full-v1 189 (each plus its archive manifest). The trusted archive
+  verifier independently reopened all three copied archives successfully.
+  Archived implementation/test bytes match the final remediation.
+- The original independent nested-zombie reproducer now rejects with the intended
+  lifecycle ValueError (exit 1); the unmodified live fixture still passes top-level
+  verification. Baseline/fixed outputs and a retained standalone copy of the
+  independent fixture are beside the new logs. Rehashed dead evidence blocks
+  safe-resume before reservation and launch for Z/X/x, with original fixture
+  bytes unchanged by rejection. Legacy and runtime demo pilot verification pass.
+- Regenerated the original 104 trials byte-identically, with plan SHA-256
+  f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24 and
+  manifest SHA-256 f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+  The fresh pre-R1 9,757-file preservation snapshot and older 9,654-/911-entry maps
+  all have zero mismatches. These maps overlap; their counts are not additive.
+- Parsed all 61 tracked Python files; `git diff --check` passed. Four intended
+  files only: campaign_runtime.py, test_campaign_runtime.py, runtime-provenance.md
+  and this research log. No unresolved fresh local acceptance failure remains.
+
+Exact argv, raw logs, source/test hashes, preservation receipts and independent
+archive results are retained under `results/validation/phase6b2b3ar1`; temporary
+build trees remain under /tmp. Only this final outcome text postdates the stable
+archive source snapshot. Snapshot non-atomicity, Linux/libgomp/cgroup2 support,
+unauthenticated producer assumptions and unavailable worker-team observations
+remain unchanged. Scientific eligibility stays false. No hosted-CI, performance
+or race-freedom claim is made; the unmet TSan acceptance gate and its historical
+LIKELY TOOL/RUNTIME LIMITATION classification remain. Later instrumentation,
+scientific execution/inference, retries and isolation remain deferred. Stop after
+the authorized local commit/report; no push, PR or merge.

@@ -2,22 +2,21 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2B-2 safe development-only resume on
-  feature/phase6b2b2-safe-resume, based on ab2548d. Explicit implementation,
-  bounded crash/lifecycle tests, fresh local verification and a local commit are
-  authorized. Reuse fully verified completions; execute never-launched pending
-  trials only after full preflight and both execution/resume authorizations.
-  Reject failed, interrupted, unresolved or legacy-unowned executions. Preserve
-  immutable original evidence, pilot v2, journal v1 and the R1 deadline correction.
-  No automatic retries, scientific campaigns or resource isolation. No push,
-  merge or PR. Stop after the authorized commit and report.
+- Current authorized scope: Phase 6B-2B-3A runtime observation and evidence
+  contracts on feature/phase6b2b3-runtime-provenance, based on 573982a.
+  Implementation, bounded tests, fresh local verification and a local commit
+  are authorized. Preserve safe-resume authorization, immutable original evidence,
+  pilot v2, journal v1, ownership protections and the R1 deadline correction.
+  Runtime snapshots never authorize scientific admission or prove worker teams,
+  exclusivity or uncontended execution. No retries, scientific campaigns,
+  resource isolation, dependency installation, push, merge or PR.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-2B-2 implementation/local verification and the authorized commit;
+- Stop after Phase 6B-2B-3A implementation/local verification and the authorized commit;
   broader recovery and later scientific execution/inference remain deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report

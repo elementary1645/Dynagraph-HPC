@@ -414,7 +414,7 @@ def verify_success(directory, record, plan):
 
 
 def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None):
+              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None):
     # New pilots reserve once and hold ownership through final publication.
     # Historical pilots without this protocol remain inspectable, not resumable.
     from campaign_ownership import directory_lock, owner, OWNER
@@ -432,11 +432,11 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
         put(output, OWNER, owner(root, output))
         return _run_pilot(plan, manifest, root, output, trial_ids, execute=execute,
                           max_trials=max_trials, wall_seconds=wall_seconds, timeout=timeout,
-                          output_limit=output_limit, _deadline=attempt_deadline)
+                          output_limit=output_limit, _deadline=attempt_deadline, _runtime_origin=_runtime_origin)
 
 
 def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None):
+               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None):
     selected = select(plan, manifest, trial_ids, max_trials)
     bounds(plan, max_trials, wall_seconds, timeout, output_limit)
     if execute is not True:
@@ -463,6 +463,10 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
     put(output, 'execution-manifest.json', execution)
     from campaign_journal import Journal
     journal = Journal.create(output)
+    from campaign_runtime import MARKER, collect
+    runtime_origin = _runtime_origin or dict(kind='original', attempt_id=None)
+    put(output, 'runtime-contract.json', dict(schema='dynagraph-runtime-contract', schema_version=1,
+                                             origin=runtime_origin))
     records = [];halted = False
     for trial in selected:
         trial_deadline = min(deadline, time.monotonic()+timeout)
@@ -479,7 +483,7 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                       observed_affinity=[int(c) for c in affinity] if affinity is not None else None,
                       openmp_environment={k:v for k,v in env.items() if k.startswith('OMP_')},
                       observed_team_size=None,
-                      execution_observations='child affinity, runtime mapping, exclusivity and stability unavailable',
+                      execution_observations=MARKER,
                       start=timestamp(), end=None, status='failed', reason='not-run', message='',
                       correctness=dict(checked=False,outcome='not-checked',oracle=None),
                       measurement_eligible=False, processes=[], artifacts={})
@@ -510,11 +514,17 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                         return expired(now)
                     try:
                         process, streams = capture(arguments, directory, env, remaining, output_limit,
-                                                   deadline=trial_deadline)
+                                                   deadline=trial_deadline,
+                                                   runtime_observer=lambda pid: collect(
+                                                       pid, directory/'runner', record['executable_sha256']))
                     except LaunchDeadlineExpired:
                         # An intent entry is not proof of a started process.
                         # Do not manufacture streams, a receipt or an exit code.
                         return expired(time.monotonic())
+                    from campaign_runtime import provenance
+                    snapshot = process.pop('_runtime_snapshot', None)
+                    observation = provenance(journal.bound, trial, process, snapshot, runtime_origin, record['executable_sha256'])
+                    put(directory, f'{len(record["processes"])}-{kind}.runtime.json', observation)
                     for name, data in streams.items():
                         reference = f'{len(record["processes"])}-{kind}.{name}'
                         atomic_bytes(directory/reference, data);process[name] = reference
@@ -621,6 +631,32 @@ def verify_trial_evidence(directory, trial, plan, execution, hardware, inventory
     if actual_artifacts != set(record['artifacts'])|{'record.json'}:
         raise ValueError('incomplete pilot artifact index')
     reconcile_processes(directory/base,record,plan,execution,inventory)
+    from campaign_runtime import MARKER, verify as verify_runtime
+    if record['execution_observations'] == MARKER:
+        contract = read_json(directory/'runtime-contract.json')
+        fields(contract, 'schema schema_version origin', 'runtime contract')
+        if (contract['schema'] != 'dynagraph-runtime-contract' or type(contract['schema_version']) is not int or
+                contract['schema_version'] != 1):
+            raise ValueError('unsupported runtime contract')
+        origin = contract['origin']
+        fields(origin, 'kind attempt_id', 'runtime origin')
+        if origin['kind'] == 'original':
+            if origin['attempt_id'] is not None: raise ValueError('invalid original runtime origin')
+        elif origin['kind'] == 'resume': digest(origin['attempt_id'])
+        else: raise ValueError('invalid runtime attempt origin')
+        from campaign_journal import binding
+        bound = binding(directory, (plan, read_json(directory/'trial-manifest.json'), execution, execution['selected_trials'], hardware))
+        expected_runtime = {f"{i}-{process['command'][1]}.runtime.json"
+                            for i, process in enumerate(record['processes'])}
+        if {n for n in record['artifacts'] if n.endswith('.runtime.json')} != expected_runtime:
+            raise ValueError('unexpected runtime provenance artifacts')
+        for i, process in enumerate(record['processes']):
+            name = f"{i}-{process['command'][1]}.runtime.json"
+            if name not in record['artifacts']:
+                raise ValueError('missing runtime provenance artifact')
+            verify_runtime(read_json(directory/base/name), bound, record, process, origin)
+    elif (directory/'runtime-contract.json').exists() or any(n.endswith('.runtime.json') for n in record['artifacts']):
+        raise ValueError('runtime observation contract downgrade')
     if record['status']=='success':
         verify_success(directory/base,record,plan)
     return record
