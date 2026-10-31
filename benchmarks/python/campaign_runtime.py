@@ -159,6 +159,10 @@ def validate_snapshot(value, executable_hash):
                     v['process_start_ticks'] != value['process_start_ticks'] or
                     v['executable_sha256'] != executable_hash):
                 raise ValueError('conflicting OpenMP runtime identity')
+            # The nested stat is a separate read: live state letters may differ,
+            # but an exited process cannot support an observed mapping.
+            if v['process_stat'].rsplit(') ', 1)[-1][0] in 'ZXx':
+                raise ValueError('exited OpenMP mapping cannot bind child observations')
         elif type(v) is not str or not v.strip():
             raise ValueError('invalid OS/kernel identity')
     if not value['executable_match'] and any(value[k]['value'] is not None for k in ('affinity','cgroups','openmp')):

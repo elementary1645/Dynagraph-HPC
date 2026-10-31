@@ -4426,3 +4426,90 @@ and workload-region counts remain unavailable; scientific eligibility remains
 false. Phase 6B-2B-3B and all scientific execution/inference, retries, resource
 isolation and tuning remain deferred. Stop after the authorized local commit;
 no hosted-CI claim, dependency installation, push, PR or merge.
+
+## Phase 6B-2B-3A-R1 — nested runtime state validation
+
+Targeted remediation explicitly authorized on
+feature/phase6b2b3-runtime-provenance at
+cad20c652110dfd5d16e4cda6a2476b46f777cff, with a clean index and working tree.
+Read AGENTS.md and inspected the runtime, pilot, resume, tests and runbook.
+Baseline command `python3 -B /tmp/phase6b2b3a-audit/reproduce.py nested-zombie`
+returned accepted=true, executable_match=true, outer_state=S, runtime_state=Z,
+runtime_status=observed. The outer lifecycle guard did not validate the separate
+stat retained inside observed OpenMP mapping evidence.
+
+The correction is confined to the runtime v1 snapshot boundary, after existing
+mapping-schema and PID/start/executable checks. Nested states Z/X/x now reject
+the complete record with `exited OpenMP mapping cannot bind child observations`.
+The existing process-stat schema still rejects missing, malformed and unsupported
+states. Different valid live-state letters remain accepted because the reads
+are non-atomic. No identical timestamps or complete stat strings are required.
+Unavailable facts and conservative recovery classifications are unchanged.
+Shared hardware/mapping schemas, pilot v2, journal v1 and resume v1 are unchanged.
+
+Added top-level runtime verification controls and rehashed pilot/recovery/resume
+integration controls. The latter supply explicitly synthetic mapping fixtures,
+refresh all applicable consistency hashes, and verify that semantic rejection
+occurs before resume reservation or pending execution. Their live controls first
+pass the same evidence gates. The new suite demonstrated the defect before the
+fix; the pre-fix resume control reached the stubbed execution path/reservation,
+not an actual additional child, and subsequent subcases saw the reserved path.
+Those red results are retained without being represented as passing evidence.
+
+No production algorithms, timing code, heuristics, workload/configuration files,
+build configuration, dependency pins, execution logic or journal contracts are
+modified. The audit's nonblocking null-success-snapshot ambiguity is outside this
+targeted correction. Snapshot authenticity, worker-team observation, resource
+ownership/exclusivity and scientific admission limitations remain in force.
+Fresh commands, final results and preservation checks follow below after the
+stable-source verification gates. No dependency installation or delegation;
+local commit authorized, no push, merge or PR.
+
+R1 final fresh validation completed (2026-10-31):
+
+- `python3 -B tests/test_campaign_runtime.py`: 20/20 (eight new test methods,
+  including lifecycle/identity subcases and fully rehashed integration evidence).
+  Resume: 36/36; journal: 82/82; pilot: 47/47; campaign: 85/85; archive: 59/59;
+  diagnostic controls: 3/3; infrastructure: 17/17 with output
+  `/tmp/phase6b2b3ar1-repair`. All are fresh direct Python runs. Suites ran outside
+  the sandbox to permit the existing Unix-socket fixtures.
+- Sequential `tools/validation/ci_verify.py` drivers using the existing
+  `/workspaces/Dynagraph-HPC/.venv-analysis/bin/python`, modes debug, release
+  (`--smoke`) and sanitize, outputs `/tmp/phase6b2b3ar1-MODE`: 31/31 CTest each.
+  Release smoke and all negative smoke controls passed. Sanitizer ran outside
+  the sandbox with ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1; its command receipt passed.
+  No dependencies installed. All three profiles report source unchanged with
+  inventory SHA-256 c7523e582ad51b10ff15f42f57620d51b87e0f5f08f16b3fb80665ff9a3dfff9.
+- Each driver produced and reopened its passing portable archive. Copied archives
+  and sidecars into ignored `results/validation/phase6b2b3ar1`. A separate bounded
+  standard-library checker independently verified each SHA-256 sidecar and every
+  member size/digest: debug-full-v1 189 payload files, release-smoke-v1 689,
+  sanitize-full-v1 189 (each plus its archive manifest). The trusted archive
+  verifier independently reopened all three copied archives successfully.
+  Archived implementation/test bytes match the final remediation.
+- The original independent nested-zombie reproducer now rejects with the intended
+  lifecycle ValueError (exit 1); the unmodified live fixture still passes top-level
+  verification. Baseline/fixed outputs and a retained standalone copy of the
+  independent fixture are beside the new logs. Rehashed dead evidence blocks
+  safe-resume before reservation and launch for Z/X/x, with original fixture
+  bytes unchanged by rejection. Legacy and runtime demo pilot verification pass.
+- Regenerated the original 104 trials byte-identically, with plan SHA-256
+  f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24 and
+  manifest SHA-256 f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+  The fresh pre-R1 9,757-file preservation snapshot and older 9,654-/911-entry maps
+  all have zero mismatches. These maps overlap; their counts are not additive.
+- Parsed all 61 tracked Python files; `git diff --check` passed. Four intended
+  files only: campaign_runtime.py, test_campaign_runtime.py, runtime-provenance.md
+  and this research log. No unresolved fresh local acceptance failure remains.
+
+Exact argv, raw logs, source/test hashes, preservation receipts and independent
+archive results are retained under `results/validation/phase6b2b3ar1`; temporary
+build trees remain under /tmp. Only this final outcome text postdates the stable
+archive source snapshot. Snapshot non-atomicity, Linux/libgomp/cgroup2 support,
+unauthenticated producer assumptions and unavailable worker-team observations
+remain unchanged. Scientific eligibility stays false. No hosted-CI, performance
+or race-freedom claim is made; the unmet TSan acceptance gate and its historical
+LIKELY TOOL/RUNTIME LIMITATION classification remain. Later instrumentation,
+scientific execution/inference, retries and isolation remain deferred. Stop after
+the authorized local commit/report; no push, PR or merge.

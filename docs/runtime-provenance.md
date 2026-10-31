@@ -49,6 +49,37 @@ snapshot, not an execution-time observation of the child or compiler invocation.
 Build declarations remain bound by the original plan identity and worker output;
 querying the current g++ would not prove which compiler built an executable.
 
+### Phase 6B-2B-3A-R1 nested mapping lifecycle validation
+
+The outer snapshot and nested observed OpenMP mapping must bind the same PID,
+process start ticks and executable digest. Each retained stat must satisfy the
+existing process-stat schema. An observed mapping whose nested stat says `Z`,
+`X` or `x` rejects the entire runtime provenance record; verification does not
+repair it by clearing `executable_match` or silently dropping the mapping.
+Missing, malformed and unsupported nested states also reject. The two stat reads
+are intentionally non-atomic: their valid live-state letters can differ, and
+verification requires neither identical stat strings nor a shared observation
+instant. Unavailable mappings retain their existing explicit representation.
+
+The independent audit found that the original outer-state check did not cover
+the nested mapping stat. Before R1, changing only that nested state to `Z` passed
+top-level verification with `executable_match=true` and mapping status observed.
+After R1 the same bounded offline reproducer rejects with `ValueError`:
+
+```sh
+python3 -B /tmp/phase6b2b3a-audit/reproduce.py nested-zombie
+```
+
+That audit fixture is session-local. Durable regression coverage is in
+`tests/test_campaign_runtime.py`: top-level runtime verification covers dead,
+valid live, missing/malformed/unsupported states, PID/start/executable binding,
+outer/nested lifecycle contradictions and unavailable mappings. Integration tests
+refresh artifact, record, journal and inventory hashes before checking rejection
+by pilot/recovery verification and safe-resume preflight. Corrupted completion
+evidence cannot be reused or launch pending trials. Hashes still provide internal
+consistency rather than external authentication. No observation, execution,
+schema version, timing definition or scientific-admission rule is added by R1.
+
 Delta-stepping's actual region already records `actual_threads_`, but timed calls
 use the uninstrumented metrics path and timing metadata explicitly declares
 `actual_workers` unavailable. The replay CLI does not expose an aggregate of
