@@ -2,10 +2,11 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2B-3A runtime observation and evidence
-  contracts on feature/phase6b2b3-runtime-provenance, based on 573982a.
-  Implementation, bounded tests, fresh local verification and a local commit
-  are authorized. Preserve safe-resume authorization, immutable original evidence,
+- Current authorized scope: Phase 6B-2B-3B-1 resource-control and admission
+  contracts on feature/phase6b2b3b-resource-controls, based on 894cfba.
+  Contract-first implementation, bounded tests, fresh local verification and a
+  local commit are authorized. No resource manipulation or eligible decisions.
+  Preserve safe-resume authorization, immutable original evidence,
   pilot v2, journal v1, ownership protections and the R1 deadline correction.
   Runtime snapshots never authorize scientific admission or prove worker teams,
   exclusivity or uncontended execution. No retries, scientific campaigns,
@@ -16,7 +17,7 @@
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-2B-3A implementation/local verification and the authorized commit;
+- Stop after Phase 6B-2B-3B-1 implementation/local verification and the authorized commit;
   broader recovery and later scientific execution/inference remain deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report

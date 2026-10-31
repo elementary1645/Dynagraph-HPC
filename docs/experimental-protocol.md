@@ -519,3 +519,144 @@ exclusivity; affinity does not prove uncontended execution. GitHub Actions
 runners do not establish exclusive physical cores, and the current Codespace
 cannot support credible multicore scaling conclusions. Hashed evidence is not
 authenticated evidence. No automatic admission or scientific execution is added.
+
+## Phase 6B-2B-3B-1 resource-control and admission contracts
+
+This phase adds read-only assessment contracts, not a resource enforcer. Existing
+pilot v2, journal v1, resume v1, runtime provenance v1 and hardware v2 remain
+unchanged. Existing campaign-admission v2 remains a separate legacy qualification
+interface; this new assessment does not turn that interface into enforcement or
+execution authority. All pilot/resume results remain measurement-ineligible.
+
+The new standard-library module `campaign_resources.py` defines four closed
+schemas, each with an exact integer `schema_version=1`:
+
+| Schema | Content |
+| --- | --- |
+| `dynagraph-resource-controls` | Execution/trial/process binding, evidence references, requested settings, requirements, application receipt and observations |
+| `dynagraph-affinity-application` | Optional supplied syscall receipt: process binding, requested/applied CPU arrays, outcome, errno, mechanism, timestamp, source and scope |
+| `dynagraph-resource-admission` | Deterministic state, reason codes and evidence digests, controls SHA-256, assessment ID, limitations and immutable transition policy |
+| `dynagraph-resource-assessment` | Envelope containing controls and the recomputable decision |
+
+The trusted expected context is rebuilt from an independently verified pilot,
+not taken from the sidecar. It binds execution content identity, canonical journal
+binding digest, deterministic trial ID, process index, executable SHA-256 and,
+when the runtime snapshot matched that executable, child PID/start ticks. Fixed
+relative references with SHA-256 identify plan, manifest, execution, hardware,
+trial record and optional per-process runtime record. No sidecar reference selects
+an executable or controls filesystem traversal. Original and resumed trials retain
+their existing execution/origin identities. Before/after bounded inventories reject
+evidence mutation during inspection; they are not atomic filesystem attestation.
+
+### Requested, applied and observed distinctions
+
+`request` carries the original plan affinity, requested workers/OpenMP environment,
+minimum physical cores and SMT policy. A request alone is never an application
+receipt. `application` defaults to `{state: not_attempted, cpus: null, receipt:
+null}`. Other states are `unavailable`, `failed` and `applied`. The first two have
+no receipt or applied CPU array. `failed` requires a matching supplied failure
+receipt with positive errno and no applied array. `applied` requires a matching
+supplied success receipt, errno zero, and sorted unique applied CPUs exactly equal
+to the requested set. Only `sched_setaffinity` receipt syntax is currently defined;
+no such syscall is performed by this phase. Receipt time is within the process
+interval and no later than the effective-affinity observation when that interval
+is known. An interpreter/unmatched executable cannot acquire a receipt binding.
+
+Application receipts are supplied claims whose consistency is validated, not
+independent proof that the syscall occurred. There is no trusted receipt producer
+in this phase. Application and later effective affinity remain separate facts;
+an observed mismatch is a failed alignment requirement, not proof of stability.
+
+Every observation has `value`, `status` (`observed`/`unavailable`), `source`,
+`scope`, supporting reference and `start`/`end`. Both times are null when the old
+source has no collection interval; no timestamp is fabricated. Observations cover:
+
+- Child leader effective affinity; observer-namespace online/visible CPU IDs.
+- Raw visible child cgroup2 ancestry, effective cpuset and rational quota pairs;
+  `max` means no finite quota in those visible records, not unlimited host resources.
+- Earlier observer physical-core/SMT topology and optional NUMA locality. They are
+  not synchronized worker placement or physical ownership observations.
+- Workload-region OpenMP teams, exclusivity, uncontended execution and isolation:
+  explicitly unavailable. This schema rejects supplied positive or negative
+  guarantees for those unsupported evidence categories, including invented teams.
+
+Source provenance is preserved. A missing child snapshot or legacy pilot does not
+inherit the observer's affinity as child affinity. Runtime mappings do not prove
+OpenMP execution. Affinity, quota, cpusets and CPU counts never prove exclusivity.
+Contract validation does not prove physical resource isolation.
+
+### Decision model, evidence requirements and reason codes
+
+The requirements map has exact boolean keys: `applied_affinity`,
+`observed_affinity`, `online_cpus`, `cpuset`, `quota`, `topology`, `numa`,
+`openmp_team`, `exclusivity`, `uncontended`, `isolation`. Development assessment
+defaults to none of these quality requirements; they may be explicitly requested.
+Scientific assessment requires all of them and rejects policy weakening.
+The already verified trial must have a verified completion for every assessment
+purpose. `trial_success` is true for a verified completion, false for a terminal
+failure/interruption, and null for an indeterminate journal outcome. Successful
+output without a committed terminal transition remains indeterminate.
+
+| State | Meaning in v1 |
+| --- | --- |
+| `rejected` | Trial failed, or a required condition is known to fail; takes precedence over missing evidence |
+| `indeterminate` | No known required failure, but required evidence is unavailable, unsupported or incomplete |
+| `development_only` | Functional evidence and selected requirements pass; the phase cap still prohibits scientific measurement |
+| `eligible` | Reserved for a future contract; never emitted and always rejected if supplied in v1 |
+
+All decisions set `measurement_eligible=false`,
+`scientific_performance_allowed=false` and `execution_authorized=false`, including
+successful functional assessments. Valid record verification exits zero even for
+a correctly computed rejected/indeterminate decision; malformed or inconsistent
+evidence exits 2. No assessment grants permission to launch or resume anything.
+
+Reason codes are deterministic: `TRIAL_NOT_SUCCESSFUL`,
+`TRIAL_COMPLETION_UNAVAILABLE`; prefixes
+`AFFINITY_APPLICATION`, `AFFINITY_MATCH`, `ONLINE_CPUS`, `CPUSET`, `CPU_QUOTA`,
+`PHYSICAL_CORES`, `NUMA_LOCALITY` with `_FAILED` or `_UNAVAILABLE`; and
+`OPENMP_TEAM_UNAVAILABLE`, `EXCLUSIVITY_UNAVAILABLE`, `UNCONTENDED_UNAVAILABLE`,
+`ISOLATION_UNAVAILABLE`. Every decision includes `SCIENTIFIC_ADMISSION_DISABLED`.
+Each reason records failure/unknown/phase-limit outcome and a bounded local
+`controls#/...` evidence pointer with canonical SHA-256. The controls' fixed file
+references bind those facts to the verified source evidence.
+
+Known failures include requested/observed affinity mismatch, allocation outside
+observed online CPUs or visible cpuset, any ancestor quota below requested workers,
+insufficient physical cores or forbidden SMT sharing, and requested single-node
+NUMA locality failing. Missing topology/coverage or NUMA remains indeterminate
+when required. Malformed supplied facts are errors, even when not required.
+
+`immutable-assessment-v1` permits only initial assessment or exact idempotent
+reverification with `--previous`. Any changed controls, reasons, identities or
+state reject as a transition. New evidence requires a separate assessment; this
+phase implements no automatic promotion or mutable admission history. Reserved
+scientific transitions need a future version and independently satisfied controls.
+
+### Read-only runbook and deferred enforcement
+
+Keep sidecars outside original pilot directories, whose inventory remains exact:
+
+```sh
+python3 -B benchmarks/python/campaign.py inspect-resources \
+  --output PILOT --trial-id TRIAL_ID --process-index 0 > /tmp/resources.json
+python3 -B benchmarks/python/campaign.py verify-resources \
+  --output PILOT --trial-id TRIAL_ID --process-index 0 --evidence /tmp/resources.json
+```
+
+`inspect-resources --purpose scientific` assesses evidence gaps without executing
+a scientific trial. `verify-resources --previous /tmp/resources.json` additionally
+checks idempotence. Completed prefixes in an interrupted journal pilot are
+inspectable; pending trials without a receipt are not resource assessments. Legacy
+final pilots use the existing full v2 gate. Resumed pilots use their own verified
+execution. No old bytes, admission flags, journal transitions or launch deadlines
+are rewritten. Sidecar verification is read-only and never executes an archived
+runner. Run new controls with `python3 -B tests/test_campaign_resources.py`.
+
+Linux namespaces, visible cgroup mounts, hardware virtualization, unsynchronized
+snapshots and unauthenticated producers limit interpretation. Hidden restrictions,
+contention and exclusive physical ownership remain unverified. Deferred
+Phase 6B-2B-3B-2 work includes designing/implementing a bounded nonprivileged
+enforcement lifecycle and trusted application receipts, stability/placement
+observations and separate OpenMP workload instrumentation contracts. Privileged
+resource operations, isolation guarantees, scientific execution/admission,
+performance claims, retries and TSan acceptance remain outside this phase.
