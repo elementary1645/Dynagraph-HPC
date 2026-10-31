@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+import threading
 
 
 @contextmanager
@@ -43,6 +44,122 @@ def defer_cleanup_signals():
             signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
+class CaptureSignals:
+    """Record catchable termination before launch through teardown; raise only at checkpoints.
+
+    Installing handlers requires the main thread. Worker-thread callers retain
+    their caller's signal policy. No mask is held across Popen/exec.
+    """
+    def __init__(self):
+        self.previous = {}
+        self.requested = None
+        self.delivered = False
+
+    def install(self):
+        if threading.current_thread() is not threading.main_thread():
+            return
+        try:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                old = signal.getsignal(sig)
+                if old == signal.SIG_IGN:
+                    continue
+                self.previous[sig] = old
+                signal.signal(sig, self.record)
+        except BaseException:
+            self.restore()
+            raise
+
+    def record(self, signum, frame):
+        if self.requested is None:
+            self.requested = (signum, frame)
+
+    def checkpoint(self):
+        if self.requested is not None and not self.delivered:
+            self.delivered = True
+            sig, frame = self.requested
+            old = self.previous.get(sig)
+            if callable(old):
+                old(sig, frame)
+            raise KeyboardInterrupt(signal.Signals(sig).name)
+
+    def restore(self):
+        if not self.previous:
+            return
+        previous_mask = None
+        if hasattr(signal, 'pthread_sigmask'):
+            previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        try:
+            try:
+                # A request recorded after the last execution checkpoint must
+                # not disappear while handlers are handed back to the caller.
+                self.checkpoint()
+            finally:
+                for sig, old in self.previous.items():
+                    signal.signal(sig, old)
+                self.previous.clear()
+        finally:
+            if previous_mask is not None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+
+def child_exited(process):
+    """Inspect without reaping: keep the session leader PID reserved for teardown."""
+    if process.returncode is not None:
+        return True
+    if hasattr(os, 'WNOWAIT'):
+        return os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+    return process.poll() is not None
+
+
+class OwnedProcessTeardown:
+    """One group signal and one bounded reap, with explicit completed steps.
+
+    Linux WNOWAIT retains ownership until killpg. A caller externally reaping
+    this exclusively owned child invalidates group ownership; never signal then.
+    """
+    def __init__(self, process):
+        self.process = process
+        self.signaled = False
+        self.reaped = False
+        self.finished = False
+        self.deadline = None
+        self.failed = False
+
+    def run(self):
+        if self.finished or self.failed:
+            return
+        if self.deadline is None:
+            self.deadline = time.monotonic()+2
+        try:
+            self._run()
+        except KeyboardInterrupt:
+            raise
+        except BaseException:
+            self.failed = True
+            raise
+
+    def _run(self):
+        p = self.process
+        if not self.signaled:
+            if p.returncode is not None:
+                self.reaped = True
+                raise ChildProcessError('owned child already reaped; group ownership lost')
+            if hasattr(os, 'WNOWAIT'):
+                # ECHILD means ownership was lost. Do not signal a recycled PID.
+                os.waitid(os.P_PID, p.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            if os.getpgid(p.pid) != p.pid or os.getsid(p.pid) != p.pid:
+                raise ChildProcessError('owned child session/group identity changed')
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            self.signaled = True
+        if not self.reaped:
+            p.wait(timeout=max(0,self.deadline-time.monotonic()))
+            self.reaped = True
+        self.finished = True
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat(timespec='microseconds')
 
@@ -69,7 +186,12 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
     if enforcement is not None:
         from campaign_enforcement import Barrier
         barrier = Barrier(enforcement, command, cwd, environment, stop)
+    guard = CaptureSignals()
+    guard.install()  # No owned child exists until both handlers are installed.
+    if barrier is not None:
+        barrier.checkpoint = guard.checkpoint
     try:
+        guard.checkpoint()
         with selectors.DefaultSelector() as selector:
             # Setup may consume the caller's remaining budget. Do no further
             # journal/file I/O after this check and before process creation.
@@ -82,6 +204,7 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
             else:
                 process = barrier.spawn()
                 barrier.verify_and_release(process)
+            guard.checkpoint()
             for name in buffers:
                 pipe = getattr(process, name)
                 os.set_blocking(pipe.fileno(), False)
@@ -94,7 +217,9 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
                     diagnostic = ('runtime observation rejected: '+str(error)).encode('utf-8')
                     buffers['stderr'].extend(diagnostic[:output_limit])
                     result['truncated'] = len(diagnostic) > output_limit
-            while result['reason'] == 'exited' and (selector.get_map() or process.poll() is None):
+            guard.checkpoint()
+            while result['reason'] == 'exited' and (selector.get_map() or not child_exited(process)):
+                guard.checkpoint()
                 remaining = stop - time.monotonic()
                 if remaining <= 0:
                     result['reason'] = 'timeout'
@@ -143,26 +268,25 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
         if len(diagnostic) > remaining:
             result['truncated'] = True
     finally:
-        primary = sys.exc_info()[1]
-        cleanup_errors = []
-        def attempt(action):
-            try:
-                action()
-            except BaseException as error:
-                cleanup_errors.append(error)
-        def terminate_group():
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         try:
-            with defer_cleanup_signals():
-                if barrier is not None:
-                    process = process or barrier.process
-                # Close/seal failures cannot bypass termination or reaping.
-                if process is not None:
-                    attempt(terminate_group)
-                    attempt(lambda: process.wait(timeout=2))
+            primary = sys.exc_info()[1]
+            cleanup_errors = []
+            def attempt(action):
+                try:
+                    action()
+                except KeyboardInterrupt as error:
+                    nonlocal interruption
+                    interruption = error
+                    result['reason'] = 'interrupted'
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            if barrier is not None:
+                process = process or barrier.process
+            teardown = OwnedProcessTeardown(process) if process is not None else None
+            entered = False
+            def settle():
+                if teardown is not None:
+                    attempt(teardown.run)
                     result['returncode'] = process.returncode
                     if process.returncode is not None and process.returncode < 0:
                         result['signal'] = -process.returncode
@@ -170,27 +294,59 @@ def capture(command, cwd, environment, timeout, output_limit, *, deadline=None, 
                         attempt(getattr(process, name).close)
                 if barrier is not None:
                     attempt(barrier.close)
-        except KeyboardInterrupt as error:
-            # Pending SIGTERM/SIGINT was delivered only after kill/reap/close.
-            interruption = error
-            result['reason'] = 'interrupted'
-            if barrier is not None and not barrier.value['released'] and barrier.value['state']=='requested':
-                barrier.fail('interrupted', error)
-        if barrier is not None:
-            from campaign_enforcement import seal
-            def record_enforcement():
-                result['_enforcement'] = seal(barrier.value)
-            attempt(record_enforcement)
-        result['end'] = timestamp()
-        if cleanup_errors:
-            first = cleanup_errors[0]
-            for extra in cleanup_errors[1:]:
-                first.add_note('Additional cleanup failure: '+repr(extra))
-            if primary is not None:
-                raise primary from first
-            if interruption is not None:
-                raise interruption from first
-            raise first
+            try:
+                with defer_cleanup_signals():
+                    entered = True
+                    settle()
+            except KeyboardInterrupt as error:
+                interruption = error
+                result['reason'] = 'interrupted'
+            except BaseException as error:
+                cleanup_errors.append(error)
+            finally:
+                # Entry failure is not teardown. Persistent non-raising handlers
+                # protect this fallback even before a mask can be installed.
+                if not entered or (teardown is not None and not teardown.finished and not teardown.failed):
+                    settle()
+            if teardown is not None and not teardown.finished and not cleanup_errors:
+                cleanup_errors.append(RuntimeError('owned-process teardown incomplete'))
+            try:
+                guard.checkpoint()
+            except KeyboardInterrupt as error:
+                interruption = error
+                result['reason'] = 'interrupted'
+                if barrier is not None and not barrier.value['released'] and barrier.value['state']=='requested':
+                    barrier.fail('interrupted', error)
+            if barrier is not None:
+                from campaign_enforcement import seal
+                def record_enforcement():
+                    result['_enforcement'] = seal(barrier.value)
+                attempt(record_enforcement)
+            try:
+                guard.checkpoint()
+            except KeyboardInterrupt as error:
+                interruption = error
+                result['reason'] = 'interrupted'
+            result['end'] = timestamp()
+            if cleanup_errors:
+                first = cleanup_errors[0]
+                for extra in cleanup_errors[1:]:
+                    first.add_note('Additional cleanup failure: '+repr(extra))
+                if primary is not None:
+                    raise primary from first
+                if interruption is not None:
+                    raise interruption from first
+                raise first
+        finally:
+            active_error = sys.exc_info()[1]
+            try:
+                guard.restore()
+            except KeyboardInterrupt as error:
+                # Resources are settled. Preserve an unrelated cleanup failure
+                # while still recording a final termination request.
+                result['reason'] = 'interrupted'
+                if active_error is not None:
+                    active_error.add_note('Termination during signal-handler restoration: '+str(error))
     if result['reason'] == 'exited' and result['returncode'] != 0:
         result['reason'] = 'signal' if result['signal'] else 'nonzero-exit'
     return result, {name: bytes(data) for name, data in buffers.items()}

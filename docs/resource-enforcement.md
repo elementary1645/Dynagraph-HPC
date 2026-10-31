@@ -104,3 +104,71 @@ completed trial or unsafe resume reuse. Pre-GO invalid streams produce neither G
 nor a verified-success receipt. All measurement/scientific-authority flags remain
 false. No admission promotion, retry, team instrumentation or isolation is added.
 See the research log for exact before/after independent fixtures and final results.
+
+
+## R2: cleanup progress and GO accounting
+
+The R1 re-audit reproduced a signal before the cleanup context installed its mask:
+its body was skipped, yet capture returned with a live workload. It also delivered
+SIGTERM immediately after the GO write, before the release ledger assignment;
+the workload ran while the receipt incorrectly said `released=false`.
+
+Capture now installs non-raising SIGINT/SIGTERM recording handlers before creating
+any child and retains them through termination, reaping, descriptor cleanup and
+receipt sealing. Explicit execution checkpoints deliver the caller's interruption
+policy. Repeated termination requests coalesce; the caller's handlers and signal
+mask are restored. Handler handoff also checks requests recorded after the final
+checkpoint, so a late request cannot disappear during restoration. No mask is held across Popen, so children inherit the original
+mask. Ignored signals remain ignored. Handler installation is main-thread only;
+worker-thread callers retain their surrounding signal policy. These temporary
+handlers assume serialized main-thread capture/handler ownership.
+
+Cleanup tracks group termination, reaping and completion separately. Interrupted
+context entry runs a fallback under the already-installed recording handlers;
+entry is never evidence of completion. Teardown is idempotent and uses one total
+two-second monotonic reap budget. Closure/sealing failures cannot skip termination
+and are surfaced, chained to an original exception when present. An incomplete
+teardown cannot return a normal capture receipt. Linux status inspection uses
+`waitid(WNOWAIT)` instead of reaping with poll: the session leader PID remains
+reserved until group SIGKILL and wait. The child must remain a waitable child with
+its original session/group. Already-reaped or changed ownership is an error and
+never authorizes group signaling. This assumes exclusive ownership of child
+reaping: an unrelated concurrent reaper can invalidate the check-to-signal interval;
+Python cannot authenticate or serialize arbitrary external same-process actors.
+Descendants that deliberately escape the owned process group are outside this
+bounded group-cleanup mechanism. Portable non-Linux capture retains weaker process
+inspection; affinity enforcement remains Linux-only.
+
+New affinity receipts use schema version 2; the verifier continues to accept strict
+version-1 historical receipts unchanged. Policy, pilot v2, resume headers, runtime
+sidecars and journal v1 are unchanged. Version 2 adds `release`:
+
+| State | `released` | Meaning |
+| --- | --- | --- |
+| `not_attempted` | false | No GO write attempted; timestamps/byte count/errno null |
+| `attempted` | null | In-memory transition only; cannot pass offline verification |
+| `confirmed_sent` | true | Write returned exactly one byte; no workload-completion claim |
+| `not_sent` | false | Zero-byte write or known no-write EPIPE/EBADF/EAGAIN |
+| `indeterminate` | null | Delivery cannot be determined, including EINTR/EIO or an exception without a known write result |
+
+GO is a single nonblocking byte (within PIPE_BUF), after all verification and the
+final deadline/interruption checkpoint, with no automatic retry. The write and
+ledger update run under the recording handlers plus a restored signal mask.
+`attempted_at` is recorded immediately before the write; on confirmed success it
+is retained as `release_timestamp`, a pre-write bound, not an invented exact kernel
+delivery time. `confirmed_at` records when successful return was observed.
+`bytes_written` and `errno` retain known results. Ambiguous writes have no confirmed
+or release timestamp. The verifier reconciles these fields, lifecycle and process
+outcome; an unresolved `attempted` state is rejected. A post-GO interruption retains
+confirmed release but fails the process/trial/journal completion gate. An uncertain
+write never authorizes a successful completion or safe retry. Scientific flags
+remain false for every release outcome.
+
+These guarantees cover catchable SIGINT/SIGTERM in the main-thread ownership scope,
+not unconditional asynchronous-exception safety. SIGKILL, interpreter death,
+uninterruptible kernel execution, external reaping or arbitrary injected Python
+exceptions can prevent cleanup; failures must remain visible. A custom caller
+handler is invoked only at a safe checkpoint, rather than in the GO/cleanup
+critical section. Receipt serialization failure propagates after teardown. No
+claim of race freedom, external authenticity, team observation or scientific
+eligibility follows from these changes.

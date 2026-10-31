@@ -702,7 +702,8 @@ correctness/oracle and journal completion gates must still pass.
 ### Receipt schema and offline verification
 
 New per-process `I-KIND.affinity.json` sidecars use
-`dynagraph-affinity-enforcement`, exact integer `schema_version=1`. They are a
+`dynagraph-affinity-enforcement`, exact integer `schema_version=2` since R2. Strict
+version-1 historical sidecars remain supported unchanged. They are a
 separate evidence schema, not a reinterpretation of the earlier supplied
 `dynagraph-affinity-application` v1 receipt. Existing resource-assessment v1 remains
 a conservative proposal/assessment interface; it does not import the new receipt
@@ -722,6 +723,18 @@ successful receipt is manufactured for absent processes. Partial diagnostics are
 bounded and cannot grant release. Runtime PID/start identity is cross-checked
 when available. Version, binding, lifecycle, types, authority flags, times,
 CPU/cgroup semantics and digest are revalidated offline even after outer rehashing.
+
+Version 2 adds a strict `release` ledger: not_attempted (false), transient attempted
+(null; rejected offline), confirmed_sent (true), not_sent (false) or indeterminate
+(null). `attempted_at` precedes the single nonblocking GO write; confirmed writes
+retain that bound in `release_timestamp` and record `confirmed_at` on observed
+return. These are bounds, not exact kernel delivery times. Known zero-byte or
+EPIPE/EBADF/EAGAIN failures cannot claim release; ambiguous EINTR/EIO/unknown
+outcomes cannot claim definitely unreleased. No GO retry is allowed. Signal
+recording and masking protect write/ledger transitions; post-GO interruption
+retains release evidence while failing process/trial completion. Uncertain GO
+never permits successful completion or safe retry. See the runbook for cleanup
+progress, fallback and signal/ownership limitations.
 
 Pilot v2, runtime v1, journal v1 and existing resume v1 remain readable. Explicitly
 enforced resume uses resume header v2, adding `authorization.enforce_affinity=true`

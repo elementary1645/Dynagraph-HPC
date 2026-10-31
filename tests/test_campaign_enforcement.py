@@ -17,7 +17,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'benchmarks/python'))
 from campaign_enforcement import (Barrier, POLICY, binding, preflight, permitted, receipt,
                                   seal, verify, observe, validate_ack)
-from campaign_process import capture, termination_as_interrupt, LaunchDeadlineExpired
+from campaign_process import (capture, termination_as_interrupt, LaunchDeadlineExpired,
+                              defer_cleanup_signals, OwnedProcessTeardown, CaptureSignals)
 from campaign_provenance import reconcile_cgroups, mounts_for
 from workloads import canonical_json, sha256
 
@@ -58,6 +59,13 @@ def launcher_source(mode):
     return source
 
 
+def wait_exited_without_reaping(child, timeout=2):
+    stop=time.monotonic()+timeout
+    while os.waitid(os.P_PID,child.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is None:
+        if time.monotonic()>=stop:raise subprocess.TimeoutExpired(child.args,timeout)
+        time.sleep(.005)
+
+
 @contextmanager
 def faulty_launcher(directory, mode):
     helper=directory/(mode+'-launcher.py');helper.write_text(launcher_source(mode))
@@ -66,7 +74,7 @@ def faulty_launcher(directory, mode):
         argv=list(argv)
         if len(argv)>4 and argv[4].endswith('campaign_affinity_child.py'):argv[4]=str(helper)
         child=popen(argv,**kwargs);children.append(child)
-        if mode=='exit_after_ack':child.wait(timeout=2)  # Dead before the parent consumes EOF.
+        if mode=='exit_after_ack':wait_exited_without_reaping(child)  # Dead, still owned.
         return child
     try:
         with patch('campaign_enforcement.subprocess.Popen',side_effect=spawn):yield children
@@ -303,7 +311,7 @@ with patch('campaign_enforcement.preflight'):
 
     def test_rehashed_contradictions_versions_and_bindings(self):
         v,p=self.good()
-        changes=[lambda x:x.update(schema_version=True),lambda x:x.update(schema_version=2),
+        changes=[lambda x:x.update(schema_version=True),lambda x:x.update(schema_version=3),
                  lambda x:x.update(measurement_eligible=True),lambda x:x.update(released=False),
                  lambda x:x['binding'].update(trial_id='f'*64),
                  lambda x:x['binding'].update(execution_id='f'*64),
@@ -442,7 +450,7 @@ with patch('campaign_enforcement.preflight'):
                 calls.append(kwargs);return wait(*args,**kwargs)
             child.wait=bounded_wait;return child
         with patch.object(Barrier,'spawn',spawned):self.good()
-        self.assertEqual(calls,[dict(timeout=2)])
+        self.assertEqual(len(calls),1);self.assertGreater(calls[0]['timeout'],0);self.assertLessEqual(calls[0]['timeout'],2)
 
     def test_interruption_preserved_with_secondary_cleanup_error(self):
         original_close=Barrier.close;state={};spawn=Barrier.spawn
@@ -519,6 +527,214 @@ with patch('campaign_enforcement.preflight'):
             self.assertEqual(p['reason'],'interrupted');self.assertIsNotNone(state['child'].returncode)
             with self.assertRaises(ChildProcessError):os.waitpid(state['child'].pid,os.WNOHANG)
         time.sleep(.3);self.assertFalse((self.base/'late').exists())
+
+    def delayed_target(self):
+        self.target.write_text('#!/usr/bin/python3\nimport time,pathlib\ntime.sleep(.3)\npathlib.Path("late").write_text("ran")\ntime.sleep(2)\n')
+        self.b['executable_sha256']=sha256(self.target.read_bytes())
+
+    def test_R2_exact_cleanup_entry_signals_and_mask_boundaries(self):
+        self.delayed_target()
+        code=defer_cleanup_signals.__wrapped__.__code__
+        for sig in (signal.SIGINT,signal.SIGTERM):
+            for boundary in ('entry','before_mask','after_mask'):
+                state={};old_trace=sys.gettrace()
+                old_mask=signal.pthread_sigmask(signal.SIG_BLOCK,[])
+                old_handlers={s:signal.getsignal(s) for s in (signal.SIGINT,signal.SIGTERM)}
+                def trace(frame,event,arg):
+                    caller=frame.f_back.f_back if frame.f_back else None
+                    if frame.f_code is code and event=='line' and caller is not None and caller.f_code is capture.__code__:
+                        masked=bool(signal.pthread_sigmask(signal.SIG_BLOCK,[]) & {sig})
+                        if not state.get('sent') and (boundary=='entry' or
+                                (boundary=='before_mask' and frame.f_locals.get('previous','absent') is None) or
+                                (boundary=='after_mask' and masked)):
+                            state['sent']=True
+                            os.kill(os.getpid(),sig);os.kill(os.getpid(),sig)
+                    return trace
+                try:
+                    sys.settrace(trace)
+                    p,_=self.run_capture(runtime_observer=lambda pid:(_ for _ in ()).throw(ValueError('cleanup')))
+                finally:sys.settrace(old_trace)
+                self.assertTrue(state.get('sent'),boundary);self.assertEqual(p['reason'],'interrupted')
+                self.assertIsNotNone(p['returncode']);verify(p['_enforcement'],self.b,self.cpus,p)
+                self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK,[]),old_mask)
+                self.assertEqual({s:signal.getsignal(s) for s in old_handlers},old_handlers)
+        time.sleep(.35);self.assertFalse((self.base/'late').exists())
+
+    def test_cleanup_context_entry_exception_runs_fallback(self):
+        self.delayed_target();original=defer_cleanup_signals;state={}
+        @contextmanager
+        def interrupted_entry():
+            if not state.get('sent') and sys._getframe(2).f_code is capture.__code__:
+                state['sent']=True
+                raise KeyboardInterrupt('before mask')
+            with original():yield
+        with patch('campaign_process.defer_cleanup_signals',interrupted_entry):
+            p,_=self.run_capture(runtime_observer=lambda pid:(_ for _ in ()).throw(ValueError('cleanup')))
+        self.assertTrue(state.get('sent'));self.assertEqual(p['reason'],'interrupted');self.assertIsNotNone(p['returncode'])
+        time.sleep(.35);self.assertFalse((self.base/'late').exists())
+
+    def test_repeated_signals_during_kill_and_wait(self):
+        self.delayed_target()
+        for sig in (signal.SIGINT,signal.SIGTERM):
+            for stage in ('kill','wait'):
+                kill=os.killpg;spawn=Barrier.spawn;sent=[]
+                def requested():
+                    sent.append(True)
+                    for _ in range(3):os.kill(os.getpid(),sig)
+                def killed(pid,signum):
+                    if stage=='kill':requested()
+                    return kill(pid,signum)
+                def spawned(b):
+                    child=spawn(b);wait=child.wait
+                    def waited(*args,**kwargs):
+                        if stage=='wait':requested()
+                        return wait(*args,**kwargs)
+                    child.wait=waited;return child
+                with patch('os.killpg',side_effect=killed),patch.object(Barrier,'spawn',spawned):
+                    p,_=self.run_capture(runtime_observer=lambda pid:(_ for _ in ()).throw(ValueError('cleanup')))
+                self.assertTrue(sent);self.assertEqual(p['reason'],'interrupted');self.assertIsNotNone(p['returncode'])
+        time.sleep(.35);self.assertFalse((self.base/'late').exists())
+
+    def test_teardown_twice_and_concurrent_exit_keep_pid_until_signal(self):
+        child=subprocess.Popen([sys.executable,'-c','pass'],start_new_session=True)
+        self.addCleanup(reap_fixture_child,child)
+        wait_exited_without_reaping(child)
+        teardown=OwnedProcessTeardown(child);kill=os.killpg
+        with patch('os.killpg',wraps=kill) as calls:
+            teardown.run();teardown.run()
+        self.assertEqual(calls.call_count,1);self.assertTrue(teardown.finished);self.assertTrue(teardown.reaped)
+        with self.assertRaises(ChildProcessError):os.waitpid(child.pid,os.WNOHANG)
+
+    def test_teardown_already_reaped_never_signals_group(self):
+        for external in (False,True):
+            child=subprocess.Popen([sys.executable,'-c','pass'],start_new_session=True)
+            self.addCleanup(reap_fixture_child,child)
+            if external:
+                wait_exited_without_reaping(child);os.waitpid(child.pid,os.WNOHANG)
+            else:child.wait(timeout=2)
+            teardown=OwnedProcessTeardown(child)
+            with patch('os.killpg',side_effect=AssertionError('lost ownership')):
+                with self.assertRaises(ChildProcessError):teardown.run()
+                teardown.run()
+            self.assertTrue(teardown.failed)
+
+    def test_changed_group_identity_never_signals(self):
+        child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(2)'],start_new_session=True)
+        self.addCleanup(reap_fixture_child,child)
+        with patch('os.getpgid',return_value=child.pid+1),patch('os.killpg',side_effect=AssertionError('wrong group')):
+            with self.assertRaises(ChildProcessError):OwnedProcessTeardown(child).run()
+
+    def test_R2_signals_during_GO_and_after_success_before_ledger(self):
+        for sig in (signal.SIGINT,signal.SIGTERM):
+            for stage in ('during','after'):
+                state={};original=Barrier.verify_and_release;write=os.write
+                def armed(b,child):state['barrier']=b;return original(b,child)
+                def sending(fd,data):
+                    b=state.get('barrier')
+                    if b is None or fd!=b.gate:return write(fd,data)
+                    if stage=='during':os.kill(os.getpid(),sig)
+                    n=write(fd,data)
+                    if stage=='after':os.kill(os.getpid(),sig)
+                    return n
+                with patch.object(Barrier,'verify_and_release',armed),patch('os.write',side_effect=sending):p,_=self.run_capture()
+                v=p['_enforcement'];self.assertEqual(p['reason'],'interrupted');self.assertIs(v['released'],True)
+                self.assertEqual(v['release']['state'],'confirmed_sent');verify(v,self.b,self.cpus,p)
+
+    def test_signal_immediately_before_GO_prevents_write(self):
+        for sig in (signal.SIGINT,signal.SIGTERM):
+            boundary=Barrier.boundary;sent=[];write=os.write
+            def requested(b):
+                boundary(b)
+                if b.value['lifecycle'][-1]=='verified' and not sent:
+                    sent.append(True);os.kill(os.getpid(),sig)
+            with patch.object(Barrier,'boundary',requested),patch('os.write',wraps=write) as writes:p,_=self.run_capture()
+            self.assertTrue(sent);self.assertEqual(p['reason'],'interrupted');self.assertFalse(writes.called)
+            self.assertEqual(p['_enforcement']['release']['state'],'not_attempted');verify(p['_enforcement'],self.b,self.cpus,p)
+            self.assertFalse((self.base/'marker').exists())
+
+    def test_GO_known_failed_and_uncertain_IO_no_retry(self):
+        for mode in ('EPIPE','EBADF','EAGAIN','EINTR','EIO','short','unknown','delivered_then_EIO'):
+            state={};original=Barrier.verify_and_release;write=os.write;calls=[]
+            def armed(b,child):state['barrier']=b;return original(b,child)
+            def failed(fd,data):
+                b=state.get('barrier')
+                if b is None or fd!=b.gate:return write(fd,data)
+                calls.append(True)
+                if mode=='short':return 0
+                if mode=='unknown':raise KeyboardInterrupt('unknown write outcome')
+                if mode=='delivered_then_EIO':write(fd,data);raise OSError(errno.EIO,'after delivery')
+                raise OSError(getattr(errno,mode),'injected GO failure')
+            with patch.object(Barrier,'verify_and_release',armed),patch('os.write',side_effect=failed):p,_=self.run_capture()
+            v=p['_enforcement'];uncertain=mode in ('EINTR','EIO','unknown','delivered_then_EIO')
+            self.assertEqual(len(calls),1);self.assertIs(v['released'],None if uncertain else False)
+            self.assertEqual(v['release']['state'],'indeterminate' if uncertain else 'not_sent')
+            self.assertIsNone(v['release_timestamp']);self.assertNotEqual(p['reason'],'exited');verify(v,self.b,self.cpus,p)
+            bad=copy.deepcopy(v);bad['release']['attempted_at']=bad['observation']['start']
+            with self.assertRaises(ValueError):verify(seal(bad),self.b,self.cpus,p)
+            self.assertFalse(v['measurement_eligible'])
+            if mode!='delivered_then_EIO':self.assertFalse((self.base/'marker').exists())
+            (self.base/'marker').unlink(missing_ok=True)
+
+    def test_GO_child_exit_and_unexpected_closed_control_fd(self):
+        for mode in ('child_exit','closed_gate'):
+            original=Barrier.boundary;state={}
+            def failed(b):
+                original(b)
+                if b.value['lifecycle'][-1]=='verified' and not state:
+                    state['sent']=True
+                    if mode=='child_exit':
+                        os.kill(b.process.pid,signal.SIGKILL)
+                        wait_exited_without_reaping(b.process)
+                    else:os.close(b.gate)
+            with patch.object(Barrier,'boundary',failed):p,_=self.run_capture()
+            self.assertEqual(p['_enforcement']['release']['state'],'not_sent')
+            self.assertIs(p['_enforcement']['released'],False);verify(p['_enforcement'],self.b,self.cpus,p)
+            self.assertFalse((self.base/'marker').exists())
+
+    def test_signal_during_handler_handoff_is_not_lost(self):
+        original=CaptureSignals.restore
+        for sig in (signal.SIGINT,signal.SIGTERM):
+            handlers={s:signal.getsignal(s) for s in (signal.SIGINT,signal.SIGTERM)}
+            mask=signal.pthread_sigmask(signal.SIG_BLOCK,[])
+            def requested(guard):
+                os.kill(os.getpid(),sig)
+                return original(guard)
+            with patch.object(CaptureSignals,'restore',requested):p,_=self.run_capture()
+            self.assertEqual(p['reason'],'interrupted');self.assertIsNotNone(p['returncode'])
+            self.assertEqual({s:signal.getsignal(s) for s in handlers},handlers)
+            self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK,[]),mask)
+            verify(p['_enforcement'],self.b,self.cpus,p)
+
+    def test_legacy_v1_and_strict_v2_release_reconciliation(self):
+        v,p=self.good();legacy=copy.deepcopy(v);legacy.pop('release');legacy['schema_version']=1
+        verify(seal(legacy),self.b,self.cpus,p)
+        for mutation in (lambda x:x['release'].update(attempted_at=x['observation']['start']),
+                         lambda x:x['release'].update(state='attempted'),
+                         lambda x:x['release'].update(bytes_written=True),
+                         lambda x:x['release'].update(confirmed_at=None),
+                         lambda x:x['release'].update(errno=errno.EPIPE),
+                         lambda x:x.update(released=None),
+                         lambda x:x['release'].update(state='not_sent')):
+            bad=copy.deepcopy(v);mutation(bad)
+            with self.assertRaises((ValueError,TypeError)):verify(seal(bad),self.b,self.cpus,p)
+
+    def test_signal_during_final_serialization_keeps_release_and_reaps(self):
+        import campaign_enforcement as ce
+        sealing=ce.seal;state={}
+        def signaled(value):
+            if value['release']['state']=='confirmed_sent' and value['release_timestamp'] is not None and not state:
+                state['sent']=True;os.kill(os.getpid(),signal.SIGTERM)
+            return sealing(value)
+        # Candidate sealing is pre-GO; inject only in capture's final serialization.
+        def final(value):
+            frame=sys._getframe(1)
+            while frame is not None:
+                if frame.f_code.co_name=='record_enforcement':return signaled(value)
+                frame=frame.f_back
+            return sealing(value)
+        with patch('campaign_enforcement.seal',side_effect=final):p,_=self.run_capture()
+        self.assertTrue(state);self.assertEqual(p['reason'],'interrupted');self.assertIsNotNone(p['returncode'])
+        self.assertTrue(p['_enforcement']['released']);verify(p['_enforcement'],self.b,self.cpus,p)
 
 
 @unittest.skipUnless(sys.platform=='linux' and hasattr(os,'sched_getaffinity'),'Linux required')
@@ -608,6 +824,25 @@ class PilotIntegrationTests(unittest.TestCase):
             before=f.snapshot()
             with self.assertRaises(ValueError):resume_pilot(f.out,execute=True,authorize=True,enforce_affinity=True)
             self.assertEqual(f.snapshot(),before);self.assertEqual(f.marks(),[])
+
+    def test_R2_post_GO_signal_keeps_release_without_completion(self):
+        from campaign_pilot import verify_pilot
+        original=Barrier.verify_and_release;write=os.write;state={}
+        def armed(b,child):state['barrier']=b;return original(b,child)
+        def sent(fd,data):
+            n=write(fd,data);b=state.get('barrier')
+            if b is not None and fd==b.gate and data==b'G' and not state.get('sent'):
+                stop=time.monotonic()+.5
+                while not self.f.marks() and time.monotonic()<stop:time.sleep(.002)
+                state['executed']=bool(self.f.marks());state['sent']=True
+                os.kill(os.getpid(),signal.SIGTERM)
+            return n
+        with patch.object(Barrier,'verify_and_release',armed),patch('os.write',side_effect=sent):index=self.start()
+        self.assertTrue(state['executed']);self.assertEqual(index['status'],'failed')
+        self.assertEqual(verify_pilot(self.f.out)['execution_status'],'failed')
+        value=json.loads(next(self.f.out.glob('*/*.affinity.json')).read_bytes())
+        self.assertIs(value['released'],True);self.assertEqual(value['release']['state'],'confirmed_sent')
+        self.assertIsNotNone(value['release_timestamp']);self.assertFalse(value['measurement_eligible'])
 
     def test_close_boundary_SIGTERM_cannot_record_completed_trial(self):
         from campaign_journal import inspect_recovery

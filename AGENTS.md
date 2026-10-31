@@ -2,9 +2,9 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2B-3B-2-R1 targeted IPC and process-cleanup
-  remediation on feature/phase6b2b3b2-resource-enforcement, based on 1450d47.
-  Fix descriptor ownership/termination safety and bounded acknowledgement EOF framing. Explicit opt-in, bounded development fixtures, tests, local
+- Current authorized scope: Phase 6B-2B-3B-2-R2 targeted signal-safe cleanup and GO accounting
+  remediation on feature/phase6b2b3b2-resource-enforcement, based on 5352bea.
+  Fix cleanup-context entry interruption and atomic/conservative release receipts. Preserve R1 descriptor ownership and bounded acknowledgement EOF framing. Explicit opt-in, bounded development fixtures, tests, local
   verification and a local commit are authorized. Preserve safe-resume authorization,
   immutable evidence, pilot v2, journal v1, ownership and R1 deadlines.
   No scientific eligibility, isolation/ownership guarantees, retries, dependency
@@ -15,7 +15,7 @@
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-2B-3B-2-R1 implementation/local verification and the authorized commit;
+- Stop after Phase 6B-2B-3B-2-R2 implementation/local verification and the authorized commit;
   broader recovery and later scientific execution/inference remain deferred. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report

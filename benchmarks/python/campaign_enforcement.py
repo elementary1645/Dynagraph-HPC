@@ -13,7 +13,7 @@ from campaign_contract import fields, digest, integer, load_bytes
 from campaign_provenance import cpu_array, cpu_list, process_identity, validate_cgroups
 from campaign_hardware import cgroup_ancestry
 from campaign_runtime import read_metadata, time_range
-from campaign_process import timestamp, defer_cleanup_signals
+from campaign_process import timestamp, defer_cleanup_signals, child_exited
 from workloads import canonical_json, sha256
 
 POLICY = 'linux-self-affinity-barrier-v1; development-only'
@@ -81,10 +81,11 @@ def binding(bound, trial, index, origin, command, executable, ownership_sha256):
 
 
 def receipt(request):
-    return dict(schema='dynagraph-affinity-enforcement',schema_version=1,
+    return dict(schema='dynagraph-affinity-enforcement',schema_version=2,
                 binding=copy.deepcopy(request['binding']),requested_cpus=copy.deepcopy(request['cpus']),
                 lifecycle=['requested'],state='requested',acknowledgement=None,observation=None,
-                released=False,release_timestamp=None,error=None,measurement_eligible=False,
+                released=False,release_timestamp=None,
+                release=dict(state='not_attempted',attempted_at=None,confirmed_at=None,bytes_written=None,errno=None),error=None,measurement_eligible=False,
                 scientific_performance_allowed=False,execution_authorized=False,
                 limitations=list(LIMITATIONS))
 
@@ -141,9 +142,11 @@ class Barrier:
     """Own pipes/descriptors until cleanup; workload release is one explicit byte."""
     def __init__(self, request, command, cwd, environment, stop):
         self.request=request;self.command=command;self.cwd=cwd;self.environment=environment
+        self.checkpoint=lambda:None
         self.stop=stop;self.value=receipt(request);self.fds=[];self._fd_identity={};self.pid=None;self.process=None
 
     def boundary(self):
+        self.checkpoint()
         if time.monotonic()>=self.stop:raise TimeoutError('affinity enforcement deadline expired')
 
     def spawn(self):
@@ -191,8 +194,8 @@ class Barrier:
         self.value['acknowledgement']=a
         ticks=validate_ack(a,process.pid,self.request['cpus'],self.request['binding']['executable_sha256'])
         self.value['lifecycle'].append('applied');self.boundary()
-        o=observe(process.pid);self.value['observation']=o
-        if o['pid']!=process.pid or o['process_start_ticks']!=ticks or process.poll() is not None:
+        o=observe(process.pid);self.checkpoint();self.value['observation']=o
+        if o['pid']!=process.pid or o['process_start_ticks']!=ticks or child_exited(process):
             raise EnforcementError('child identity mismatch or exit before release')
         if o['affinity']!=self.request['cpus']:
             raise EnforcementError('independent effective affinity mismatch')
@@ -208,16 +211,42 @@ class Barrier:
         time_range(a['timestamp'],o['start']);self.boundary()
         self.value['lifecycle'].append('verified')
         # No journal I/O or observation after this final check and before GO.
-        release=timestamp()
         candidate=copy.deepcopy(self.value)
-        candidate.update(state='verified',released=True,release_timestamp=release)
+        candidate.update(state='verified',released=True,release_timestamp=timestamp())
+        candidate['release'].update(state='confirmed_sent',attempted_at=timestamp(),confirmed_at=timestamp(),bytes_written=1)
         load_bytes(canonical_json(seal(candidate)))  # Metadata cap before authorizing exec.
+        os.set_blocking(self.gate,False)  # One byte <= PIPE_BUF; never block or retry GO.
         self.boundary()
-        if os.write(self.gate,b'G')!=1:raise EnforcementError('workload release failed')
-        self.value=candidate
+        self.checkpoint()  # Also covers a request delivered by a boundary hook.
+        with defer_cleanup_signals():
+            self.checkpoint()
+            release=self.value['release']
+            release.update(state='attempted',attempted_at=timestamp())
+            self.value['released']=None  # Until the syscall result is known.
+            try:
+                written=os.write(self.gate,b'G')
+            except BaseException as error:
+                code=error.errno if isinstance(error,OSError) else None
+                known=code in (errno.EPIPE,errno.EBADF,errno.EAGAIN,errno.EWOULDBLOCK)
+                release.update(state='not_sent' if known else 'indeterminate',errno=code)
+                self.value['released']=False if known else None
+                raise
+            else:
+                # No raising signal handlers can run between the write and ledger.
+                release.update(state='confirmed_sent' if written==1 else 'not_sent',bytes_written=written)
+                self.value['released']=written==1
+                if written==1:
+                    self.value.update(state='verified',release_timestamp=release['attempted_at'])
+                    release['confirmed_at']=timestamp()
+                else:
+                    raise EnforcementError('workload release short write')
+        self.checkpoint()
         self.close_fd(self.gate)
 
     def fail(self, state, error):
+        if self.value['release']['state']=='attempted':
+            self.value['release']['state']='indeterminate'
+            self.value['released']=None
         self.value.update(state=state,error=str(error)[:2048])
         self.value['lifecycle'].append(state)
 
@@ -258,8 +287,10 @@ class Barrier:
 def verify(value, expected, cpus, process, runtime_snapshot=None):
     """Offline semantic reconciliation in addition to inventory/digest checks."""
     load_bytes(canonical_json(value))
-    fields(value,'schema schema_version binding requested_cpus lifecycle state acknowledgement observation released release_timestamp error measurement_eligible scientific_performance_allowed execution_authorized limitations evidence_sha256','affinity enforcement')
-    if value['schema']!='dynagraph-affinity-enforcement' or type(value['schema_version']) is not int or value['schema_version']!=1:
+    version=value.get('schema_version')
+    extra=' release' if type(version) is int and version==2 else ''
+    fields(value,'schema schema_version binding requested_cpus lifecycle state acknowledgement observation released release_timestamp error measurement_eligible scientific_performance_allowed execution_authorized limitations evidence_sha256'+extra,'affinity enforcement')
+    if value['schema']!='dynagraph-affinity-enforcement' or type(value['schema_version']) is not int or value['schema_version'] not in (1,2):
         raise ValueError('unsupported affinity enforcement schema')
     if canonical_json(value['binding'])!=canonical_json(expected) or canonical_json(value['requested_cpus'])!=canonical_json(cpus):
         raise ValueError('affinity receipt execution/trial/request mismatch')
@@ -267,6 +298,7 @@ def verify(value, expected, cpus, process, runtime_snapshot=None):
     if value!=seal(value):raise ValueError('affinity evidence digest mismatch')
     if any(value[k] is not False for k in ('measurement_eligible','scientific_performance_allowed','execution_authorized')) or value['limitations']!=LIMITATIONS:
         raise ValueError('unsupported affinity authority claim')
+    if version==2:validate_release(value,process)
     path=value['lifecycle'];prefix=['requested','validated','application_pending','applied','verified']
     if type(path) is not list or len(path)<2 or path[0]!='requested' or any(type(s) is not str or s not in STATES for s in path):
         raise ValueError('invalid enforcement lifecycle')
@@ -275,7 +307,7 @@ def verify(value, expected, cpus, process, runtime_snapshot=None):
         if path!=prefix or value['released'] is not True or value['error'] is not None:
             raise ValueError('contradictory verified enforcement')
     elif (value['state'] not in ('rejected','indeterminate','interrupted') or path[-1]!=value['state'] or
-          path[:-1]!=prefix[:len(path)-1] or len(path)>6 or value['released'] is not False or
+          path[:-1]!=prefix[:len(path)-1] or len(path)>6 or (value['released'] is not False and not (version==2 and value['released'] is None)) or
           value['release_timestamp'] is not None or type(value['error']) is not str or not 1<=len(value['error'])<=2048 or
           process['reason']=='exited'):
         raise ValueError('contradictory unsuccessful enforcement')
@@ -312,3 +344,38 @@ def verify(value, expected, cpus, process, runtime_snapshot=None):
     if success:
         time_range(o['end'],value['release_timestamp']);time_range(value['release_timestamp'],process['end'])
     return value
+
+
+def validate_release(value, process):
+    r=value['release']
+    fields(r,'state attempted_at confirmed_at bytes_written errno','GO release')
+    state=r['state']
+    if state not in ('not_attempted','attempted','confirmed_sent','not_sent','indeterminate'):
+        raise ValueError('invalid GO release state')
+    if state=='attempted':
+        raise ValueError('unsettled GO attempt must be indeterminate')
+    if state=='not_attempted':
+        if any(r[k] is not None for k in ('attempted_at','confirmed_at','bytes_written','errno')) or value['released'] is not False:
+            raise ValueError('contradictory unattempted GO')
+    else:
+        if 'verified' not in value['lifecycle'] or value['observation'] is None:
+            raise ValueError('GO attempted before verification')
+        time_range(value['observation']['end'],r['attempted_at'])
+        time_range(process['start'],r['attempted_at']);time_range(r['attempted_at'],process['end'])
+        if state=='confirmed_sent':
+            if (value['released'] is not True or type(r['bytes_written']) is not int or r['bytes_written']!=1 or
+                    r['errno'] is not None or value['release_timestamp']!=r['attempted_at']):
+                raise ValueError('contradictory confirmed GO')
+            time_range(r['attempted_at'],r['confirmed_at']);time_range(r['confirmed_at'],process['end'])
+        else:
+            if r['confirmed_at'] is not None or value['release_timestamp'] is not None:
+                raise ValueError('unconfirmed GO timestamp')
+            if state=='not_sent':
+                if (value['released'] is not False or not
+                    ((type(r['bytes_written']) is int and r['bytes_written']==0 and r['errno'] is None) or
+                     (r['bytes_written'] is None and type(r['errno']) is int and r['errno'] in (errno.EPIPE,errno.EBADF,errno.EAGAIN)))):
+                    raise ValueError('contradictory failed GO')
+            elif value['released'] is not None or r['bytes_written'] is not None or (r['errno'] is not None and (type(r['errno']) is not int or not 1<=r['errno']<=4095)):
+                raise ValueError('contradictory indeterminate GO')
+    if state!='confirmed_sent' and value['release_timestamp'] is not None:
+        raise ValueError('release timestamp without confirmation')
