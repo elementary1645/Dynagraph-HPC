@@ -40,7 +40,7 @@ def preflight(original):
     return context, ownership, expected, head, reused, pending
 
 
-def header(original):
+def header(original, enforce_affinity=False):
     context, ownership, bound, head, reused, pending = preflight(original)
     value = dict(schema='dynagraph-pilot-resume', schema_version=1, attempt_sequence=1,
                  original=str(original), original_execution_id=bound['pilot_execution_id'],
@@ -52,6 +52,14 @@ def header(original):
                  original_inventory=bounded_inventory(original),
                  original_sidecar=(sha256(regular_bytes(original/'sha256.json',MAX_ARTIFACT))
                                    if (original/'sha256.json').exists() else None))
+    from campaign_enforcement import POLICY
+    if type(enforce_affinity) is not bool:
+        raise ValueError('enforce_affinity must be boolean')
+    if context[2]['affinity_policy']==POLICY and not enforce_affinity:
+        raise ValueError('enforced original requires explicit --enforce-affinity on resume')
+    if enforce_affinity:
+        value['schema_version']=2
+        value['authorization']['enforce_affinity']=True
     value['attempt_id'] = sha256(canonical_json(value))
     return value, context
 
@@ -63,13 +71,15 @@ def event(sequence, previous, kind, payload):
     return value
 
 
-def resume_pilot(original, *, execute=False, authorize=False):
+def resume_pilot(original, *, execute=False, authorize=False, enforce_affinity=False):
+    if type(enforce_affinity) is not bool:
+        raise ValueError('enforce_affinity must be boolean')
     if execute is not True or authorize is not True:
         raise ValueError('both --execute-development and --authorize-resume are required')
     original = Path(original).absolute()
     begin = time.monotonic()
     with directory_lock(original):
-        value, context = header(original)
+        value, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}))
         plan, manifest, execution, selected, hardware = context
         limits = value['limits']
         deadline = begin + limits['wall_seconds']
@@ -96,7 +106,8 @@ def resume_pilot(original, *, execute=False, authorize=False):
             run_pilot(plan, manifest, root, attempt/'pilot', value['pending'], execute=True,
                       max_trials=limits['max_trials'], wall_seconds=limits['wall_seconds'],
                       timeout=limits['timeout_seconds'], output_limit=limits['stream_bytes'],
-                      _deadline=deadline, _runtime_origin=dict(kind='resume', attempt_id=value['attempt_id']))
+                      _deadline=deadline, _runtime_origin=dict(kind='resume', attempt_id=value['attempt_id']),
+                      **(dict(enforce_affinity=True) if enforce_affinity else {}))
             child = inspect_recovery(attempt/'pilot')
             payload = dict(attempt_id=value['attempt_id'],
                            pilot_inventory=bounded_inventory(attempt/'pilot'),
@@ -125,7 +136,8 @@ def inspect_resume(attempt):
     original = Path(value['original'])
     if transaction_path(original) != attempt:
         raise ValueError('resume directory identity mismatch; relocation unsupported')
-    expected, context = header(original)
+    enforce_affinity = value.get('schema_version')==2
+    expected, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}))
     if canonical_json(value) != canonical_json(expected):
         raise ValueError('resume binding or original evidence mismatch')
     child = None
@@ -143,6 +155,9 @@ def inspect_resume(attempt):
                 contract = read_json(attempt/'pilot/runtime-contract.json')
                 if contract.get('origin') != dict(kind='resume', attempt_id=value['attempt_id']):
                     raise ValueError('resumed runtime origin mismatch')
+            from campaign_enforcement import POLICY, INHERIT
+            if e['affinity_policy'] != (POLICY if enforce_affinity else INHERIT):
+                raise ValueError('resumed enforcement opt-in mismatch')
             if (canonical_json(p)!=canonical_json(context[0]) or canonical_json(m)!=canonical_json(context[1]) or
                     e['limits']!=value['limits'] or [t['trial_id'] for t in s]!=value['pending'] or
                     canonical_json(read_json(attempt/'pilot'/OWNER))!=canonical_json(owner(value['ownership']['input_root'],attempt/'pilot'))):

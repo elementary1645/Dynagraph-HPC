@@ -660,3 +660,94 @@ enforcement lifecycle and trusted application receipts, stability/placement
 observations and separate OpenMP workload instrumentation contracts. Privileged
 resource operations, isolation guarantees, scientific execution/admission,
 performance claims, retries and TSan acceptance remain outside this phase.
+
+## Phase 6B-2B-3B-2: unprivileged affinity barrier
+
+Enforcement is explicit: add `--enforce-affinity` to `campaign.py pilot` or
+`resume-pilot`, alongside their existing development/resume authorizations.
+Default execution still inherits affinity. Enforced execution declares
+`affinity_policy="linux-self-affinity-barrier-v1; development-only"` in the
+existing pilot execution v2 manifest. This policy participates in execution and
+journal identity. Unknown policies and enforcement artifacts without opt-in fail
+verification. Plan and deterministic trial-manifest formats/bytes do not change.
+
+A Linux Python launcher applies `sched_setaffinity(0, requested_cpus)` to itself,
+never to the parent or an unrelated PID. It independently reads its effective
+set and acknowledges on a private pipe. It has not executed the benchmark.
+The parent checks live PID/start ticks, exact effective affinity, online CPU IDs,
+visible child cgroup2 ancestry/cpuset and every finite ancestor quota against the
+requested workers. Unavailable or unsupported mandatory sources prevent release.
+There is no alternate CPU selection, privileged operation, cgroup write or retry.
+
+The staged executable is opened without following a leaf symlink, bounded and
+hashed before spawning. The child hashes that inherited descriptor; the parent
+rehashes the pinned descriptor before release. Execution uses that descriptor,
+so pathname replacement cannot select a different file. Python startup is
+isolated (`-I -S -B`); the implementation avoids Python `preexec_fn` after fork.
+Local files, interpreter, libraries and the host remain trusted components.
+A hostile same-UID writer changing executable bytes after the final check is not
+prevented; this is not authenticated provenance or immutable filesystem attestation.
+
+The lifecycle is `requested -> validated -> application_pending -> applied ->
+verified`. A prefix may end in `rejected` (known validation/application mismatch),
+`indeterminate` (deadline/OS observation unavailable), or `interrupted` (termination).
+Only verified enforcement can send the single GO byte. Parent death before GO
+closes the pipe; EOF is never authorization to execute. The monotonic process
+and attempt deadlines include enforcement. Checks occur before spawning, while
+waiting for acknowledgement, during verification and immediately before GO.
+Existing process-group termination, stream caps and SIGTERM cleanup remain in
+force. A verified release is not proof of successful execution; normal process,
+correctness/oracle and journal completion gates must still pass.
+
+### Receipt schema and offline verification
+
+New per-process `I-KIND.affinity.json` sidecars use
+`dynagraph-affinity-enforcement`, exact integer `schema_version=2` since R2. Strict
+version-1 historical sidecars remain supported unchanged. They are a
+separate evidence schema, not a reinterpretation of the earlier supplied
+`dynagraph-affinity-application` v1 receipt. Existing resource-assessment v1 remains
+a conservative proposal/assessment interface; it does not import the new receipt
+as an authenticated application claim or scientific-admission fact. Use the new
+sidecar plus `verify-pilot` to inspect/reconcile actual enforcement.
+
+The receipt binds execution/trial identity, journal binding digest, process index,
+original/resume origin and non-null attempt ID, argv, staged executable SHA-256
+and workers. Original attempt IDs hash execution identity plus the pilot directory
+ownership-record digest; resumed attempt IDs use the authorized resume header ID.
+It records requested CPUs, lifecycle/terminal state, child acknowledgement with
+PID/raw stat/application time/applied set/errno, independent parent observation
+with PID/start ticks/effective set/online set/raw cgroup evidence and observation
+interval/source, release timestamp, errors and a canonical SHA-256 of the remaining
+receipt. Failed attempts can have null acknowledgement/observation/times; no
+successful receipt is manufactured for absent processes. Partial diagnostics are
+bounded and cannot grant release. Runtime PID/start identity is cross-checked
+when available. Version, binding, lifecycle, types, authority flags, times,
+CPU/cgroup semantics and digest are revalidated offline even after outer rehashing.
+
+Version 2 adds a strict `release` ledger: not_attempted (false), transient attempted
+(null; rejected offline), confirmed_sent (true), not_sent (false) or indeterminate
+(null). `attempted_at` precedes the single nonblocking GO write; confirmed writes
+retain that bound in `release_timestamp` and record `confirmed_at` on observed
+return. These are bounds, not exact kernel delivery times. Known zero-byte or
+EPIPE/EBADF/EAGAIN failures cannot claim release; ambiguous EINTR/EIO/unknown
+outcomes cannot claim definitely unreleased. No GO retry is allowed. Signal
+recording and masking protect write/ledger transitions; post-GO interruption
+retains release evidence while failing process/trial completion. Uncertain GO
+never permits successful completion or safe retry. See the runbook for cleanup
+progress, fallback and signal/ownership limitations.
+
+Pilot v2, runtime v1, journal v1 and existing resume v1 remain readable. Explicitly
+enforced resume uses resume header v2, adding `authorization.enforce_affinity=true`
+to the hashed attempt identity. It still reserves one attempt permanently and
+reuses only verified original completions. Enforced originals require renewed
+explicit enforcement opt-in; new evidence belongs only to pending trials in the
+fresh child pilot. Missing/contradictory enforcement sidecars cannot make a
+successful enforced trial. No original evidence is rewritten.
+
+All receipt/assessment eligibility and scientific execution-authority flags stay
+false. Effective leader affinity is not worker instrumentation, placement stability,
+exclusive physical-core ownership, resource isolation or absence of contention.
+Cgroup visibility and quota checks cannot expose hidden host constraints. The
+Codespace remains development-only. Scientific admission, external attestation,
+workload-region OpenMP team instrumentation, isolation and retries remain deferred.
+See [resource-enforcement.md](resource-enforcement.md) for commands and failures.

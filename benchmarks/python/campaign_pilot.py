@@ -414,7 +414,7 @@ def verify_success(directory, record, plan):
 
 
 def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None):
+              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False):
     # New pilots reserve once and hold ownership through final publication.
     # Historical pilots without this protocol remain inspectable, not resumable.
     from campaign_ownership import directory_lock, owner, OWNER
@@ -422,21 +422,31 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
     bounds(plan, max_trials, wall_seconds, timeout, output_limit)
     if execute is not True:
         raise ValueError('--execute-development is required to launch a pilot')
+    if type(enforce_affinity) is not bool:
+        raise ValueError('enforce_affinity must be boolean')
+    enforcement_deadline = time.monotonic()+wall_seconds if enforce_affinity else None
+    if enforce_affinity:
+        from campaign_enforcement import preflight
+        for trial in select(plan, manifest, trial_ids, max_trials):
+            preflight(plan['hardware']['allocated_cpus'], trial['workers'])
     root = Path(root).resolve(strict=True)
     output = Path(output).absolute()
     output.mkdir(parents=True, exist_ok=False)
     attempt_deadline = time.monotonic()+wall_seconds
+    if enforcement_deadline is not None:
+        attempt_deadline = min(attempt_deadline, enforcement_deadline)
     if _deadline is not None:
         attempt_deadline = min(attempt_deadline, _deadline)
     with directory_lock(output):
         put(output, OWNER, owner(root, output))
         return _run_pilot(plan, manifest, root, output, trial_ids, execute=execute,
                           max_trials=max_trials, wall_seconds=wall_seconds, timeout=timeout,
-                          output_limit=output_limit, _deadline=attempt_deadline, _runtime_origin=_runtime_origin)
+                          output_limit=output_limit, _deadline=attempt_deadline, _runtime_origin=_runtime_origin,
+                          enforce_affinity=enforce_affinity)
 
 
 def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None):
+               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False):
     selected = select(plan, manifest, trial_ids, max_trials)
     bounds(plan, max_trials, wall_seconds, timeout, output_limit)
     if execute is not True:
@@ -459,7 +469,8 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                      limits=dict(max_trials=max_trials, wall_seconds=wall_seconds,
                                  timeout_seconds=timeout, stream_bytes=output_limit),
                      development_only=True, measurement_eligible=False,
-                     affinity_policy='inherit; requested plan affinity recorded, not applied')
+                     affinity_policy=('linux-self-affinity-barrier-v1; development-only' if enforce_affinity else
+                                      'inherit; requested plan affinity recorded, not applied'))
     put(output, 'execution-manifest.json', execution)
     from campaign_journal import Journal
     journal = Journal.create(output)
@@ -512,9 +523,18 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                     remaining = trial_deadline-now
                     if remaining <= 0:
                         return expired(now)
+                    enforcement = None
+                    if enforce_affinity:
+                        from campaign_enforcement import binding as affinity_binding
+                        from campaign_ownership import OWNER
+                        enforcement = dict(cpus=plan['hardware']['allocated_cpus'],
+                            binding=affinity_binding(journal.bound, trial, len(record['processes']),
+                                                    runtime_origin, arguments, record['executable_sha256'],
+                                                    sha256(regular_bytes(output/OWNER,MAX_ARTIFACT))))
                     try:
                         process, streams = capture(arguments, directory, env, remaining, output_limit,
                                                    deadline=trial_deadline,
+                                                   **(dict(enforcement=enforcement) if enforce_affinity else {}),
                                                    runtime_observer=lambda pid: collect(
                                                        pid, directory/'runner', record['executable_sha256']))
                     except LaunchDeadlineExpired:
@@ -522,6 +542,9 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                         # Do not manufacture streams, a receipt or an exit code.
                         return expired(time.monotonic())
                     from campaign_runtime import provenance
+                    if enforce_affinity:
+                        put(directory, f'{len(record["processes"])}-{kind}.affinity.json',
+                            process.pop('_enforcement'))
                     snapshot = process.pop('_runtime_snapshot', None)
                     observation = provenance(journal.bound, trial, process, snapshot, runtime_origin, record['executable_sha256'])
                     put(directory, f'{len(record["processes"])}-{kind}.runtime.json', observation)
@@ -600,6 +623,9 @@ def pilot_context(directory):
             execution['schema_version']!=2 or execution['development_only'] is not True or
             execution['measurement_eligible'] is not False):
         raise ValueError('invalid pilot execution schema')
+    from campaign_enforcement import POLICY, INHERIT
+    if execution['affinity_policy'] not in (POLICY, INHERIT):
+        raise ValueError('unsupported pilot affinity policy')
     limits = execution['limits'];fields(limits,'max_trials wall_seconds timeout_seconds stream_bytes','pilot limits')
     bounds(plan,limits['max_trials'],limits['wall_seconds'],limits['timeout_seconds'],limits['stream_bytes'])
     selected = select(plan,manifest,[t['trial_id'] for t in execution['selected_trials']],limits['max_trials'])
@@ -657,6 +683,23 @@ def verify_trial_evidence(directory, trial, plan, execution, hardware, inventory
             verify_runtime(read_json(directory/base/name), bound, record, process, origin)
     elif (directory/'runtime-contract.json').exists() or any(n.endswith('.runtime.json') for n in record['artifacts']):
         raise ValueError('runtime observation contract downgrade')
+    from campaign_enforcement import POLICY, binding as affinity_binding, verify as verify_affinity
+    from campaign_ownership import OWNER
+    affinity_names = {n for n in record['artifacts'] if n.endswith('.affinity.json')}
+    if execution['affinity_policy'] == POLICY:
+        expected_affinity = {f"{i}-{p['command'][1]}.affinity.json" for i,p in enumerate(record['processes'])}
+        if affinity_names != expected_affinity:
+            raise ValueError('missing or extra enforcement evidence')
+        if record['execution_observations'] != MARKER:
+            raise ValueError('enforced pilot requires runtime origin contract')
+        for i, process in enumerate(record['processes']):
+            expected = affinity_binding(bound, trial, i, origin, process['command'], record['executable_sha256'],
+                                        sha256(regular_bytes(directory/OWNER,MAX_ARTIFACT)))
+            verify_affinity(read_json(directory/base/f"{i}-{process['command'][1]}.affinity.json"),
+                            expected, record['requested_affinity'], process,
+                            read_json(directory/base/f"{i}-{process['command'][1]}.runtime.json")['snapshot'])
+    elif affinity_names:
+        raise ValueError('enforcement evidence without execution opt-in')
     if record['status']=='success':
         verify_success(directory/base,record,plan)
     return record
