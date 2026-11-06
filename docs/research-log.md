@@ -5310,3 +5310,28 @@ or claimed. Scientific eligibility remains false; TSan's earlier work_ finding a
 unmet research gate are unchanged. Phases B–G have not started in this restoration
 task; whole-project completion is not declared. The next phase is the separately
 scoped Codespaces resource-stability/interference assessment.
+
+## 2026-11-06 — Phase 6B-2B-3B-4 implementation
+
+Authorized baseline be3588a on feature/phase6b2b3b4-resource-interference. Added
+bounded Linux resource snapshots, workload v3 monotonic envelopes, semantic
+classification and explicit pilot/offline/journal/resume integration. Kept earlier
+resource-control contracts, workload v2, pilot v2, journal v1 and enforcement R1/R2
+semantics. Native testing exposed a valid cpu.stat kernel extension and full
+campaign regression exposed a malformed-input exception regression; both corrected
+before acceptance. [Phase B matrix](phase-b-acceptance.md) records final validation.
+Scientific eligibility false; isolation, absence of contention and TSan acceptance
+are not established. Historical Phase 5 evidence is preserved, not regenerated.
+
+Final Phase B local acceptance: APPROVED for bounded development evidence.
+Canonical Debug/Release/sanitizer profiles passed 31 CTests each; final additive
+workload/resource CTest tiers passed in all three configurations (14 + 11 tests),
+and all 382 campaign tests passed. Combined registration 33, Release smoke 32 trials /
+14 figures, nine smoke negatives, six environment negatives and four compatibility
+configurations passed. Six native trials observed shared CPU PSI increases with
+complete coverage. Retained lifecycle evidence proves immutable original reuse and
+non-reusability after publication failure/post-GO interruption. Both 104-trial hashes
+are unchanged; 825 historical audit entries match. Exact source relationships,
+commands, versions, initial corrections and limits are in the Phase B matrix.
+No scientific eligibility, TSan acceptance, hosted CI, isolation or contention-free
+execution claim follows. Stop after the local commit; no later phase started.

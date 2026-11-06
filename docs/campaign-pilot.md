@@ -248,3 +248,10 @@ execution-time runtime/team/affinity observations, enforced placement and resour
 isolation, larger workloads, resumption/retries, campaign matrix execution,
 statistical analysis, visualization, performance/scaling claims and inference.
 TSan acceptance and race freedom remain unestablished.
+
+Bounded diagnostic selections may add
+`--observe-resources --observe-workload --enforce-affinity` for the separate
+[resource interference contract](resource-interference.md). This excludes timing
+trials and keeps scientific eligibility false. Complete coverage can record
+observed interference or configuration change as diagnostic outcomes; it does not
+admit performance results or isolation claims.

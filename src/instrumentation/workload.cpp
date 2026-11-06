@@ -1,5 +1,6 @@
 #include "dynagraph/instrumentation/workload.hpp"
 #include <omp.h>
+#include "dynagraph/instrumentation/resources.hpp"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -88,7 +89,16 @@ void WorkloadObservations::prepare(int requested, int configured) {
 }
 void WorkloadObservations::capture(int number, bool exit) {
     auto& t = regions.back().threads.at(static_cast<std::size_t>(number));
-    if (exit) { t.exit = sample(); return; }
+    if (exit) {
+        if (resources) { t.exit_begin_ns=resource_monotonic_ns(); }
+        t.exit=sample();
+        if (resources) {
+            if (number==0 && regions.size()==1) { resources->workload(true); }
+            t.exit_end_ns=resource_monotonic_ns();
+        }
+        return;
+    }
+    if (resources) { t.entry_begin_ns=resource_monotonic_ns(); }
     t.number = number; t.team = omp_get_num_threads(); t.level = omp_get_level();
     t.active_level = omp_get_active_level(); t.max_active_levels = omp_get_max_active_levels();
     require(t.level >= 1 && t.level <= 16);
@@ -97,11 +107,17 @@ void WorkloadObservations::capture(int number, bool exit) {
         t.ancestor_numbers.push_back(omp_get_ancestor_thread_num(level));
     }
     t.entry = sample();
+    if (resources) {
+        if (number==0 && regions.size()==1) { resources->workload(false); }
+        t.entry_end_ns=resource_monotonic_ns();
+    }
 }
 void WorkloadObservations::finish(int actual) { regions.back().threads.resize(static_cast<std::size_t>(actual)); }
 std::string WorkloadObservations::json() const {
     std::ostringstream out;
-    out << "{\"schema\":\"dynagraph-workload-native\",\"schema_version\":2,\"measurement_eligible\":false,\"regions\":[";
+    out << "{\"schema\":\"dynagraph-workload-native\",\"schema_version\":" << (resources ? 3 : 2) << ",\"measurement_eligible\":false";
+    if (resources) { out << ",\"clock\":\"CLOCK_MONOTONIC\""; }
+    out << ",\"regions\":[";
     for (std::size_t r = 0; r < regions.size(); ++r) {
         if (r) { out << ','; }
         const auto& region = regions[r];
@@ -113,7 +129,11 @@ std::string WorkloadObservations::json() const {
                 << ",\"active_level\":" << t.active_level << ",\"max_active_levels\":" << t.max_active_levels
                 << ",\"ancestor_sizes\":"; array(out, t.ancestor_sizes);
             out << ",\"ancestor_numbers\":"; array(out, t.ancestor_numbers);
-            out << ",\"entry\":"; emit(out, t.entry); out << ",\"exit\":"; emit(out, t.exit); out << '}';
+            out << ",\"entry\":"; emit(out, t.entry); out << ",\"exit\":"; emit(out, t.exit);
+            if (resources) {
+                out << ",\"intervals\":[" << t.entry_begin_ns << ',' << t.entry_end_ns << ',' << t.exit_begin_ns << ',' << t.exit_end_ns << ']';
+            }
+            out << '}';
         }
         out << "]}";
     }

@@ -172,7 +172,7 @@ def oracle_label(trial):
     return 'full-preflight+'+METHOD+('' if trial['phase']=='diagnostic' else '+worker')
 
 
-def command(plan, trial, source, kind, observe_workload=False):
+def command(plan, trial, source, kind, observe_workload=False, observe_resources=False):
     """Version-2 argv is relative to the explicit private trial cwd.
 
     Relative fixed references keep verification valid after evidence relocation.
@@ -186,6 +186,9 @@ def command(plan, trial, source, kind, observe_workload=False):
         if observe_workload:
             from campaign_workload import NATIVE
             base += ['--workload-observations', NATIVE]
+        if observe_resources:
+            from campaign_interference import NATIVE as RESOURCE_NATIVE, CONFIG
+            base += ['--resource-observations', RESOURCE_NATIVE, '--resource-cgroup-paths', CONFIG]
         return base+['--verification', 'full']
     if kind != 'time' or trial['phase']=='diagnostic':
         raise ValueError('unsupported pilot process kind')
@@ -316,7 +319,7 @@ def reconcile_processes(directory, record, plan, execution, inventory):
                 datetime.fromisoformat(process['end'])>datetime.fromisoformat(record['end']) or
                 (i and datetime.fromisoformat(process['start'])<datetime.fromisoformat(processes[i-1]['end']))):
             raise ValueError('pilot process timestamp context mismatch')
-        if process['command'] != command(plan,trial,source,kind, observe_workload='workload_policy' in execution):
+        if process['command'] != command(plan,trial,source,kind, observe_workload='workload_policy' in execution, observe_resources='resource_policy' in execution):
             raise ValueError('pilot complete argv mismatch')
         if process['stream_limit'] != execution['limits']['stream_bytes']:
             raise ValueError('pilot process stream limit mismatch')
@@ -417,7 +420,7 @@ def verify_success(directory, record, plan):
 
 
 def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False, observe_workload=False):
+              wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False, observe_workload=False, observe_resources=False):
     # New pilots reserve once and hold ownership through final publication.
     # Historical pilots without this protocol remain inspectable, not resumable.
     from campaign_ownership import directory_lock, owner, OWNER
@@ -429,6 +432,8 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
         raise ValueError('enforce_affinity must be boolean')
     if type(observe_workload) is not bool:
         raise ValueError('observe_workload must be boolean')
+    if type(observe_resources) is not bool: raise ValueError('observe_resources must be boolean')
+    if observe_resources and not observe_workload: raise ValueError('--observe-resources requires --observe-workload')
     if observe_workload:
         if not enforce_affinity:
             raise ValueError('--observe-workload requires --enforce-affinity')
@@ -452,11 +457,11 @@ def run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tri
         return _run_pilot(plan, manifest, root, output, trial_ids, execute=execute,
                           max_trials=max_trials, wall_seconds=wall_seconds, timeout=timeout,
                           output_limit=output_limit, _deadline=attempt_deadline, _runtime_origin=_runtime_origin,
-                          enforce_affinity=enforce_affinity, observe_workload=observe_workload)
+                          enforce_affinity=enforce_affinity, observe_workload=observe_workload, observe_resources=observe_resources)
 
 
 def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_trials=1,
-               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False, observe_workload=False):
+               wall_seconds=60, timeout=10, output_limit=262144, _deadline=None, _runtime_origin=None, enforce_affinity=False, observe_workload=False, observe_resources=False):
     selected = select(plan, manifest, trial_ids, max_trials)
     bounds(plan, max_trials, wall_seconds, timeout, output_limit)
     if execute is not True:
@@ -483,6 +488,10 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                                       'inherit; requested plan affinity recorded, not applied'))
     if observe_workload:
         from campaign_workload import POLICY as WORKLOAD_POLICY
+        execution['workload_policy'] = WORKLOAD_POLICY
+    if observe_resources:
+        from campaign_interference import POLICY as RESOURCE_POLICY, WORKLOAD_POLICY
+        execution['resource_policy'] = RESOURCE_POLICY
         execution['workload_policy'] = WORKLOAD_POLICY
     put(output, 'execution-manifest.json', execution)
     from campaign_journal import Journal
@@ -522,7 +531,14 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                 executable = contained(root, plan['build']['executable'])
                 bundle, inputs = stage_inputs(root, directory, workload, executable, plan['build']['executable_sha256'])
                 cfg = config(plan, trial)
+                resource_finished_ns = None
+                if observe_resources:
+                    from campaign_interference import CONFIG, prepare
+                    resource_config = prepare()
+                    atomic_bytes(directory/CONFIG, resource_config)
+                    inputs[CONFIG] = sha256(resource_config)
                 def launch(kind):
+                    nonlocal resource_finished_ns
                     def expired(now):
                         record['reason'] = 'budget-exhausted' if now>=deadline else 'timeout'
                         return None
@@ -531,7 +547,7 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                         return expired(time.monotonic())
                     if not record['processes']:
                         journal.transition(trial['trial_id'], 'launched')
-                    arguments = command(plan, trial, bundle['source'], kind, observe_workload=observe_workload)
+                    arguments = command(plan, trial, bundle['source'], kind, observe_workload=observe_workload, observe_resources=observe_resources)
                     now = time.monotonic()
                     remaining = trial_deadline-now
                     if remaining <= 0:
@@ -554,6 +570,7 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                         # An intent entry is not proof of a started process.
                         # Do not manufacture streams, a receipt or an exit code.
                         return expired(time.monotonic())
+                    if observe_resources: resource_finished_ns = time.monotonic_ns()
                     from campaign_runtime import provenance
                     if enforce_affinity:
                         put(directory, f'{len(record["processes"])}-{kind}.affinity.json',
@@ -590,6 +607,13 @@ def _run_pilot(plan, manifest, root, output, trial_ids, *, execute=False, max_tr
                         put(directory, BOUND, observation)
                         if observation['classification'] != 'observed_consistent':
                             raise ValueError('workload observations: '+str(observation['issue']))
+                    if observe_resources:
+                        from campaign_interference import NATIVE as RN, BOUND as RB, bind as resource_bind, complete
+                        resource_observation = resource_bind(read_json(directory/RN), native, observation, receipt,
+                            resource_config, resource_finished_ns, record['hardware_sha256'], record['openmp_environment'])
+                        put(directory, RB, resource_observation)
+                        if not complete(resource_observation):
+                            raise ValueError('resource observations: '+str(resource_observation['issues']))
                     record['correctness'] = dict(checked=True,outcome='passed',oracle='full-preflight+'+METHOD)
                     if trial['phase'] != 'diagnostic':
                         ids = dict(graph_sha256=workload['graph_sha256'],trace_sha256=workload['trace_sha256'],
@@ -641,7 +665,7 @@ def pilot_context(directory):
     plan = validate_plan(read_json(directory/'plan.json'));manifest = read_json(directory/'trial-manifest.json')
     execution = read_json(directory/'execution-manifest.json')
     fields(execution, 'schema schema_version campaign_id plan_sha256 manifest_sha256 selected_trials limits '
-           'development_only measurement_eligible affinity_policy'+(' workload_policy' if 'workload_policy' in execution else ''), 'pilot execution manifest')
+           'development_only measurement_eligible affinity_policy'+(' workload_policy' if 'workload_policy' in execution else '')+(' resource_policy' if 'resource_policy' in execution else ''), 'pilot execution manifest')
     if (execution['schema']!='dynagraph-pilot-execution' or type(execution['schema_version']) is not int or
             execution['schema_version']!=2 or execution['development_only'] is not True or
             execution['measurement_eligible'] is not False):
@@ -651,9 +675,15 @@ def pilot_context(directory):
         raise ValueError('unsupported pilot affinity policy')
     if 'workload_policy' in execution:
         from campaign_workload import POLICY as WORKLOAD_POLICY
+        if 'resource_policy' in execution:
+            from campaign_interference import WORKLOAD_POLICY
         if (execution['workload_policy'] != WORKLOAD_POLICY or execution['affinity_policy'] != POLICY or
                 any(t['phase'] != 'diagnostic' for t in execution['selected_trials'])):
             raise ValueError('invalid workload observation opt-in')
+    if 'resource_policy' in execution:
+        from campaign_interference import POLICY as RESOURCE_POLICY
+        if execution['resource_policy'] != RESOURCE_POLICY or 'workload_policy' not in execution:
+            raise ValueError('invalid resource observation opt-in')
     limits = execution['limits'];fields(limits,'max_trials wall_seconds timeout_seconds stream_bytes','pilot limits')
     bounds(plan,limits['max_trials'],limits['wall_seconds'],limits['timeout_seconds'],limits['stream_bytes'])
     selected = select(plan,manifest,[t['trial_id'] for t in execution['selected_trials']],limits['max_trials'])
@@ -739,11 +769,26 @@ def verify_trial_evidence(directory, trial, plan, execution, hardware, inventory
                                        sha256(regular_bytes(directory/OWNER, MAX_ARTIFACT)))
             count = expected_regions(regular_bytes(directory/base/'workload/graph.txt', MAX_ARTIFACT),
                 regular_bytes(directory/base/'workload/trace.txt', MAX_ARTIFACT), trial['policy'], plan['no_effect'])
-            verify_workload(read_json(directory/base/BOUND), read_json(directory/base/NATIVE),
+            native_workload = read_json(directory/base/NATIVE)
+            if type(native_workload) is not dict or native_workload.get('schema_version') != (3 if 'resource_policy' in execution else 2):
+                raise ValueError('workload resource timeline opt-in mismatch')
+            verify_workload(read_json(directory/base/BOUND), native_workload,
                 read_json(directory/base/'0-verify.affinity.json'), expected, record['hardware_sha256'],
                 count, record['status']=='success')
     elif diagnostic_names:
         raise ValueError('workload observation contract downgrade')
+    from campaign_interference import NATIVE as RN, BOUND as RB, CONFIG, verify as verify_resources
+    resource_names = {n for n in record['artifacts'] if n in (RN,RB,CONFIG)}
+    if 'resource_policy' in execution:
+        if record['status']=='success' or RB in resource_names:
+            if resource_names != {RN,RB,CONFIG} or len(record['processes']) != 1:
+                raise ValueError('missing resource observation evidence')
+            verify_resources(read_json(directory/base/RB),read_json(directory/base/RN),
+                read_json(directory/base/NATIVE),read_json(directory/base/BOUND),
+                read_json(directory/base/'0-verify.affinity.json'),regular_bytes(directory/base/CONFIG,MAX_ARTIFACT),
+                record['hardware_sha256'],record['openmp_environment'],record['status']=='success')
+    elif resource_names:
+        raise ValueError('resource observation contract downgrade')
     if record['status']=='success':
         verify_success(directory/base,record,plan)
     return record

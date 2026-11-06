@@ -197,6 +197,14 @@ set_tests_properties(workload_instrumentation PROPERTIES TIMEOUT 120 PROCESSORS 
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
 endif()
 
+option(DYNAGRAPH_ENABLE_RESOURCE_DIAGNOSTICS "Register bounded resource interference diagnostics" OFF)
+if(DYNAGRAPH_ENABLE_RESOURCE_DIAGNOSTICS)
+    add_test(NAME resource_interference COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_campaign_interference.py $<TARGET_FILE:dynagraph_bench>)
+    set_tests_properties(resource_interference PROPERTIES TIMEOUT 180 PROCESSORS 2
+        ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
+endif()
+
 if(DYNAGRAPH_FULL_VALIDATION)
     # Check CMake's registered names now; the standalone checker additionally
     # enumerates generated CTest JSON after generation (including duplicates).
@@ -223,6 +231,9 @@ if(DYNAGRAPH_FULL_VALIDATION)
     endforeach()
     if(DYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS)
         list(APPEND full_optional_args --optional workload-diagnostics)
+    endif()
+    if(DYNAGRAPH_ENABLE_RESOURCE_DIAGNOSTICS)
+        list(APPEND full_optional_args --optional resource-diagnostics)
     endif()
     execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -B
         "${PROJECT_SOURCE_DIR}/tools/validation/check_registration.py"

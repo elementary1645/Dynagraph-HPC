@@ -167,3 +167,9 @@ TSan acceptance gate remains unmet; its earlier LIKELY TOOL/RUNTIME LIMITATION
 classification is preserved. No retries, dependency installation, push, merge or
 PR are part of this phase. See the research log for actual validation outcomes and
 missing local historical evidence/dependency limitations.
+
+Resource opt-in adds native workload v3 CLOCK_MONOTONIC entry/exit envelopes while
+preserving exact v2 fields without that opt-in. These intervals bind the separate
+resource collector to actual workload boundaries. See the
+[resource interference contract](resource-interference.md) and
+[Phase B acceptance evidence](phase-b-acceptance.md).
