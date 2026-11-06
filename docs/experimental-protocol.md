@@ -777,3 +777,12 @@ receipt v1/v2, journal v1, pilot v2, cleanup, ownership, acknowledgement and GO
 contracts remain in force. Sample consistency conveys no scientific eligibility,
 CPU ownership, stable placement, uncontended execution, NUMA isolation, external
 authentication, physical-core scaling or TSan acceptance.
+
+## Phase 6B-2B-3B-4 boundary diagnostics
+
+Explicit `--observe-resources --observe-workload --enforce-affinity` opts bounded
+development diagnostic trials into [resource interference evidence](resource-interference.md).
+Four resource snapshots and workload monotonic envelopes support conservative
+observed stability/interference/configuration classifications. Shared cgroup
+counters do not attribute contention to this process or prove isolation. Complete
+coverage permits diagnostic completion only; scientific eligibility stays false.

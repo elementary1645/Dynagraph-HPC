@@ -25,6 +25,7 @@ def main(argv=None):
     pilot.add_argument('--execute-development', action='store_true')
     pilot.add_argument('--enforce-affinity', action='store_true')
     pilot.add_argument('--observe-workload', action='store_true')
+    pilot.add_argument('--observe-resources', action='store_true')
     pilot.add_argument('--max-trials', type=int, default=1)
     pilot.add_argument('--wall-seconds', type=int, default=60)
     pilot.add_argument('--timeout', type=int, default=10)
@@ -39,6 +40,7 @@ def main(argv=None):
     resume.add_argument('--authorize-resume', action='store_true')
     resume.add_argument('--enforce-affinity', action='store_true')
     resume.add_argument('--observe-workload', action='store_true')
+    resume.add_argument('--observe-resources', action='store_true')
     resume_check = sub.add_parser('inspect-resume', allow_abbrev=False)
     resume_check.add_argument('--output', required=True, type=Path)
     for name in ('inspect-resources','verify-resources'):
@@ -72,7 +74,8 @@ def main(argv=None):
                     result = resume_pilot(args.output, execute=args.execute_development,
                                           authorize=args.authorize_resume,
                                           **(dict(enforce_affinity=True) if args.enforce_affinity else {}),
-                                          **(dict(observe_workload=True) if args.observe_workload else {}))
+                                          **(dict(observe_workload=True) if args.observe_workload else {}),
+                                          **(dict(observe_resources=True) if args.observe_resources else {}))
         elif args.command == 'inspect-recovery':
             from campaign_journal import inspect_recovery
             result = inspect_recovery(args.output)
@@ -88,7 +91,8 @@ def main(argv=None):
                         max_trials=args.max_trials, wall_seconds=args.wall_seconds,
                         timeout=args.timeout, output_limit=args.output_limit,
                         **(dict(enforce_affinity=True) if args.enforce_affinity else {}),
-                        **(dict(observe_workload=True) if args.observe_workload else {}))
+                        **(dict(observe_workload=True) if args.observe_workload else {}),
+                                          **(dict(observe_resources=True) if args.observe_resources else {}))
         elif args.command == 'inspect':
             if args.executable is not None and not args.executable.is_file():
                 raise ValueError('inspected executable must be an existing file')

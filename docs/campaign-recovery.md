@@ -313,3 +313,10 @@ attempt ID. The existing pilot v2 and journal v1 formats and R1 launch ordering
 remain unchanged. Missing process observations do not imply execution failure or
 scientific eligibility; contradictory provenance rejects evidence verification.
 No observed OpenMP teams are claimed by this phase.
+
+Resource-observed originals require resume authorization v4, including renewed
+`--observe-resources --observe-workload --enforce-affinity`. Completed originals
+pass the shared resource semantic gate before read-only reuse; only never-launched
+pending trials may run. Earlier authorization versions remain readable, and no
+legacy pilot is upgraded into the resource contract. See
+[resource interference](resource-interference.md) for failure/publication limits.

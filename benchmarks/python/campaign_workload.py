@@ -96,8 +96,10 @@ def _task_sample(sample, pid, ticks, cpus):
 
 
 def validate_native(value, receipt, requested, count):
-    fields(value, 'schema schema_version measurement_eligible regions', 'native workload')
-    integer(value['schema_version'], 2, 2, 'native workload version')
+    version = value.get('schema_version') if type(value) is dict else None
+    integer(version, 2, 3, 'native workload version')
+    fields(value, 'schema schema_version measurement_eligible regions'+(' clock' if version==3 else ''), 'native workload')
+    if version == 3 and value['clock'] != 'CLOCK_MONOTONIC': raise ValueError('invalid workload clock')
     if value['schema'] != 'dynagraph-workload-native' or value['measurement_eligible'] is not False:
         raise ValueError('unsupported native workload contract')
     regions = value['regions']
@@ -113,6 +115,7 @@ def validate_native(value, receipt, requested, count):
     cpus = set(receipt['requested_cpus'])
     seen_generations = {}
     incomplete = False
+    previous_exit = 0
     for index, region in enumerate(regions):
         fields(region, 'region_id requested_workers configured_workers threads', 'workload region')
         integer(region['region_id'], index, index, 'region ID')
@@ -128,7 +131,13 @@ def validate_native(value, receipt, requested, count):
             # An absent endpoint is unavailable evidence, not permission to skip
             # contradictions in another endpoint/thread/region.
             shaped = dict(thread, entry=thread.get('entry'), exit=thread.get('exit')) if type(thread) is dict else thread
-            fields(shaped, 'number team level active_level max_active_levels ancestor_sizes ancestor_numbers entry exit', 'workload thread')
+            fields(shaped, 'number team level active_level max_active_levels ancestor_sizes ancestor_numbers entry exit'+(' intervals' if version==3 else ''), 'workload thread')
+            if version == 3:
+                times = thread['intervals']
+                if type(times) is not list or len(times) != 4: raise ValueError('invalid workload interval')
+                previous = previous_exit
+                for stamp in times:
+                    integer(stamp, previous, (1<<63)-1, 'workload monotonic timestamp');previous=stamp
             integer(thread['number'], number, number, 'OpenMP thread number')
             integer(thread['team'], len(threads), len(threads), 'actual team')
             level, active, maximum = (thread[k] for k in ('level','active_level','max_active_levels'))
@@ -162,6 +171,10 @@ def validate_native(value, receipt, requested, count):
             if entry is not None and exit is not None and any(
                     entry[key] != exit[key] for key in _IDENTITY_FIELDS if key in entry and key in exit):
                 raise ValueError('entry/exit identity mismatch')
+        if version == 3:
+            if max(t['intervals'][1] for t in threads) > min(t['intervals'][2] for t in threads):
+                raise ValueError('overlapping workload entry/exit intervals')
+            previous_exit = max(t['intervals'][3] for t in threads)
     if incomplete:
         raise _IncompleteTaskEvidence('missing workload task evidence')
     return value

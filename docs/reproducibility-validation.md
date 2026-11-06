@@ -860,3 +860,13 @@ archive hashes and the recovered file inventory are preserved separately under
 untouched. See the research log's recovery reconciliation for scope and limitations.
 Local verification is complete; independent re-audit, hosted CI and the unmet
 TSan gate retain their existing status. Phase 6 remains deferred.
+
+## Resource interference diagnostics
+
+Use the unchanged `.venv-analysis` pins and the two optional diagnostic tiers in
+[the interference runbook](resource-interference.md). Default historical archive
+profiles keep their exact 31-test registrations; workload and resource tiers are
+validated separately and together at 33 registrations. Exact commands, raw logs,
+source inventories, local outcomes and limitations are recorded in
+[Phase B acceptance](phase-b-acceptance.md). Local checks never imply hosted CI or
+TSan acceptance, scientific eligibility or physical isolation.

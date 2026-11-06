@@ -2,19 +2,15 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: the research-grade completion master request, beginning
-  with Phase A acceptance audit of f83ebd4 against baseline 71d731f on
-  feature/phase6b2b3b3-workload-instrumentation. Inspection, reproduced-defect fixes,
-  focused tests, local verification, documentation and local commits are authorized.
-  Proceed to Phase B only after Phase A is accepted; do not declare acceptance
-  while essential checks remain blocked or inconclusive. GitHub Codespaces is the
-  only computing environment. Preserve all correctness, evidence, ownership,
-  R1/R2 cleanup/framing/deadline/GO and safe-resume guarantees. Explicit user
-  permission authorizes restoring only .venv-analysis from the existing unchanged
-  benchmarks/requirements-analysis.txt pins and rerunning Phase A's blocked gates.
-  No system-wide package changes, unrelated installs, pin changes, push, PR or merge.
-  Keep scientific eligibility false and TSan acceptance unmet. Do not begin
-  Phases B–G before Phase A acceptance.
+- Current authorized scope: Phase 6B-2B-3B-4 resource interference evidence on
+  feature/phase6b2b3b4-resource-interference, based on be3588a. Phase A is accepted.
+  Explicit opt-in, bounded Codespaces diagnostics, implementation, adversarial tests,
+  local verification, documentation and a local commit are authorized. Preserve
+  correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership, deadlines,
+  framing, cleanup and conservative GO accounting. No retries, dependency changes,
+  scientific campaigns, push, PR or merge. Stop after this phase's local report;
+  later phases require approval. Scientific eligibility remains false and TSan
+  acceptance remains unmet.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all

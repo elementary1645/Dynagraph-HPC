@@ -188,3 +188,14 @@ receipt v1/v2, journal v1, pilot v2, cleanup, ownership, acknowledgement and GO
 contracts remain in force. Sample consistency conveys no scientific eligibility,
 CPU ownership, stable placement, uncontended execution, NUMA isolation, external
 authentication, physical-core scaling or TSan acceptance.
+
+## Resource observations after confirmed release
+
+[Resource boundary diagnostics](resource-interference.md) are an additive opt-in
+and do not alter barrier, receipt v2, cleanup, ownership or deadline guarantees.
+The staged sampling configuration precedes launch. Native sampling happens inside
+`verify` after GO; no collector I/O is added to the final validation-to-GO window.
+The common offline/recovery gate requires verified workload membership and complete
+semantically consistent resource evidence for successful opted-in trials. Unknown
+GO remains incapable of establishing completion. Resume v4 requires renewed flags;
+completed original bytes remain immutable, with no automatic retries.
