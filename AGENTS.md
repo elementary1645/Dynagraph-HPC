@@ -9,8 +9,12 @@
   Proceed to Phase B only after Phase A is accepted; do not declare acceptance
   while essential checks remain blocked or inconclusive. GitHub Codespaces is the
   only computing environment. Preserve all correctness, evidence, ownership,
-  R1/R2 cleanup/framing/deadline/GO and safe-resume guarantees. No dependency
-  installation, push, PR or merge is authorized. Scientific eligibility remains false.
+  R1/R2 cleanup/framing/deadline/GO and safe-resume guarantees. Explicit user
+  permission authorizes restoring only .venv-analysis from the existing unchanged
+  benchmarks/requirements-analysis.txt pins and rerunning Phase A's blocked gates.
+  No system-wide package changes, unrelated installs, pin changes, push, PR or merge.
+  Keep scientific eligibility false and TSan acceptance unmet. Do not begin
+  Phases B–G before Phase A acceptance.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all

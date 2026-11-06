@@ -3,7 +3,9 @@
 Phase 6B-2B-3B-3 implements opt-in workload-region OpenMP/Linux task observations
 and shared pilot/offline/recovery verification. The current
 [Phase A acceptance audit](docs/phase-a-acceptance.md) records verified checks,
-a reproduced classification fix and unresolved prerequisites. Phase A is **BLOCKED**;
+a reproduced classification fix and restored full rendering/registration/smoke
+validation and recovery/verification of nine original published Phase 5 archives.
+Phase A is **APPROVED** for its local workload-instrumentation scope;
 Phase B resource-interference implementation has not started. Scientific
 eligibility remains false. See the [instrumentation runbook](docs/workload-instrumentation.md).
 

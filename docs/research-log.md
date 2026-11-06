@@ -5202,3 +5202,111 @@ Live builds and negative special-file fixtures remain under
 /tmp/dynagraph-phase-a-audit-20261106. These available-check catalogues are not
 successful historical full-validation archive profiles. Stop at the documented
 unavailable-prerequisite gate after the authorized local audit/fix commit/report.
+
+
+## 2026-11-06 — Authorized pinned restoration and Phase A approval
+
+User permission explicitly authorizes restoring only the existing exact analysis
+pins inside ignored `.venv-analysis`, with no system-wide/unrelated installs or
+pin/lockfile changes, then rerunning every previously blocked renderer,
+registration and smoke gate. Phases B–G must wait for Phase A acceptance. The
+existing implementation is a293d1aa141307d22a4bfbd6c220951bf534de77; this continuation
+changes documentation only. Scientific eligibility remains false and TSan
+acceptance remains unmet.
+
+Created the venv using Python 3.14.2's bundled bootstrap pip 25.3; pip was not
+upgraded. Installed only binary wheels named in the unchanged
+benchmarks/requirements-analysis.txt with dependency resolution disabled:
+
+```sh
+python3 -m venv .venv-analysis
+.venv-analysis/bin/python -m pip --isolated --disable-pip-version-check --no-cache-dir install --require-virtualenv --no-deps --only-binary=:all: --no-input --report results/validation/phase-a-pinned-restoration/install-report.json -r benchmarks/requirements-analysis.txt
+.venv-analysis/bin/python -m pip --isolated check
+.venv-analysis/bin/python -m pip --isolated freeze --all
+.venv-analysis/bin/python -B tools/validation/check_environment.py
+```
+
+Installed versions: matplotlib 3.10.8, numpy 2.4.1, contourpy 1.3.3, cycler 0.12.1,
+fonttools 4.61.1, kiwisolver 1.4.9, packaging 25.0, pillow 12.1.0, pyparsing 3.3.2,
+python-dateutil 2.9.0.post0, six 1.17.0. All eleven match exactly. The only other
+venv distribution is its bootstrap pip. Pip check and real Agg rendering pass.
+Before/after inventories for ambient Python 3.14.2 and system Python 3.12.3 are
+identical, system site packages are disabled, and requirements bytes/hash match
+a293d1a and the Phase 5 baseline. No dependency specification was modified.
+
+Ran canonical ci_verify.py on a clean local detached a293d1a checkout at
+/tmp/dynagraph-phase-a-restored-20261106/checkout, with no overlay and the restored
+venv selected explicitly. New sequential Debug, Release --smoke and sanitizer
+full profiles each pass **31/31 mandatory CTest tests**, now including
+analysis_figures. Current archives are newly generated debug-full-v1,
+release-smoke-v1 and sanitize-full-v1 profiles and are not historical replacements.
+The source inventory remained unchanged. Exact argv, environments, command times,
+exit codes, JUnit, registrations and logs are retained under
+results/validation/phase-a-pinned-restoration/full-verification/.
+
+Release smoke verifies two complete **16-trial** harness datasets, analysis,
+**14 figure files**, and **9/9 intended negative diagnostics**. Supplemental
+workload/native tests pass **14/14 per build**; campaign Python tests using the
+fresh Release binaries pass **371/371**. Full configuration and the official
+checker with the opt-in workload tier accept exactly **32 names**; those 32 are a
+registration result, not an executed-32-test claim. The canonical archive profiles
+retain their original 31-name execution contract. Environment-negative fixtures
+pass all **6 intended configure rejections** and missing/extra/duplicate comparisons;
+compatibility passes **4 configurations** (31 full, 27 minimal, 0 library-only,
+37 optional) and rejects full mode without testing. No gate was weakened.
+
+Canonical sanitizer flags/options were retained unchanged:
+-fsanitize=address,undefined -fno-omit-frame-pointer with matching linker flags,
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. Process inspection and existing
+Unix-domain socket fixtures used the authorized execution mechanism. No sanitizer
+or test timeout requirement was disabled. The three new archive/sidecar pairs pass
+sha256sum and copied-kit offline verification using system Python -I -S -B with
+checkout/venv reads and network/subprocess operations explicitly denied. This is
+local current-code validation, not new hosted CI or race-freedom evidence.
+
+Historical search initially found no original archive candidates in **112
+documented references** or **5,946 directories / 48,181 file entries** in accessible
+existing Codespaces storage, including persisted/shared mounts. Directory links
+were not followed; the private /tmp/codex-daemon-1000 denial is explicit. That was
+not a claim of global nonexistence. The separate original local-run retention
+directories quoted in older log entries remain unavailable.
+
+A further read-only check used already configured GitHub CLI credentials, without
+login, account changes or workflow execution. The repository still held **75
+existing workflow artifacts**, including **9 original Phase 5 artifacts** for
+02aecf155dca44f681371378a709f7f0ab722d3c and
+8b05c2b2dc1212176eb70cf24559b0bf1ccd53bd. Downloaded their original ZIP bytes and
+canonical archive/sidecar pairs; nothing was regenerated or relabeled as an old
+local run. All ZIP digests match GitHub metadata. Three push/pull-request workflow
+contexts and original creation dates are recorded; retrieval occurred now.
+
+All **9 original archive/sidecar pairs** pass sha256sum and guarded copied-kit
+bounded offline verification: three debug-full-v1, three release-smoke-v1 and three
+sanitize-full-v1. Each validates an original 31-test profile, including required
+inventories and the original Release dataset/figure/negative-control evidence.
+These are recorded historical tests, not tests executed again here. Independent
+Git-object checks compare all **133 source files per archive** to its workflow
+head: **1,197 checks, zero mismatches**. The pull-request artifacts retain recorded
+merge revision 1471e90b..., with source content matching head 02aecf1...; no metadata
+was rewritten. Original artifacts/provenance and verification results are retained
+under results/validation/phase5-recovered-github-20261106/.
+
+Acceptance decision: **Phase A is APPROVED for the implemented local workload-
+instrumentation and evidence-verification scope**. Original published Phase 5
+baseline artifacts now satisfy the historical baseline verification gate; the
+previous block changed because genuine original evidence was recovered, not
+because a verifier or requirement was bypassed. Separate missing older local-run
+copies and their specific hash claims remain unverified. They are not used as
+current inputs, reused trials, or scientific observations, and do not block this
+scoped current-code qualification backed by recovered originals and fresh full
+profiles. Any future use/endorsement of those particular unavailable runs remains
+blocked until genuine payloads are restored. Complete historical local-run
+provenance is not claimed.
+
+The [updated Phase A matrix](phase-a-acceptance.md) separates mandatory PASS checks
+from remaining project limitations. Current-code hosted CI has not been triggered
+or claimed. Scientific eligibility remains false; TSan's earlier work_ finding and
+unmet research gate are unchanged. Phases B–G have not started in this restoration
+task; whole-project completion is not declared. The next phase is the separately
+scoped Codespaces resource-stability/interference assessment.

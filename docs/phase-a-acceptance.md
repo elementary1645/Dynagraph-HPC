@@ -1,13 +1,17 @@
 # Phase A — workload-instrumentation acceptance audit
 
-**Overall result: BLOCKED. Phase A is not accepted; Phases B–G have not started.**
+**Current result: APPROVED for Phase A local workload-instrumentation acceptance. All mandatory Phase A gates pass, including recovered original published Phase 5 baseline archives. Phases B–G have not started; scientific eligibility remains false and TSan acceptance remains unmet.**
 
 This 2026-11-06 self-audit starts at
 `f83ebd4966e9a48a5024114c110731c78834d026` and reviews the reconstruction against
 `71d731f877ce41cb110ca7617655be92e6222c76`. There was no separate reviewer and
 no hosted-CI result. All execution used the same GitHub Codespaces environment,
-including the isolated local checkout. No dependencies were installed, no research
+including isolated local checkouts. The initial audit installed no dependencies.
+Subsequent explicit user permission restored only the existing exact pins inside
+`.venv-analysis`; ambient/system package inventories are unchanged. No research
 evidence was deleted, and nothing was pushed, merged or submitted as a PR.
+The restored full-profile validation tests clean committed source
+`a293d1aa141307d22a4bfbd6c220951bf534de77`; this update changes documentation only.
 
 ## Audited architecture and completion boundary
 
@@ -25,10 +29,10 @@ resource admission/enforcement, process capture, provenance, pilot records and
 journal/resume separate. The acknowledgement/GO barrier binds a workload process
 before execution. Workload samples are bound after diagnostic exit, and one shared
 semantic gate controls offline verification and completed reuse. Descriptive
-analysis already exists; renderer validation is unavailable and no new scientifically
+analysis already exists; pinned renderer validation now passes. No scientifically
 eligible performance data was established. Interference/stability observations,
 subsequent campaign/analysis phases and whole-project final acceptance remain
-blocked by the Phase A boundary. There is no claim of unconditional completion.
+outside this completed Phase A acceptance scope. There is no claim of unconditional project completion.
 
 ## Reproduced defect and fix
 
@@ -62,8 +66,13 @@ resource admission, journal schemas and deterministic campaign inputs are unchan
 
 ## Acceptance matrix
 
-Evidence references below are relative to
-`results/validation/phase-a-acceptance-audit/` unless otherwise stated. Statuses
+Initial-audit evidence references below are relative to
+`results/validation/phase-a-acceptance-audit/` unless otherwise stated.
+**R** denotes the new, separate `results/validation/phase-a-pinned-restoration/`
+retention directory. Earlier failure logs remain unchanged; they are not current
+failures after environment restoration.
+**H** denotes `results/validation/phase5-recovered-github-20261106/`, containing
+original historical workflow downloads and their verification/provenance records. Statuses
 mean PASS = verified, FAIL = demonstrated unresolved defect, BLOCKED = unavailable
 required validation, NOT APPLICABLE = not justified/applicable in this audit.
 The original classification FAIL is retained in `classification-red.log`; the
@@ -81,19 +90,21 @@ corrected result is PASS. No unresolved software FAIL was demonstrated by these 
 | Native real-control pilot | Unmocked visible cgroup/affinity enforcement, one- and two-worker diagnostic trials, compiled and Python correctness oracles, offline/recovery checks | PASS | `../phase-a-real-execution/summary.json`, `pilot/`, `offline.json`, `recovery.json` | Visible controls and local consistency only; no interference/ownership conclusion |
 | Timing/publication rejection | C++ timing API test; real CLI rejects diagnostic timing and publication over an existing immutable file | PASS | `../phase-a-real-execution/negative/`, CTest benchmark_timing | Diagnostic runs remain measurement-ineligible |
 | Pilot/recovery/resume safety | Shared semantic gate; unknown GO, native/receipt downgrade, renewed authorization, immutable reuse, pending-only execution and no retries | PASS | `isolated-verification/campaign-python.log`, 14 focused tests | Abrupt death/external reaping/escaped descendants retain documented limits |
-| Fresh Debug build and available CTest | Clean local base plus identified overlay; warnings-as-errors; sequential CTest and JUnit checks | PASS | `isolated-verification/debug-{configure,build,ctest}.log`, `debug-execution.xml` | 31/31 available tests; full renderer registration is blocked |
-| Fresh Release build and available CTest | Same fresh procedure and explicit test names | PASS | Release logs/JUnit | 31/31 available tests; not a full-validation profile |
-| ASan+UBSan+LeakSanitizer | Fresh instrumented build; leak detection and halt-on-error enabled; process inspection permitted | PASS | Sanitizer logs/JUnit | 31/31 available tests; no TSan/race-freedom implication |
-| Campaign Python regressions | All campaign suites use explicitly selected freshly built Release binaries | PASS | `isolated-verification/campaign-python.log`, `campaign-runners.json` | 371 executed tests; fixture cgroups are synthetic except the separate real-control execution |
+| Fresh Debug full gate | Canonical ci_verify.py, full mode, exact default registration and JUnit | PASS | R/full-verification/debug/, debug.tar.gz and sidecar | 31/31, including analysis_figures; local, not hosted CI |
+| Fresh Release full gate and complete smoke | Same canonical profile plus real pipeline and intended negatives | PASS | R/full-verification/release/ and release.tar.gz | 31/31; two 16-trial harness datasets, 14 figures and 9/9 smoke negatives; no scientific eligibility |
+| ASan+UBSan+LeakSanitizer full gate | Canonical sanitizer profile, leak detection and halt-on-error enabled | PASS | R/full-verification/sanitize/ and sanitize.tar.gz | 31/31; no TSan/race-freedom implication |
+| Campaign Python regressions | Restored venv and freshly built Release runner/fixture | PASS | R/full-verification/campaign-python.log and native-*-workload.log | 371 executed campaign tests; 14 native/workload tests per build; fixture cgroups synthetic except separate real-control execution |
 | Archive/repair infrastructure | Existing documented standalone entry points | PASS | Archive 59/59, repair 17/17, negative diagnostics 3/3 logs | Synthetic contract tests do not substitute for historical archives |
 | Deterministic inputs | Raw configuration comparison to baseline; canonical plan and 104-trial manifest expansion/digests | PASS | `manifest-preservation.json` | This is deterministic regeneration/comparison, not reopening a missing historical manifest file |
 | Available retained Phase 6 evidence | Independent raw SHA-256 checks of five old inventories; archived source compared to f83ebd4 Git objects | PASS | `retained-evidence-verification.json` | 371 artifact checks and 168 source checks, zero mismatches; not Phase 5 archive validation |
-| Full pinned analysis environment | Actual environment checks using Python 3.14.2 and system 3.12.3 | BLOCKED | `dependency-inventory.json`, environment logs | Exact pins unavailable; no installation authorized |
-| Full registration and renderer smoke | Actual full CMake configure, official registration checker and full smoke entry point | BLOCKED | `blocked-gates.json`, `full-registration.stderr`, `full-smoke-environment.log` | Expected 32 tests with diagnostic tier; analysis_figures missing. Existing full gates still reject |
-| Historical Phase 5 inventories/archive sidecars | Bounded local search and tracked-file inspection | BLOCKED | `historical-evidence-search.json` | No preserved candidates found in the searched locations; history cannot be regenerated as original evidence |
-| TSan acceptance/race-freedom claim | Preserve prior calibrated gate outcome and intentional-race-control isolation | BLOCKED | Existing research log and tests/tsan_controls | Prior work_ report remains LIKELY TOOL/RUNTIME LIMITATION; ASan is not a race detector |
+| Full pinned analysis environment | Exact eleven versions, pip check, real Agg render, ambient inventory comparison | PASS | R/restoration-result.json, pip-freeze.stdout, environment-gate.stdout | Isolated .venv-analysis only; bootstrap pip 25.3, no pip upgrade or system package changes |
+| Full registration and renderer smoke | Actual full configure/checkers, render tests and complete smoke entry point | PASS | R/full-verification/optional-official-registration.log and release/ | Default 31 executed; opt-in diagnostic registration exactly 32; 14 diagnostic tests executed separately per build |
+| New current-code archives and sidecars | sha256sum plus copied trusted kit under system Python -I -S -B with checkout/venv/network/subprocess access denied | PASS | R/offline-verification/offline-results.json | Three newly generated full-profile pairs; source a293d1a, not regenerated historical evidence |
+| Full-gate negative and compatibility controls | Six intended configure failures; four compatibility configurations; invalid full-without-tests rejection | PASS | R/full-verification/environment-negatives/, compatibility/ | Counts 31 full, 27 minimal, 0 library-only, 37 optional; original gates remain strict |
+| Mandatory historical Phase 5 baseline archive/inventory verification | Recover original published workflows; verify original ZIP digests, archive sidecars, complete member inventories, source Git objects and full profiles | PASS | H/recovery-index.json, verification-results.json, workflow-provenance.json | Nine originals verified; earlier separate local-run copies remain unverified and are not used as acceptance inputs |
+
 | Performance inference/physical-core speedup | No scientifically eligible observations established by this audit | NOT APPLICABLE | All pilot and bound evidence retains false scientific flags | No confidence intervals, significance or scaling claim is justified |
-| Phase B and later phase acceptance | Enforce the master request's dependency order | BLOCKED | This report and AGENTS.md | Phase A remains unaccepted; no interference implementation/campaign is presented as completed |
+| Phase B and later phase acceptance | Separate later work from this acceptance decision | NOT APPLICABLE | This report and AGENTS.md | Outside Phase A; no later implementation or acceptance is claimed |
 
 ## Native observations and real execution
 
@@ -135,30 +146,75 @@ not copied into a purported portable archive. The two audit driver scripts are
 retained for inspection. These audit catalogues are not a successful historical
 `debug-full-v1`, `release-smoke-v1` or `sanitize-full-v1` archive/profile.
 
-To reproduce available checks from this commit in Codespaces, choose new build
-paths. Explicit OFF below reports available tests only and does not bypass or
-satisfy the mandatory full gate:
+The authorized restoration used these exact installation operations (recorded argv,
+stdout/stderr, return codes and timestamps are in R/restoration-commands.json):
 
 ```sh
-cmake -S . -B build/phase-a-debug -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON -DDYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS=ON -DDYNAGRAPH_FULL_VALIDATION=OFF
-cmake --build build/phase-a-debug --parallel 2
-ctest --test-dir build/phase-a-debug --parallel 1 --output-on-failure
-cmake -S . -B build/phase-a-release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DDYNAGRAPH_WARNINGS_AS_ERRORS=ON -DDYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS=ON -DDYNAGRAPH_FULL_VALIDATION=OFF
-cmake --build build/phase-a-release --parallel 2
-ctest --test-dir build/phase-a-release --parallel 1 --output-on-failure
-DYNAGRAPH_PILOT_TEST_RUNNER="$PWD/build/phase-a-release/dynagraph_bench" DYNAGRAPH_WORKLOAD_TEST_FIXTURE="$PWD/build/phase-a-release/tests/workload_fixture" python3 -B -m unittest discover -s tests -p 'test_campaign*.py'
-python3 -B tools/validation/test_archive.py
-python3 -B tools/validation/test_repair.py --output /tmp/dynagraph-phase-a-repair-new
-python3 -B tools/validation/test_negative_diagnostics.py
+python3 -m venv .venv-analysis
+.venv-analysis/bin/python -m pip --isolated --disable-pip-version-check --no-cache-dir install --require-virtualenv --no-deps --only-binary=:all: --no-input --report results/validation/phase-a-pinned-restoration/install-report.json -r benchmarks/requirements-analysis.txt
+.venv-analysis/bin/python -m pip --isolated check
+.venv-analysis/bin/python -m pip --isolated freeze --all
+.venv-analysis/bin/python -B tools/validation/check_environment.py
 ```
 
-For sanitizer reproduction, use a fresh build with
-`-DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie'`
-and `-DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined -no-pie'`.
-Run CTest with `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
-`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`, through the approved mechanism
-that permits LeakSanitizer inspection and existing Unix-socket negative fixtures.
-No sanitizer requirement was disabled.
+The eleven installed project versions exactly match the unchanged specification:
+
+| Package | Version |
+| --- | --- |
+| matplotlib | 3.10.8 |
+| numpy | 2.4.1 |
+| contourpy | 1.3.3 |
+| cycler | 0.12.1 |
+| fonttools | 4.61.1 |
+| kiwisolver | 1.4.9 |
+| packaging | 25.0 |
+| pillow | 12.1.0 |
+| pyparsing | 3.3.2 |
+| python-dateutil | 2.9.0.post0 |
+| six | 1.17.0 |
+
+Pip 25.3 is the standard venv bootstrap tool, not an additional project dependency;
+it was not upgraded. Dependency resolution was disabled, only pinned binary wheels
+were installed, and pip check confirmed the closed dependency set. The before/after
+package inventories of both ambient interpreters are identical. The requirements
+file hash is unchanged, and system site packages are disabled for this venv.
+
+The restored driver uses a clean local a293d1a checkout with no overlay, builds and
+runs each canonical full profile sequentially, and checks the frozen source stays
+unchanged. It includes full registration, real analysis_figures execution and
+Release pipeline/negative controls. The optional diagnostic tier is separately
+configured and checked for exactly 32 enabled names; its 14-test workload script
+runs against the fresh binaries from each canonical profile. Thus the historical
+31-name archive contract remains unchanged, and no executed-32-test claim is made.
+
+To reproduce current full profiles, use fresh disjoint outputs and the approved
+execution mechanism that supports LeakSanitizer inspection/Unix-domain sockets:
+
+```sh
+.venv-analysis/bin/python -B tools/validation/ci_verify.py --python "$PWD/.venv-analysis/bin/python" --mode debug --output /tmp/dynagraph-phase-a-full-new/debug
+.venv-analysis/bin/python -B tools/validation/ci_verify.py --python "$PWD/.venv-analysis/bin/python" --mode release --smoke --output /tmp/dynagraph-phase-a-full-new/release
+.venv-analysis/bin/python -B tools/validation/ci_verify.py --python "$PWD/.venv-analysis/bin/python" --mode sanitize --output /tmp/dynagraph-phase-a-full-new/sanitize
+cmake -S . -B build/phase-a-full-registration -DDYNAGRAPH_FULL_VALIDATION=ON -DDYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS=ON -DDYNAGRAPH_ANALYSIS_PYTHON="$PWD/.venv-analysis/bin/python"
+.venv-analysis/bin/python -B tools/validation/check_registration.py --build build/phase-a-full-registration --optional workload-diagnostics
+```
+
+Actual source/output paths, selected fresh binaries, environments and commands for
+all supplemental tests are retained in R/full-verification/commands.json and the
+three profile command catalogues. Sanitizers used canonical
+`-fsanitize=address,undefined -fno-omit-frame-pointer` with matching linker flags,
+`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`, and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. No requirement was disabled.
+Fresh complete default profiles each execute **31/31**, including the renderer.
+Release verifies both complete 16-trial datasets, all 14 figure files and all nine
+specific negative diagnostics. Six environment/registration-negative configurations
+and four compatibility configurations also pass their intended checks.
+
+Three **new** archive/sidecar pairs are retained and independently checked with
+sha256sum and a copied trusted verifier kit using system Python 3.12.3 with site
+packages disabled. An audit hook denies reads from the original/frozen checkouts
+or the venv, and denies network/subprocess activity. These current-code archives
+carry source a293d1a and current execution timestamps. They are never labeled as
+original Phase 5 archives and do not replace their missing historical provenance.
 
 The immutable reference plan remains byte-identical to baseline. Its canonical
 SHA-256 is `f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24`;
@@ -167,25 +223,75 @@ the deterministic 104-trial manifest SHA-256 is
 Only disposable development copies substitute the current executable digest and
 observed CPU request for genuine diagnostic execution.
 
-## Blocking prerequisites and next action
+## Historical recovery and Phase A acceptance decision
 
-The exact eleven-package rendering requirements remain unchanged. The ambient
-Python 3.14.2 environment matches only one pin; system Python 3.12.3 matches none.
-Both fail the actual gate on missing matplotlib==3.10.8. The former has venv and
-ensurepip available; the latter lacks ensurepip. The repository's existing
-reproducibility runbook describes an ignored `.venv-analysis` environment, but
-AGENTS.md requires explicit dependency-install permission. No installation was
-attempted. Full configuration, analysis_figures, renderer smoke and corresponding
-figure controls remain blocked until that prerequisite is restored and validated.
+The initial storage search checked **112 documented references**, traversed
+**5,946 directories / 48,181 file entries**, and found no archive candidates in
+accessible local storage outside excluded new outputs. It included Codespaces
+persisted/shared mounts under `/workspaces/.codespaces`. Directory symlinks were
+not followed; `/tmp/codex-daemon-1000` was access-denied and reported. This was a
+local search result, not a claim that no backup existed elsewhere.
 
-The searched local `/tmp`, `/workspaces` and `/home/codespace` trees (depth six)
-contain no preserved historical archive/sidecar candidates; `results/validation`
-has no Phase 5 retention directory. This bounded search does not establish that
-copies do not exist elsewhere. Supply the retained location/files if available;
-new synthetic fixtures or regenerated outputs cannot establish historical integrity.
-Available Phase 6 retention has been independently checked without mutation.
+The repository's workflow documents upload of original verification bundles.
+The already configured GitHub CLI could read their existing artifact records.
+A read-only listing returned all **75 available artifacts**, including **nine
+original Phase 5 artifacts** at source heads `02aecf155dca...` and `8b05c2b2dc12...`.
+These were downloaded, not regenerated. No workflow, push, PR, merge, upload or
+external computing job was triggered; all inspection/verification ran in Codespaces.
 
-Next: obtain authorization to restore the existing pinned analysis environment
-**inside Codespaces**, locate/restore the original historical evidence, and rerun
-the blocked gates. Phase B must wait. Scientific eligibility remains false, TSan
-acceptance remains unmet, and no unconditional project completion is declared.
+For every recovered artifact:
+
+1. Original ZIP bytes match GitHub's recorded SHA-256 digest.
+2. The original canonical `.tar.gz` and `.tar.gz.sha256` bytes were extracted
+   without rewriting. Other uploaded negative fixtures remain inert ZIP data.
+3. `sha256sum -c` and the copied trusted bounded offline verifier pass under system
+   Python `-I -S -B`, with live checkout/venv access and network/subprocess denied.
+4. Complete member hash/mode/size inventories and the original full profile pass.
+   There are three originals each for debug-full-v1, release-smoke-v1 and
+   sanitize-full-v1; each records 31 accepted tests. Those historical tests were
+   not rerun or regenerated here.
+5. All **133 archived source files per artifact** match original repository Git
+   object bytes: **1,197 checks, zero mismatches**. Push and pull-request run
+   provenance is retained. The three pull-request records retain their recorded
+   merge revision `1471e90b...`; their complete source content also matches the
+   workflow head `02aecf1...`. No revision metadata was rewritten.
+
+The nine artifact IDs are 12917025344, 12916715606, 12915912063, 12915818384,
+12915673958, 12915648737, 12915009363, 12914629585 and 12914479883. The three
+original workflow contexts are push run 40916057294, pull-request run 40916117142,
+and push run 40916519138. API provenance, original creation dates, current download
+times, original bytes and all verification commands/results remain in H. These
+records establish transfer/local consistency, not externally authenticated evidence
+or a hosted-CI result for the current a293d1a implementation.
+
+**Decision: the historical baseline gate is now PASS because original published
+Phase 5 archives and their inventories/sidecars have actually been recovered and
+verified.** The earlier BLOCKED assessment was made before that recovery. This is
+new original evidence becoming available, not a waiver based on fresh regeneration.
+The code's verification gates, archive contract and scientific restrictions were
+not weakened.
+
+The distinct earlier local-run retention directories, including
+`results/validation/phase5c3b3r/`, are still absent. Their specific locally reported
+hashes/runs have **not** been verified or claimed recovered. Their absence does not
+block Phase A's current-code qualification now that an original published Phase 5
+baseline covering all three full profiles is verified. They are not inputs to
+current execution, completed-trial reuse or any scientific result. Any future claim
+or analysis relying on those particular unavailable local runs remains blocked
+until their genuine payloads are restored. This approval does not certify every
+historical local-run claim or complete research provenance.
+
+## Remaining project limitations outside Phase A
+
+| Requirement | Result | Reason / minimum action if it is needed |
+| --- | --- | --- |
+| Verify specific missing older local-run copies | BLOCKED | Obtain their genuine payloads and original inventories/sidecars before using or endorsing those runs; published originals above are a separate verified baseline |
+| TSan research acceptance / race-freedom claim | BLOCKED | Prior work_ report remains LIKELY TOOL/RUNTIME LIMITATION; rendering/ASan recovery does not satisfy that separate gate |
+| Scientific performance eligibility | NOT APPLICABLE | Remains false; no eligible performance observations or physical-core speedup claim |
+| Current-code hosted CI | NOT APPLICABLE | Current verification is local Codespaces execution; no new hosted workflow was triggered or claimed |
+| Phase B interference assessment and later phases | NOT APPLICABLE | Not performed by this Phase A restoration/acceptance task; later work remains required |
+
+**Phase A is APPROVED for the implemented local workload-instrumentation and
+evidence-verification scope.** All mandatory Phase A gates pass. There are no
+remaining Phase A software/dependency blockers. Scientific eligibility stays false,
+TSan acceptance stays unmet, and whole-project completion is not declared.

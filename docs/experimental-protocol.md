@@ -7,7 +7,9 @@ The research-grade completion request begins with the
 The audit retains scientific ineligibility and strict existing evidence gates.
 Known contradictions take precedence over missing workload task evidence.
 Phase B interference assessment may proceed only after Phase A acceptance;
-unavailable pinned rendering and historical evidence must remain explicit blockers.
+the pinned renderer, full local gates and nine recovered original published
+Phase 5 archives now pass verification. Phase A is approved for its local scope;
+separate missing local-run copies remain unverified and are not used as evidence.
 Earlier phase status statements below retain their historical context.
 
 Current scope is Phase 6B-2B-2 [safe development resume](campaign-recovery.md).
