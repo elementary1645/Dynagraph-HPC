@@ -5117,3 +5117,88 @@ uncontended execution, NUMA isolation, external authenticity or physical-core
 scaling. Scientific eligibility stays false. TSan acceptance remains unmet and its
 previous LIKELY TOOL/RUNTIME LIMITATION classification is unchanged. No hosted CI,
 performance/inferential result, push, PR or merge is claimed.
+
+
+## 2026-11-06 — Master completion request, Phase A self-audit
+
+Started from clean f83ebd4966e9a48a5024114c110731c78834d026, reviewing the Phase
+6B-2B-3B-3 diff against 71d731f877ce41cb110ca7617655be92e6222c76. The new master
+request authorizes local implementation/tests/docs/commits in dependency order,
+with Codespaces as the only computing environment. No separate reviewer, hosted
+CI, external compute, package installation, push, PR or merge is claimed.
+
+Reproduced a classification defect: when a record contained both a known identity
+or CPU contradiction and missing task membership, a global missing-field heuristic
+reported insufficient_evidence. The red test failed twelve subcases in one test.
+These records already failed successful completion; this was not a demonstrated
+completion bypass. The fix checks all available task facts and defers the missing
+verdict until known facts are consistent. Contradictions now take precedence;
+missing evidence alone remains insufficient. Schema shapes, complete valid
+observations and all scientific restrictions remain preserved. No algorithm,
+OpenMP synchronization, timing, enforcement/GO/cleanup, dependency pin or campaign
+configuration changed.
+
+Focused coverage now has 14 tests, including mixed-evidence precedence across
+samples/threads/regions, missing endpoints and independently rehashed false
+observed_consistent claims. Offline verification rejects the latter, as does
+recovery both with the complete inventory and directly without the final-index
+shortcut. Isolated campaign tests explicitly select freshly built runner and
+fixture binaries rather than accidentally using an earlier build.
+
+The [Phase A acceptance report](phase-a-acceptance.md) contains the requirement /
+method / result / evidence / remaining-limitation matrix. Overall Phase A result
+is **BLOCKED**, not accepted. Phases B–G have not started.
+
+Actual checks used a new local detached f83ebd4 checkout plus an identified frozen
+working overlay, using the existing snapshot, command receipt and JUnit tools.
+Sequential fresh Debug/Release/ASan+UBSan builds with warnings-as-errors each
+passed **31/31 available CTest tests**. Native diagnostics comprise nine modes in
+each build. Sanitizers used leak detection and halt-on-error, with process
+inspection permitted; no acceptance requirement was disabled. The official full
+configuration/registration and renderer smoke gates were separately executed and
+remain blocked. With the optional diagnostic tier the full expected set has 32
+names; the absent analysis_figures leaves 31 locally available names. This is not
+a full-validation archive/profile acceptance or a TSan/race-freedom conclusion.
+
+Campaign Python: **371 executed tests passed** using the fresh Release executable
+and native fixture. Archive contract: **59/59**; infrastructure repair: **17/17**;
+negative diagnostic controls: **3/3**. The frozen source inventory was unchanged
+through validation. Final documentation was prepared after results, and final
+implementation/test hashes are compared with that frozen snapshot.
+
+A separate genuine Linux execution, with **no hardware or cgroup mocks**, passed
+one- and two-worker enforced diagnostic pilot trials. Compiled replay and Python
+correctness oracles passed; offline verification and journal recovery both
+verified completion. A joined nonleader std::thread caller also passed through
+real cgroups/affinity/GO and native identity verification. Two real CLI controls
+rejected diagnostic timing and exclusive-publication failure while preserving the
+preexisting file. These observations remain measurement-ineligible and establish
+no absence of interference, exclusive CPU ownership, NUMA isolation, stable
+placement/availability or physical-core scaling.
+
+Original configuration bytes and canonical 104-trial expansion match baseline:
+plan f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24;
+manifest f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a.
+Five retained Phase 6 inventories (371 artifact checks) have zero mismatches.
+The retained 168-file Phase 6 source map matches f83ebd4 Git objects; comparing
+that old map to this modified working tree would have been the wrong reference.
+No retained research evidence was rewritten.
+
+Blocked: both installed Python interpreters fail the pinned rendering gate on
+missing matplotlib==3.10.8 (ambient Python 3.14.2 matches 1/11 exact pins; system
+3.12.3 matches 0/11). No venv restoration/install is authorized. Historical Phase 5
+inventories/archive/sidecars were not found in the recorded bounded local search;
+no replacement history was generated. The old work_ TSan finding remains LIKELY
+TOOL/RUNTIME LIMITATION, and its acceptance gate remains unmet. The next action is
+restoration/validation of the pinned environment inside Codespaces with explicit
+install permission and locating/restoring original historical evidence. Phase B
+must wait for Phase A acceptance.
+
+Evidence is retained under ignored results/validation/phase-a-acceptance-audit/
+and phase-a-real-execution/. The former includes red/green logs, blocked gate
+receipts, dependency/search/manifest/retention records and isolated-verification/
+command logs, JUnit reports, source inventory/overlay and raw native fixtures.
+Live builds and negative special-file fixtures remain under
+/tmp/dynagraph-phase-a-audit-20261106. These available-check catalogues are not
+successful historical full-validation archive profiles. Stop at the documented
+unavailable-prerequisite gate after the authorized local audit/fix commit/report.

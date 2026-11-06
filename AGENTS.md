@@ -2,23 +2,23 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2B-3B-3 reconstruction of explicit opt-in
-  development workload-region instrumentation and resource observation evidence on
-  feature/phase6b2b3b3-workload-instrumentation, based on 71d731f.
-  Native identity/nesting observations, enforcement/pilot/offline/recovery/resume
-  integration, bounded fixtures, local verification, documentation and one local
-  commit are authorized. Preserve R1/R2 ownership, acknowledgement framing,
-  deadlines, signal cleanup, conservative GO accounting and immutable evidence.
-  Scientific eligibility remains false. No retries, dependency installation,
-  scientific campaigns, push, merge or PR.
+- Current authorized scope: the research-grade completion master request, beginning
+  with Phase A acceptance audit of f83ebd4 against baseline 71d731f on
+  feature/phase6b2b3b3-workload-instrumentation. Inspection, reproduced-defect fixes,
+  focused tests, local verification, documentation and local commits are authorized.
+  Proceed to Phase B only after Phase A is accepted; do not declare acceptance
+  while essential checks remain blocked or inconclusive. GitHub Codespaces is the
+  only computing environment. Preserve all correctness, evidence, ownership,
+  R1/R2 cleanup/framing/deadline/GO and safe-resume guarantees. No dependency
+  installation, push, PR or merge is authorized. Scientific eligibility remains false.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
   completed Phase 5C-3B-1R implementation and evidence. CI workflow changes are
   authorized; preserve production algorithms, graph semantics, APIs, heuristic,
   timing boundaries, workload formats and pinned dependency versions.
-- Stop after Phase 6B-2B-3B-3 implementation/local verification and the authorized commit;
-  broader recovery and later scientific execution/inference remain deferred. Preserve historical Phase 5
+- Stop when an unavailable prerequisite or required user decision prevents valid
+  progress through the master request's dependency gates. Preserve historical Phase 5
   evidence. Do not claim hosted CI passed from local checks.
   The race-detector acceptance gate remains unmet: the specific work_ TSan report
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
@@ -69,4 +69,5 @@
   hardware metadata, and raw results. Keep large generated artifacts out of Git.
 - Record actual commands, outcomes, limitations, and scope changes in docs.
 - Before each phase gate, report changed files, verification results, unresolved
-  issues, and the next proposed phase. Stop and wait for approval.
+  issues, and the next proposed phase. Continue only when the master request's
+  prerequisites are satisfied; stop for unavailable prerequisites or required user decisions.

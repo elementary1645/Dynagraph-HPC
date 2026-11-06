@@ -65,8 +65,9 @@ and every thread affinity against the enforced set. Migration between valid samp
 CPUs is allowed. A narrower valid thread affinity is allowed.
 
 Classifications are `observed_consistent`, `observed_contradictory`, and
-`insufficient_evidence`. Missing mandatory membership information is insufficient;
-contradictory complete observations are contradictory. Both prevent successful
+`insufficient_evidence`. All available task facts are checked even when another
+field, endpoint, thread or region lacks evidence. Any known contradiction takes
+precedence over missing facts. Missing mandatory task evidence alone is insufficient. Both prevent successful
 trial completion and `verified-complete` recovery. Unknown fields, including
 invented availability flags, are rejected. Missing/truncated/malformed JSON or
 missing bound artifacts cannot establish completion. Consistency concerns only

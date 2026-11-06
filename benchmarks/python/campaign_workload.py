@@ -51,6 +51,50 @@ def expected_regions(graph_data, trace_data, policy, no_effect):
     return count
 
 
+_TASK_FIELDS = ('tid', 'tgid', 'task_pid', 'task_tgid', 'pgrp', 'session',
+                'cpu', 'start_ticks', 'leader_start_ticks', 'affinity')
+_IDENTITY_FIELDS = ('tid', 'tgid', 'task_pid', 'task_tgid', 'pgrp', 'session',
+                    'start_ticks', 'leader_start_ticks')
+
+
+class _IncompleteTaskEvidence(ValueError):
+    """Only raised after every available task fact has passed semantic checks."""
+
+
+def _task_sample(sample, pid, ticks, cpus):
+    """Validate known facts even in incomplete samples; return whether any are missing.
+
+    Deferring the missing-evidence verdict lets a contradiction anywhere in the
+    document take precedence. Missing fields never substitute for observed facts.
+    """
+    if sample is None:
+        return True
+    if type(sample) is not dict or set(sample)-set(_TASK_FIELDS):
+        raise ValueError('invalid Linux workload task fields')
+    for key in ('tid', 'tgid', 'task_pid', 'task_tgid', 'pgrp', 'session'):
+        if key in sample:
+            integer(sample[key], 1, 1<<30, key)
+    for key in ('start_ticks', 'leader_start_ticks'):
+        if key in sample:
+            integer(sample[key], 1, (1<<63)-1, key)
+    if 'cpu' in sample:
+        integer(sample['cpu'], 0, 8191, 'sampled CPU')
+    if 'affinity' in sample:
+        cpu_array(sample['affinity'])
+    if (any(key in sample and sample[key] != pid for key in ('tgid', 'task_tgid', 'pgrp', 'session')) or
+            ('tid' in sample and 'task_pid' in sample and sample['task_pid'] != sample['tid']) or
+            ('leader_start_ticks' in sample and sample['leader_start_ticks'] != ticks) or
+            ('start_ticks' in sample and (sample['start_ticks'] < ticks or
+                (sample.get('tid') == pid and sample['start_ticks'] != ticks)))):
+        raise ValueError('contradictory workload task membership/generation')
+    if 'affinity' in sample and (not set(sample['affinity']) <= cpus or
+            ('cpu' in sample and sample['cpu'] not in sample['affinity'])):
+        raise ValueError('workload CPU outside enforced affinity')
+    if 'cpu' in sample and sample['cpu'] not in cpus:
+        raise ValueError('workload CPU outside enforced affinity')
+    return any(key not in sample for key in _TASK_FIELDS)
+
+
 def validate_native(value, receipt, requested, count):
     fields(value, 'schema schema_version measurement_eligible regions', 'native workload')
     integer(value['schema_version'], 2, 2, 'native workload version')
@@ -68,6 +112,7 @@ def validate_native(value, receipt, requested, count):
     # Parent and child are session/group leaders because capture uses setsid.
     cpus = set(receipt['requested_cpus'])
     seen_generations = {}
+    incomplete = False
     for index, region in enumerate(regions):
         fields(region, 'region_id requested_workers configured_workers threads', 'workload region')
         integer(region['region_id'], index, index, 'region ID')
@@ -78,9 +123,12 @@ def validate_native(value, receipt, requested, count):
         threads = region['threads']
         if type(threads) is not list or not 1 <= len(threads) <= region['configured_workers']:
             raise ValueError('invalid actual workload team')
-        tids = set(); common = None
+        tids = {}; common = None
         for number, thread in enumerate(threads):
-            fields(thread, 'number team level active_level max_active_levels ancestor_sizes ancestor_numbers entry exit', 'workload thread')
+            # An absent endpoint is unavailable evidence, not permission to skip
+            # contradictions in another endpoint/thread/region.
+            shaped = dict(thread, entry=thread.get('entry'), exit=thread.get('exit')) if type(thread) is dict else thread
+            fields(shaped, 'number team level active_level max_active_levels ancestor_sizes ancestor_numbers entry exit', 'workload thread')
             integer(thread['number'], number, number, 'OpenMP thread number')
             integer(thread['team'], len(threads), len(threads), 'actual team')
             level, active, maximum = (thread[k] for k in ('level','active_level','max_active_levels'))
@@ -98,51 +146,34 @@ def validate_native(value, receipt, requested, count):
             if common is not None and common != context:
                 raise ValueError('contradictory team ancestry')
             common = context
-            entry, exit = thread['entry'], thread['exit']
+            entry, exit = thread.get('entry'), thread.get('exit')
             for sample in (entry, exit):
-                fields(sample, 'tid tgid task_pid task_tgid pgrp session cpu start_ticks leader_start_ticks affinity', 'Linux workload task')
-                for key in ('tid','tgid','task_pid','task_tgid','pgrp','session'):
-                    integer(sample[key], 1, 1<<30, key)
-                for key in ('start_ticks','leader_start_ticks'):
-                    integer(sample[key], 1, (1<<63)-1, key)
-                integer(sample['cpu'], 0, 8191, 'sampled CPU');cpu_array(sample['affinity'])
-                if (sample['tgid'] != pid or sample['task_tgid'] != pid or sample['task_pid'] != sample['tid'] or
-                        sample['pgrp'] != pid or sample['session'] != pid or sample['leader_start_ticks'] != ticks or
-                        sample['start_ticks'] < ticks or (sample['tid'] == pid and sample['start_ticks'] != ticks)):
-                    raise ValueError('contradictory workload task membership/generation')
-                if not set(sample['affinity']) <= cpus or sample['cpu'] not in sample['affinity']:
-                    raise ValueError('workload CPU outside enforced affinity')
-                if sample['tid'] in seen_generations and seen_generations[sample['tid']] != sample['start_ticks']:
-                    raise ValueError('workload task generation changed')
-                seen_generations[sample['tid']] = sample['start_ticks']
-            if any(entry[k] != exit[k] for k in ('tid','tgid','task_pid','task_tgid','pgrp','session','start_ticks','leader_start_ticks')):
+                incomplete |= _task_sample(sample, pid, ticks, cpus)
+                if sample is None:
+                    continue
+                if 'tid' in sample:
+                    previous = tids.setdefault(sample['tid'], number)
+                    if previous != number:
+                        raise ValueError('duplicate workload task')
+                if 'tid' in sample and 'start_ticks' in sample:
+                    if sample['tid'] in seen_generations and seen_generations[sample['tid']] != sample['start_ticks']:
+                        raise ValueError('workload task generation changed')
+                    seen_generations[sample['tid']] = sample['start_ticks']
+            if entry is not None and exit is not None and any(
+                    entry[key] != exit[key] for key in _IDENTITY_FIELDS if key in entry and key in exit):
                 raise ValueError('entry/exit identity mismatch')
-            if entry['tid'] in tids: raise ValueError('duplicate workload task')
-            tids.add(entry['tid'])
+    if incomplete:
+        raise _IncompleteTaskEvidence('missing workload task evidence')
     return value
 
 
 def classification(native, receipt, requested, count):
     try:
         validate_native(native, receipt, requested, count)
+    except _IncompleteTaskEvidence as error:
+        return 'insufficient_evidence', str(error)
     except (ValueError, KeyError, TypeError) as error:
-        # Missing mandatory evidence is never strong. Known contradictions are
-        # checked on all complete samples; no availability flag can hide them.
-        missing = False
-        if type(native) is dict and type(native.get('regions')) is list:
-            for region in native['regions']:
-                if type(region) is not dict or type(region.get('threads')) is not list:
-                    continue
-                for thread in region['threads']:
-                    if type(thread) is not dict:
-                        continue
-                    for key in ('entry', 'exit'):
-                        sample = thread.get(key)
-                        if type(sample) is not dict or not {
-                            'tid','tgid','task_pid','task_tgid','start_ticks','leader_start_ticks'
-                        } <= sample.keys():
-                            missing = True
-        return ('insufficient_evidence' if missing else 'observed_contradictory'), str(error)
+        return 'observed_contradictory', str(error)
     if receipt['schema_version'] == 1:
         return 'insufficient_evidence', 'legacy receipt lacks atomic GO accounting required by the workload contract'
     return 'observed_consistent', None

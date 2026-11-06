@@ -1,5 +1,6 @@
 """Actual workload regions, rehashed semantic forgeries, pilot/offline/recovery gates."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,8 +12,8 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT/'benchmarks/python'), str(ROOT/'tests')]
-FIXTURE = Path(sys.argv.pop(1)).resolve() if __name__=='__main__' and len(sys.argv)>1 else ROOT/'build/debug/tests/workload_fixture'
-BENCH = Path(sys.argv.pop(1)).resolve() if __name__=='__main__' and len(sys.argv)>1 else ROOT/'build/debug/dynagraph_bench'
+FIXTURE = Path(sys.argv.pop(1)).resolve() if __name__=='__main__' and len(sys.argv)>1 else Path(os.environ.get('DYNAGRAPH_WORKLOAD_TEST_FIXTURE',ROOT/'build/debug/tests/workload_fixture'))
+BENCH = Path(sys.argv.pop(1)).resolve() if __name__=='__main__' and len(sys.argv)>1 else Path(os.environ.get('DYNAGRAPH_PILOT_TEST_RUNNER',ROOT/'build/debug/dynagraph_bench'))
 from campaign_workload import (NATIVE, BOUND, bind, verify, validate_native, classification, expected_regions)
 from campaign_enforcement import binding, seal
 from campaign_process import capture
@@ -118,6 +119,33 @@ class WorkloadTests(unittest.TestCase):
         unknown=seal(unknown)
         with self.assertRaises(ValueError):validate_native(native,unknown,2,1)
 
+    def test_known_contradictions_precede_missing_task_evidence(self):
+        native,receipt,b=self.samples['two']
+        for missing_worker,bad_worker in ((0,0),(0,1),(1,0)):
+            for field in ('leader_start_ticks','tgid','task_tgid','cpu'):
+                with self.subTest(missing_worker=missing_worker,bad_worker=bad_worker,field=field):
+                    forged=copy.deepcopy(native)
+                    forged['regions'][0]['threads'][missing_worker]['entry'].pop('task_pid')
+                    sample=forged['regions'][0]['threads'][bad_worker]['entry']
+                    sample[field]=8191 if field=='cpu' else sample[field]+1
+                    status,_=classification(forged,receipt,2,1)
+                    self.assertEqual(status,'observed_contradictory')
+        missing=copy.deepcopy(native)
+        missing['regions'][0]['threads'][0]['entry'].pop('task_pid')
+        self.assertEqual(classification(missing,receipt,2,1)[0],'insufficient_evidence')
+        missing['regions'][0]['threads'][0]['entry']=None
+        self.assertEqual(classification(missing,receipt,2,1)[0],'insufficient_evidence')
+        missing['regions'][0]['threads'][0].pop('entry')
+        self.assertEqual(classification(missing,receipt,2,1)[0],'insufficient_evidence')
+        # The missing fact and known contradiction can be in different regions.
+        repeated,repeated_receipt,_=self.samples['repeated']
+        forged=copy.deepcopy(repeated)
+        forged['regions'][0]['threads'][0]['entry'].pop('task_pid')
+        forged['regions'][-1]['threads'][1]['exit']['leader_start_ticks']+=1
+        self.assertEqual(classification(forged,repeated_receipt,2,3)[0],'observed_contradictory')
+        missing['regions'][0]['threads'][1]['max_active_levels']=0
+        self.assertEqual(classification(missing,receipt,2,1)[0],'observed_contradictory')
+
     def pilot(self, directory, observe=True, cut=False, fail=False, policy='delta-stepping'):
         root=directory/'inputs';root.mkdir();(root/'bin').mkdir()
         shutil.copyfile(BENCH,root/'bin/dynagraph_bench');(root/'bin/dynagraph_bench').chmod(0o700)
@@ -203,6 +231,32 @@ class WorkloadTests(unittest.TestCase):
                 try: report=inspect_recovery(output)
                 except ValueError: pass
                 else:self.assertNotEqual(next(t['classification'] for t in report['trials'] if t['trial_id']==tid),'verified-complete')
+
+    def test_rehashed_false_consistency_claims_fail_offline_and_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output,trials=self.pilot(Path(tmp))
+            tid=next(t['trial_id'] for t in trials if t['workers']==2);base=output/tid
+            original={p:p.read_bytes() for p in output.rglob('*') if p.is_file()}
+            for case in ('leader-both','foreign-worker','foreign-primary','max-zero','missing-membership'):
+                with self.subTest(case=case):
+                    for p,raw in original.items():p.write_bytes(raw)
+                    native=read_json(base/NATIVE);self.mutations()[case](native)
+                    (base/NATIVE).write_bytes(canonical_json(native))
+                    # Attacker retains a success claim and independently rehashes
+                    # every changed object, rather than calling the verifier's bind.
+                    bound=read_json(base/BOUND)
+                    bound['native_sha256']=hashlib.sha256(canonical_json(native)).hexdigest()
+                    bound['classification']='observed_consistent';bound['issue']=None
+                    bound.pop('evidence_sha256')
+                    bound['evidence_sha256']=hashlib.sha256(canonical_json(bound)).hexdigest()
+                    (base/BOUND).write_bytes(canonical_json(bound));self.rehash(output)
+                    with self.assertRaises(ValueError):verify_pilot(output)
+                    with self.assertRaises(ValueError):inspect_recovery(output)
+                    # Exercise per-trial recovery directly, without the full-index
+                    # shortcut into verify_pilot. No archived executable is run.
+                    sidecar=(output/'sha256.json').read_bytes();(output/'sha256.json').unlink()
+                    with self.assertRaises(ValueError):inspect_recovery(output)
+                    (output/'sha256.json').write_bytes(sidecar)
 
     def test_serial_pilot_has_no_workload_teams(self):
         with tempfile.TemporaryDirectory() as tmp:

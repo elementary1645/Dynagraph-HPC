@@ -2,6 +2,14 @@
 
 ## Status
 
+The research-grade completion request begins with the
+[Phase A acceptance audit](phase-a-acceptance.md) of workload instrumentation.
+The audit retains scientific ineligibility and strict existing evidence gates.
+Known contradictions take precedence over missing workload task evidence.
+Phase B interference assessment may proceed only after Phase A acceptance;
+unavailable pinned rendering and historical evidence must remain explicit blockers.
+Earlier phase status statements below retain their historical context.
+
 Current scope is Phase 6B-2B-2 [safe development resume](campaign-recovery.md).
 Explicit dual authorization permits verified completion reuse and execution of
 never-launched pending trials only. A single immutable sibling transaction binds
