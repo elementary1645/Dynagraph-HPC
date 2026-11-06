@@ -1,5 +1,14 @@
 # DynaGraph-HPC
 
+Phase 6B-2B-3B-3 implements opt-in workload-region OpenMP/Linux task observations
+and shared pilot/offline/recovery verification. The current
+[Phase A acceptance audit](docs/phase-a-acceptance.md) records verified checks,
+a reproduced classification fix and restored full rendering/registration/smoke
+validation and recovery/verification of nine original published Phase 5 archives.
+Phase A is **APPROVED** for its local workload-instrumentation scope;
+Phase B resource-interference implementation has not started. Scientific
+eligibility remains false. See the [instrumentation runbook](docs/workload-instrumentation.md).
+
 Phase 6B-2A adds an explicit, bounded development pilot harness. See the
 [pilot runbook, evidence schemas and limits](docs/campaign-pilot.md). It preserves
 Phase 6B-1 trial identities and keeps every result measurement-ineligible.
@@ -98,8 +107,7 @@ Hosted CI execution is separate from local verification and requires the workflo
 
 ## Layout and development
 
-- include/dynagraph/ and src/: library API and CSR implementation; reserved modules
-  for future instrumentation; dynamic/ contains repair and adaptive/ the forced engine
+- include/dynagraph/ and src/: library API, CSR implementation and opt-in workload instrumentation; dynamic/ contains repair and adaptive/ the forced engine
 - apps/ and tests/: CLI and automated checks
 - benchmarks/: deterministic artifact generation/configuration; timing remains deferred
 - data/manifests/ and results/: provenance and generated experiment artifacts

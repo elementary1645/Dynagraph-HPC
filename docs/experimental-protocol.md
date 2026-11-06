@@ -2,6 +2,16 @@
 
 ## Status
 
+The research-grade completion request begins with the
+[Phase A acceptance audit](phase-a-acceptance.md) of workload instrumentation.
+The audit retains scientific ineligibility and strict existing evidence gates.
+Known contradictions take precedence over missing workload task evidence.
+Phase B interference assessment may proceed only after Phase A acceptance;
+the pinned renderer, full local gates and nine recovered original published
+Phase 5 archives now pass verification. Phase A is approved for its local scope;
+separate missing local-run copies remain unverified and are not used as evidence.
+Earlier phase status statements below retain their historical context.
+
 Current scope is Phase 6B-2B-2 [safe development resume](campaign-recovery.md).
 Explicit dual authorization permits verified completion reuse and execution of
 never-launched pending trials only. A single immutable sibling transaction binds
@@ -751,3 +761,19 @@ Cgroup visibility and quota checks cannot expose hidden host constraints. The
 Codespace remains development-only. Scientific admission, external attestation,
 workload-region OpenMP team instrumentation, isolation and retries remain deferred.
 See [resource-enforcement.md](resource-enforcement.md) for commands and failures.
+
+
+## Phase 6B-2B-3B-3 workload-region diagnostics
+
+Explicit development diagnostics can now sample actual persistent delta-stepping
+teams, per-task Linux membership/generation, OpenMP ancestry and entry/exit CPU
+placement. See [the workload instrumentation runbook](workload-instrumentation.md)
+for schemas, F1–F4 safeguards, bounds and commands. `--observe-workload` requires
+enforced affinity and diagnostic-only trials. Timing instrumentation is rejected.
+The shared offline/recovery gate rejects contradictory or insufficient membership
+even after hashes and journal chains are refreshed. Resume requires renewed opt-in
+and binds fresh attempts while retaining immutable originals. Existing affinity
+receipt v1/v2, journal v1, pilot v2, cleanup, ownership, acknowledgement and GO
+contracts remain in force. Sample consistency conveys no scientific eligibility,
+CPU ownership, stable placement, uncontended execution, NUMA isolation, external
+authentication, physical-core scaling or TSan acceptance.

@@ -3,9 +3,11 @@
 #include "dynagraph/algorithms/sssp.hpp"
 
 namespace dynagraph {
+struct WorkloadObservations;
 struct DeltaSteppingOptions {
     Distance delta; // Required: 1..UINT64_MAX.
     int thread_count = 0; // 0 uses omp_get_max_threads(); positive requests a team.
+    WorkloadObservations* workload_observations = nullptr; // Explicit development opt-in.
 };
 
 struct DeltaSteppingThreadMetrics {

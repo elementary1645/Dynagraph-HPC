@@ -40,7 +40,7 @@ def preflight(original):
     return context, ownership, expected, head, reused, pending
 
 
-def header(original, enforce_affinity=False):
+def header(original, enforce_affinity=False, observe_workload=False):
     context, ownership, bound, head, reused, pending = preflight(original)
     value = dict(schema='dynagraph-pilot-resume', schema_version=1, attempt_sequence=1,
                  original=str(original), original_execution_id=bound['pilot_execution_id'],
@@ -60,6 +60,18 @@ def header(original, enforce_affinity=False):
     if enforce_affinity:
         value['schema_version']=2
         value['authorization']['enforce_affinity']=True
+    if type(observe_workload) is not bool:
+        raise ValueError('observe_workload must be boolean')
+    if 'workload_policy' in context[2] and not observe_workload:
+        raise ValueError('observed original requires explicit --observe-workload on resume')
+    if observe_workload:
+        if 'workload_policy' not in context[2]:
+            raise ValueError('cannot upgrade legacy completed evidence to a workload observation contract')
+        if not enforce_affinity: raise ValueError('--observe-workload requires --enforce-affinity')
+        if any(t['phase'] != 'diagnostic' for t in context[3]):
+            raise ValueError('workload observations require diagnostic trials')
+        value['schema_version'] = 3
+        value['authorization']['observe_workload'] = True
     value['attempt_id'] = sha256(canonical_json(value))
     return value, context
 
@@ -71,15 +83,18 @@ def event(sequence, previous, kind, payload):
     return value
 
 
-def resume_pilot(original, *, execute=False, authorize=False, enforce_affinity=False):
+def resume_pilot(original, *, execute=False, authorize=False, enforce_affinity=False, observe_workload=False):
     if type(enforce_affinity) is not bool:
         raise ValueError('enforce_affinity must be boolean')
+    if type(observe_workload) is not bool:
+        raise ValueError('observe_workload must be boolean')
     if execute is not True or authorize is not True:
         raise ValueError('both --execute-development and --authorize-resume are required')
     original = Path(original).absolute()
     begin = time.monotonic()
     with directory_lock(original):
-        value, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}))
+        value, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}),
+                                **(dict(observe_workload=True) if observe_workload else {}))
         plan, manifest, execution, selected, hardware = context
         limits = value['limits']
         deadline = begin + limits['wall_seconds']
@@ -107,7 +122,8 @@ def resume_pilot(original, *, execute=False, authorize=False, enforce_affinity=F
                       max_trials=limits['max_trials'], wall_seconds=limits['wall_seconds'],
                       timeout=limits['timeout_seconds'], output_limit=limits['stream_bytes'],
                       _deadline=deadline, _runtime_origin=dict(kind='resume', attempt_id=value['attempt_id']),
-                      **(dict(enforce_affinity=True) if enforce_affinity else {}))
+                      **(dict(enforce_affinity=True) if enforce_affinity else {}),
+                      **(dict(observe_workload=True) if observe_workload else {}))
             child = inspect_recovery(attempt/'pilot')
             payload = dict(attempt_id=value['attempt_id'],
                            pilot_inventory=bounded_inventory(attempt/'pilot'),
@@ -136,8 +152,10 @@ def inspect_resume(attempt):
     original = Path(value['original'])
     if transaction_path(original) != attempt:
         raise ValueError('resume directory identity mismatch; relocation unsupported')
-    enforce_affinity = value.get('schema_version')==2
-    expected, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}))
+    enforce_affinity = value.get('schema_version') in (2, 3)
+    observe_workload = value.get('schema_version') == 3
+    expected, context = header(original, **(dict(enforce_affinity=True) if enforce_affinity else {}),
+                                **(dict(observe_workload=True) if observe_workload else {}))
     if canonical_json(value) != canonical_json(expected):
         raise ValueError('resume binding or original evidence mismatch')
     child = None
@@ -156,6 +174,8 @@ def inspect_resume(attempt):
                 if contract.get('origin') != dict(kind='resume', attempt_id=value['attempt_id']):
                     raise ValueError('resumed runtime origin mismatch')
             from campaign_enforcement import POLICY, INHERIT
+            if ('workload_policy' in e) != observe_workload:
+                raise ValueError('resumed workload opt-in mismatch')
             if e['affinity_policy'] != (POLICY if enforce_affinity else INHERIT):
                 raise ValueError('resumed enforcement opt-in mismatch')
             if (canonical_json(p)!=canonical_json(context[0]) or canonical_json(m)!=canonical_json(context[1]) or

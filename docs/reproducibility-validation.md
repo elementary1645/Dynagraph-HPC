@@ -22,10 +22,18 @@ With explicit dependency-install approval, create an ignored isolated environmen
 
 ```sh
 python3 -m venv .venv-analysis
-.venv-analysis/bin/python -m pip install -r benchmarks/requirements-analysis.txt
+.venv-analysis/bin/python -m pip --isolated --disable-pip-version-check --no-cache-dir install --require-virtualenv --no-deps --only-binary=:all: -r benchmarks/requirements-analysis.txt
 .venv-analysis/bin/python -m pip check
 PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/tmp/dynagraph-validation-mpl .venv-analysis/bin/python -B tools/validation/check_environment.py
 ```
+
+The 2026-11-06 Phase A restoration used these existing eleven exact pins with
+explicit install permission; only `.venv-analysis` was populated, dependency
+resolution was disabled, and ambient/system package inventories were unchanged.
+See the [Phase A acceptance matrix](phase-a-acceptance.md) for the exact installation
+report, successful full-profile checks and scoped Phase A approval. Nine original
+published Phase 5 artifacts were recovered without regeneration. New current-code
+archives are distinct; separate older local-run copies remain unavailable.
 
 Choose an available compatible Python with working venv/ensurepip; system Python
 may lack that component. Do not substitute pins or upgrade system packages.

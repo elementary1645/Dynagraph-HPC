@@ -185,6 +185,18 @@ foreach(failure_profile IN ITEMS fast stress extended)
     endif()
 endforeach()
 
+add_executable(workload_fixture workload_fixture.cpp)
+target_link_libraries(workload_fixture PRIVATE DynaGraph::dynagraph Threads::Threads)
+dynagraph_set_warnings(workload_fixture)
+option(DYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS "Register bounded development workload diagnostics" OFF)
+if(DYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS)
+add_test(NAME workload_instrumentation COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_campaign_workload.py
+    $<TARGET_FILE:workload_fixture> $<TARGET_FILE:dynagraph_bench>)
+set_tests_properties(workload_instrumentation PROPERTIES TIMEOUT 120 PROCESSORS 2
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1;PYTHONHASHSEED=0")
+endif()
+
 if(DYNAGRAPH_FULL_VALIDATION)
     # Check CMake's registered names now; the standalone checker additionally
     # enumerates generated CTest JSON after generation (including duplicates).
@@ -209,6 +221,9 @@ if(DYNAGRAPH_FULL_VALIDATION)
             list(APPEND full_optional_args --optional "${tier_name}")
         endif()
     endforeach()
+    if(DYNAGRAPH_ENABLE_WORKLOAD_DIAGNOSTICS)
+        list(APPEND full_optional_args --optional workload-diagnostics)
+    endif()
     execute_process(COMMAND "${DYNAGRAPH_ANALYSIS_PYTHON}" -B
         "${PROJECT_SOURCE_DIR}/tools/validation/check_registration.py"
         --names-file "${CMAKE_CURRENT_BINARY_DIR}/full-validation-names.json" ${full_optional_args}

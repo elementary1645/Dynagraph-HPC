@@ -100,6 +100,9 @@ int timing_command(const Options& options, const TimingOptions& timing, std::ost
     std::vector<TickPair> samples;
     std::string category = "artifact_validation";
     try {
+        if (options.config.parallel.workload_observations != nullptr) {
+            throw std::invalid_argument("workload observations are development diagnostics and cannot be timed");
+        }
         const auto workload = prepare_workload(options, report);
         category = "incorrect_configuration";
         if (workload.updates.empty()) { throw std::invalid_argument("empty traces cannot be timed"); }

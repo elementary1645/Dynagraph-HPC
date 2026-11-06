@@ -1,5 +1,6 @@
 #include "dynagraph/benchmark/timing.hpp"
 #include "test_support.hpp"
+#include "dynagraph/instrumentation/workload.hpp"
 #include <limits>
 #include <sstream>
 using namespace dynagraph;
@@ -12,6 +13,12 @@ struct FakeClock {
 };
 int main() {
     return dynagraph::test::run("timing contracts", [] {
+        WorkloadObservations observations;
+        Options instrumented;
+        instrumented.config.parallel.workload_observations = &observations;
+        std::ostringstream output, errors;
+        require(timing_command(instrumented, {}, output, errors) == 2, "diagnostics cannot be timed");
+        require(errors.str().find("cannot be timed") != std::string::npos, "explicit diagnostic rejection");
         const std::vector<TraceUpdate> updates{{0,1,8,6},{0,1,6,6},{0,1,6,0},{2,3,8,0}};
         for (const auto mode : {TimingMode::full_trace, TimingMode::per_update}) {
             for (const auto policy : {PolicyKind::always_dijkstra, PolicyKind::always_delta_stepping,
