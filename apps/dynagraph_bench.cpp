@@ -1,6 +1,7 @@
 #include "dynagraph/benchmark/timing.hpp"
 
 #include <iostream>
+#include "dynagraph/instrumentation/workload.hpp"
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -22,12 +23,12 @@ std::uint64_t number(const std::string& token, std::uint64_t maximum) {
     }
     return result;
 }
-void parse(int argc, char** argv, dynagraph::benchmark::Options& options, dynagraph::benchmark::TimingOptions* timing = nullptr) {
+void parse(int argc, char** argv, dynagraph::benchmark::Options& options, dynagraph::benchmark::TimingOptions* timing = nullptr, std::string* observation_path = nullptr) {
     if (argc < 2 || (std::string(argv[1]) != "verify" && (timing == nullptr || std::string(argv[1]) != "time"))) { throw std::invalid_argument("expected verify command; see --help"); }
     std::map<std::string, std::string> values;
     for (int i = 2; i < argc; i += 2) {
         const std::string key(argv[i]);
-        if (key != "--graph" && key != "--trace" && key != "--source" && key != "--policy" &&
+        if ((key != "--workload-observations" || observation_path == nullptr) && key != "--graph" && key != "--trace" && key != "--source" && key != "--policy" &&
             key != "--delta" && key != "--threads" && key != "--no-effect" && key != "--verification" && (timing == nullptr || (key != "--timing-mode" && key != "--warmups" && key != "--run-id" && key != "--block-id" && key != "--trial-id" && key != "--graph-sha256" && key != "--trace-sha256" && key != "--executable-sha256" && key != "--configuration-sha256"))) {
             throw std::invalid_argument("unknown option: " + key);
         }
@@ -38,6 +39,7 @@ void parse(int argc, char** argv, dynagraph::benchmark::Options& options, dynagr
     for (const auto key : {"--graph", "--trace", "--source", "--policy", "--delta", "--threads"}) {
         if (values.count(key) == 0 || values.at(key).empty()) { throw std::invalid_argument(std::string("required option: ") + key); }
     }
+    if (values.count("--workload-observations")) { *observation_path = values.at("--workload-observations"); if (observation_path->empty()) { throw std::invalid_argument("empty diagnostic path"); } }
     options.graph_path = values.at("--graph"); options.trace_path = values.at("--trace");
     options.source = static_cast<dynagraph::VertexId>(number(values.at("--source"), 99999));
     options.config.parallel.delta = number(values.at("--delta"), std::numeric_limits<std::uint64_t>::max());
@@ -94,6 +96,7 @@ int main(int argc, char** argv) {
         std::cout << "Usage: dynagraph_bench verify --graph FILE --trace FILE --source N\n"
                      "  --policy dijkstra|delta-stepping|incremental|heuristic --delta N --threads N\n"
                      "  [--no-effect shared_fast_path|execute_selected] [--verification full]\n"
+                     "Development only: verify accepts --workload-observations FILE (exclusive publication).\n"
                      "Canonical v1 artifacts only. Delta: 1..UINT64_MAX; threads: 0..64\n"
                      "(0 uses the OpenMP runtime default). Full per-update verification only.\n"
                      "Run Python generate.py verify --manifest FILE first: this executable does\n"
@@ -116,11 +119,19 @@ int main(int argc, char** argv) {
         }
         return dynagraph::benchmark::timing_command(options, timing, std::cout, std::cerr);
     }
+    dynagraph::WorkloadObservations observations;
+    std::string observation_path;
     dynagraph::benchmark::Report report;
     report.category = "cli_validation";
     try {
-        parse(argc, argv, options);
+        parse(argc, argv, options, nullptr, &observation_path);
+        if (!observation_path.empty()) { options.config.parallel.workload_observations = &observations; }
         dynagraph::benchmark::replay(options, report);
+        if (!observation_path.empty()) {
+            report.category = "workload_observation";
+            observations.publish(observation_path);
+            report.category = "none";
+        }
     } catch (const std::bad_alloc&) {
         report.success = false; report.category = "resource"; report.message = "allocation failed";
     } catch (const std::exception& error) {

@@ -172,3 +172,19 @@ handler is invoked only at a safe checkpoint, rather than in the GO/cleanup
 critical section. Receipt serialization failure propagates after teardown. No
 claim of race freedom, external authenticity, team observation or scientific
 eligibility follows from these changes.
+
+
+## Phase 6B-2B-3B-3 workload-region diagnostics
+
+Explicit development diagnostics can now sample actual persistent delta-stepping
+teams, per-task Linux membership/generation, OpenMP ancestry and entry/exit CPU
+placement. See [the workload instrumentation runbook](workload-instrumentation.md)
+for schemas, F1–F4 safeguards, bounds and commands. `--observe-workload` requires
+enforced affinity and diagnostic-only trials. Timing instrumentation is rejected.
+The shared offline/recovery gate rejects contradictory or insufficient membership
+even after hashes and journal chains are refreshed. Resume requires renewed opt-in
+and binds fresh attempts while retaining immutable originals. Existing affinity
+receipt v1/v2, journal v1, pilot v2, cleanup, ownership, acknowledgement and GO
+contracts remain in force. Sample consistency conveys no scientific eligibility,
+CPU ownership, stable placement, uncontended execution, NUMA isolation, external
+authentication, physical-core scaling or TSan acceptance.

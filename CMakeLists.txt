@@ -28,6 +28,7 @@ add_library(dynagraph STATIC
     src/dynamic/incremental_sssp.cpp
     src/algorithms/delta_stepping.cpp
     src/algorithms/dijkstra.cpp
+    src/instrumentation/workload.cpp
     src/project_info.cpp
     src/graph/csr_graph.cpp
     src/graph/edge_list_io.cpp)

@@ -98,6 +98,7 @@ def expected_names(optional=()):
         raise ValueError('invalid checked-in default suite: expected 31 unique names')
     additions = {'concurrency-stress': ['concurrency_stress', 'parallel_failure_stress'],
                  'concurrency-extended': ['concurrency_extended', 'parallel_failure_extended'],
+                 'workload-diagnostics': ['workload_instrumentation'],
                  'system-stress': ['system_stress'], 'system-extended': ['system_extended']}
     for tier in optional:
         names.extend(additions[tier])
@@ -167,7 +168,7 @@ def main():
     source.add_argument('--build', type=Path)
     source.add_argument('--names-file', type=Path, help='CMake configure-time name array')
     parser.add_argument('--optional', action='append', default=[], choices=[
-        'concurrency-stress', 'concurrency-extended', 'system-stress', 'system-extended'])
+        'concurrency-stress', 'concurrency-extended', 'system-stress', 'system-extended', 'workload-diagnostics'])
     args = parser.parse_args()
     try:
         if args.build:

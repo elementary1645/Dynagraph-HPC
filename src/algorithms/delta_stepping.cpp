@@ -1,6 +1,7 @@
 #include "dynagraph/algorithms/delta_stepping.hpp"
 
 #include <omp.h>
+#include "dynagraph/instrumentation/workload.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -34,11 +35,12 @@ template <bool Instrumented>
 class Query {
 public:
     Query(const CSRGraph& graph, VertexId source, Distance delta, int requested,
-          DeltaSteppingMetrics* metrics)
+          DeltaSteppingMetrics* metrics, WorkloadObservations* observations, int original_request)
         : graph_(graph), delta_(delta), cap_((graph.vertex_count() - 1) * CSRGraph::max_edge_weight),
           labels_(std::make_unique<std::atomic<Distance>[]>(static_cast<std::size_t>(graph.vertex_count()))),
           threads_(static_cast<std::size_t>(requested)),
-          in_set_(static_cast<std::size_t>(graph.vertex_count()), 0), metrics_(metrics) {
+          in_set_(static_cast<std::size_t>(graph.vertex_count()), 0), metrics_(metrics), observations_(observations) {
+        if (observations_) { observations_->prepare(original_request, requested); }
         for (std::size_t v = 0; v < graph.vertex_count(); ++v) {
             labels_[v].store(unreachable_distance, std::memory_order_relaxed);
         }
@@ -54,6 +56,13 @@ public:
 #pragma omp single
             { actual_threads_ = omp_get_num_threads(); }
             auto& local = threads_[static_cast<std::size_t>(omp_get_thread_num())];
+            if (observations_) {
+                try { observations_->capture(omp_get_thread_num(), false); }
+                catch (...) { local.error = std::current_exception(); }
+#pragma omp barrier
+#pragma omp single
+                { for (const auto& state : threads_) { if (state.error) { error_ = state.error; break; } } }
+            }
             while (true) {
 #pragma omp single
                 {
@@ -82,7 +91,15 @@ public:
                 // coordinator may otherwise change error_ for the next round
                 // while a slower worker is still testing the previous round.
             }
+            if (observations_) {
+                try { observations_->capture(omp_get_thread_num(), true); }
+                catch (...) { local.error = std::current_exception(); }
+#pragma omp barrier
+#pragma omp single
+                { for (const auto& state : threads_) { if (state.error) { error_ = state.error; break; } } }
+            }
         }
+        if (observations_) { observations_->finish(actual_threads_); }
         if (error_) { std::rethrow_exception(error_); }
         SSSPResult result{source, std::vector<Distance>(static_cast<std::size_t>(graph_.vertex_count()))};
         for (std::size_t v = 0; v < result.distances.size(); ++v) {
@@ -222,6 +239,7 @@ private:
     std::map<Distance, std::vector<Entry>> buckets_;
     std::vector<Work> work_;
     DeltaSteppingMetrics* metrics_;
+    WorkloadObservations* observations_;
     std::exception_ptr error_;
     Distance bucket_ = 0;
     int actual_threads_ = 0;
@@ -239,10 +257,13 @@ SSSPResult delta_stepping(const CSRGraph& graph, VertexId source,
         throw std::invalid_argument("delta must be positive and threads nonnegative");
     }
     const int requested = options.thread_count == 0 ? omp_get_max_threads() : options.thread_count;
+    if (options.workload_observations != nullptr && requested > WorkloadObservations::max_workers) {
+        throw std::invalid_argument("workload observation worker bound exceeded");
+    }
     if (metrics != nullptr) {
         *metrics = {};
-        return Query<true>(graph, source, options.delta, requested, metrics).execute(source, requested);
+        return Query<true>(graph, source, options.delta, requested, metrics, options.workload_observations, options.thread_count).execute(source, requested);
     }
-    return Query<false>(graph, source, options.delta, requested, nullptr).execute(source, requested);
+    return Query<false>(graph, source, options.delta, requested, nullptr, options.workload_observations, options.thread_count).execute(source, requested);
 }
 } // namespace dynagraph
