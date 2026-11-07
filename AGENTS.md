@@ -2,17 +2,19 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase F final documentation and reproducibility on
-  feature/phase-f-final-documentation, based on 0b660ec. Phases A–E are accepted
-  within their documented bounded scopes. The explicit Phase F request authorizes
-  documentation/diagrams, command and demonstration validation, existing tests and
-  a local commit. Bounded explicitly opted-in diagnostic command fixtures must
-  preserve existing pilot/enforcement/observation/recovery limits and be identified
-  separately from historical Phase D trials. Do not alter production algorithms,
-  APIs, evidence contracts, manifests, scientific goldens or historical evidence.
-  No dependency installation, full campaign, eligibility override, push, PR or
-  merge. Scientific timing eligibility remains false and TSan acceptance unmet.
-  Stop after the Phase F local report; later phases require a new request.
+- Current authorized scope: Phase G final system acceptance and handover on
+  feature/phase-g-final-acceptance, based on fd59a6b. Phases A–F are accepted
+  within their documented bounded scopes. The explicit final-phase request
+  authorizes fresh existing acceptance/regression tests, read-only source/evidence
+  audit, documented demonstration commands, minor documentation corrections,
+  final acceptance/handover documents and a local commit. Preserve production
+  algorithms, evidence contracts, manifests/goldens and historical artifacts.
+  Existing diagnostic bounds, explicit opt-in, ownership, deadlines, cleanup and
+  conservative GO accounting remain mandatory. No full 104-trial campaign, pilot
+  cap bypass, dependency install, eligibility change, push, PR, merge, tag or release.
+  Scientific multicore qualification and TSan acceptance remain unestablished.
+  This is the final planned A–G gate: stop after the local report; any later action
+  requires a new explicit request and satisfied prerequisites.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all

@@ -1,5 +1,12 @@
 # Full validation and isolated builds — Phase 5C-3B-1
 
+The final [Phase G acceptance](phase-g-final-acceptance.md) and
+[project handover](project-handover.md) record fresh final execution, artifact
+custody and the five distinct verdicts. Software/evidence/documentation pass does
+not imply scientific multicore performance or TSan acceptance. The documented
+Codespaces-constrained deliverable is ready for final review; no release/tag or
+production certification is created by that decision.
+
 Current end-to-end commands are consolidated in the
 [Codespaces reproduction guide](reproducibility-guide.md), with
 [a prepared presentation](professor-demo.md) and [Phase F validation](phase-f-acceptance.md).

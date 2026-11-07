@@ -5529,3 +5529,61 @@ complete historical presentation requires original retained bytes and exact pins
 missing data is an unavailable prerequisite, never a fabricated replacement.
 Scientific eligibility, physical-core/isolation claims and TSan acceptance remain
 unmet. No push, PR or merge; stop after the documentation commit/report.
+
+
+## 2026-11-07 — Phase G final acceptance and handover
+
+Final planned A–G audit started clean at expected
+fd59a6b27221a5e91280f40d2375b3e9dc785490 on
+`feature/phase-g-final-acceptance`. Reused existing acceptance, demonstration,
+offline verification and adversarial infrastructure; no new feature/test or
+production/schema/manifest/dependency change. [Final matrix](phase-g-final-acceptance.md)
+and [handover](project-handover.md) document scope, exact commands, source identity,
+maintenance, retained-input dependencies and all remaining limitations.
+
+Fresh clean-base canonical Debug/Release/ASan+UBSan+LeakSanitizer builds and strict
+CTest profiles each pass 31/31, zero skipped/disabled/failed. Additive workload/
+resource tiers pass 2/2 per build, registration exactly 33. Full campaign suite
+382/382 passes, including evidence/recovery/resume/failure controls. New analysis
+unit methods 11/11 (17 total analysis_stats methods in CTest), standalone actual
+retained-evidence adversaries 6/6, smoke 32 trials / 14 figures, nine smoke negatives,
+six environment negatives, compatibility, 59 archive, 17 repair and three diagnostic
+controls pass. All profiles captured the same clean fd59a6b inventory. Final changes
+are documentation only; no historical pass substitutes for required final execution.
+
+The existing race-free atomic TSan control compiles under default PIE but cannot
+start: fatal unexpected memory mapping, exit 66. Retained as a failed capability
+probe, not a pass. No intentional race, suppression, new toolchain, ASLR/fixed-layout
+or system workaround. Current TSan acceptance remains unmet and the earlier work_
+classification remains LIKELY TOOL/RUNTIME LIMITATION; no race freedom inferred.
+
+README/reproduction and five-/ten-minute demonstration commands pass using the
+documented fresh-path rule, the actual canonical chain/parameters and fresh Release
+build. The one bounded command-validation pilot requested/observed two workers and
+verified-complete with observed_interference, complete coverage and eligibility
+false; new trial ID ac0d6fa74a7e59a21ebe1cd74d21aaf93b98b961f22744ae9b8003e07ef29e4b.
+It is separate from historical Phase D/F and original campaign counts. No time
+worker, original campaign execution, automatic retry or resume. Missing originals
+would block the dependent historical demo; none was fabricated.
+
+Two final direct analyses, the documented regeneration and accepted Phase E's six
+files match byte-for-byte; independent generated recipe bundles also match all
+three files. Three new current full-profile archive pairs and nine original Phase 5
+pairs verify with sidecars, complete inventories and semantic profiles under the
+isolated trusted kit with checkout/venv/build/network/subprocess access denied.
+Retained Phase D and relocated fresh G pilot semantics verify without executing
+archived runners. Original 104-row expansion and both canonical golden hashes are
+unchanged. All 7,681 preexisting historical evidence entries remain unchanged.
+
+Scientific findings remain: original 104 unexecuted; historical Phase D two verified
+diagnostics, both observed_interference; zero scientific timings, no performance
+confidence interval/speedup, physical-core/isolation qualification or TSan acceptance.
+New ignored evidence is at `results/validation/phase-g-final-acceptance/` with raw
+receipts/logs, scripts, canonical archives, native artifacts, analysis and hashes.
+
+Final verdicts: A software engineering PASS; B benchmark/evidence infrastructure
+PASS; C documentation/reproducibility PASS; D scientific multicore qualification
+NOT ESTABLISHED; E Codespaces-constrained deliverable ACCEPTED. Ready for a final
+review PR of that bounded software deliverable, subject to ordinary review; not a
+production certification or scientific performance paper. No push, PR, merge, tag,
+release, dependency installation or new phase. Stop after local commit/report.

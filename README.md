@@ -6,12 +6,14 @@ reference Dijkstra, parallel delta-stepping and transactional sequential repair
 behind an owning adaptive engine, with deterministic workloads and verifiable
 benchmark evidence. The emphasis is correctness, traceability and reproducibility.
 
-**Verified software is not a verified speedup.** Phases A–E are accepted within
+**Verified software is not a verified speedup.** Phases A–F are accepted within
 their documented local scopes. The original 104-trial campaign remains unexecuted;
 two derived Phase D trials are verified diagnostic executions, both
 `observed_interference`, with zero scientifically eligible timing observations.
 Performance statistics, confidence intervals and multicore speedup are unavailable.
-TSan acceptance remains unmet. See [current documentation acceptance](docs/phase-f-acceptance.md).
+TSan acceptance remains unmet. See the [final five-part acceptance](docs/phase-g-final-acceptance.md) and
+[project handover](docs/project-handover.md). Software acceptance does not establish
+scientific multicore performance qualification.
 
 ## Capabilities and boundaries
 
@@ -125,8 +127,8 @@ Correctness uses independent hand/seeded Bellman–Ford oracles, complete-state
 comparisons against recomputation, transaction/failure and concurrency controls.
 Accepted Phase E checks include Debug/Release/ASan+UBSan+LeakSanitizer 31/31 each,
 382 campaign tests, additive native diagnostics, rendering/registration/smoke and
-independent current/historical archive verification. [Phase F acceptance](docs/phase-f-acceptance.md)
-distinguishes newly executed documentation checks from retained validation evidence.
+independent current/historical archive verification. [Phase G acceptance](docs/phase-g-final-acceptance.md) records fresh final builds,
+regressions and presentation checks separately from retained validation evidence.
 No hosted-CI result is inferred from local execution.
 
 Codespaces affinity, logical CPUs and snapshots do not establish exclusive
@@ -150,5 +152,6 @@ Numerical bootstrap tests do not establish independence or performance evidence.
 | GO/affinity / actual workload teams / shared counters | [Enforcement](docs/resource-enforcement.md), [workload](docs/workload-instrumentation.md), [interference](docs/resource-interference.md) |
 | Numerical methods, verified analysis and limitations | [Analysis](docs/benchmark-analysis.md), [Phase E](docs/phase-e-acceptance.md) |
 | Full test gates, portable archives and historical recovery | [Validation runbook](docs/reproducibility-validation.md), [Phase A](docs/phase-a-acceptance.md) |
+| Final acceptance and maintenance handover | [Phase G](docs/phase-g-final-acceptance.md), [handover](docs/project-handover.md) |
 | Accepted local phase matrices | [A](docs/phase-a-acceptance.md), [B](docs/phase-b-acceptance.md), [C](docs/phase-c-acceptance.md), [D](docs/phase-d-acceptance.md), [E](docs/phase-e-acceptance.md), [F](docs/phase-f-acceptance.md) |
 | Provenance of changes, failures and bounded findings | [Research log](docs/research-log.md) |
