@@ -2,6 +2,19 @@
 
 ## Status
 
+The latest local gate is [Phase D campaign/evidence acceptance](phase-d-acceptance.md),
+on c1f607a after accepted Phases A/B/C. The explicit Phase D request permits bounded
+Codespaces development pilots and verification subject to the existing contracts.
+The original 104-trial plan and hashes remain unchanged; the complete campaign
+was not executed. A separately identified two-trial diagnostic pilot passed with
+workload/resource evidence, observed shared CPU pressure and false scientific
+eligibility. The two visible logical CPUs are reported as SMT siblings on one
+core; no independent physical-core or isolation claim follows. Diagnostic
+observation commands exclude timing, and the eight-trial pilot cap is not a matrix
+execution interface. Full campaigns remain deferred under the current executor;
+no batching or relabeling may bypass this restriction. Phase E is not started.
+Earlier status/scope statements below retain their historical context.
+
 The research-grade completion request begins with the
 [Phase A acceptance audit](phase-a-acceptance.md) of workload instrumentation.
 The audit retains scientific ineligibility and strict existing evidence gates.

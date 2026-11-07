@@ -5372,3 +5372,53 @@ eligibility remains false; TSan acceptance remains unmet. No isolation, absence
 of contention, physical-core scaling, hosted-CI or publishable-speedup claim is
 made. No push, PR or merge; stop after the authorized local commit and report.
 Later phases remain unstarted and require a new request.
+
+
+## 2026-11-07 — Phase D campaign/evidence qualification
+
+At the expected clean c1f607a base on `feature/phase-d-benchmark-campaign`, verified
+the original 104-trial expansion and both required hashes before execution. Reviewed
+accepted Phases A/B/C, existing planning/admission/pilot/enforcement/workload/resource
+contracts and historical archives. No production defect or tooling change required
+an implementation fix. [Phase D acceptance](phase-d-acceptance.md) records commands,
+counts, environment qualification, matrix results and reproduction details.
+
+The existing executor caps pilots at eight trials and permits workload/resource
+observations only for diagnostic selections. The example plan has placeholder
+build hashes. Full 104-trial execution was not permitted, and no batching, raised
+limit, relabeling or competing executor bypassed the contract. Staged a separately
+identified derived plan with actual revision/build identities and observed affinity;
+all scientific workload/configuration goldens remain unchanged. Selected two delta
+diagnostic trials (workers 1/2) through the ordinary opt-in CLI with affinity,
+workload and resources, 60 s wall / 20 s per trial. Both attempted, completed and
+verified-complete; neither interrupted/rejected; zero scientifically eligible.
+Original-manifest execution count is 0, unexecuted 104. No timing worker, retry or
+resume was needed. Resume/failure invariants passed the full campaign regressions.
+
+Observed Ubuntu 24.04.5, kernel 6.8.0-1064-azure, GCC 13.3.0, CMake 3.28.3 and Python
+3.14.2. CPUs 0/1 share visible package/core and SMT-sibling identity. Both native
+pilot trials record complete resource coverage and observed_interference from
+shared CPU PSI increases, with observed teams 1/2. Child OpenMP mapping snapshots
+remain unavailable; candidate library identity is not promoted to active proof.
+Scientific eligibility stays false. No physical-core scaling/isolation/absence of
+contention, runtime attestation, TSan acceptance or performance claim follows.
+
+Fresh Debug, Release and ASan+UBSan+LeakSanitizer profiles each passed 31/31 CTests;
+additive workload/resource CTests passed 2/2 per build (14 + 11 methods), exact
+registration 33. Campaign tests 382/382 without skips, Release smoke 32 trials /
+14 figures, nine smoke negatives, six environment negatives, compatibility,
+59 archive tests, 17 repair tests and three diagnostic controls all pass. Three new
+canonical archives and nine transferred original published Phase 5 archives verify
+independently with sidecars, complete inventories and semantic profiles under
+isolated system Python with checkout/venv/build/network/subprocess access denied.
+Relocated pilot evidence also verifies. A separate pilot-transfer archive reopens
+with full inventory and existing pilot/journal semantic checks.
+
+Retained evidence/scripts are at `results/validation/phase-d-benchmark-campaign/`.
+Machine-readable Phase E preparation has 104 unexecuted original rows and two
+verified derived diagnostic rows, null timing with reasons, identities, provenance,
+classifications and hashes; no statistics or scientific ratios computed. All 4,357
+preexisting historical evidence entries remain unchanged. No dependency was installed.
+Final verdict: APPROVED for permitted bounded software/evidence qualification;
+full 104-trial/scientific execution remains unavailable. Documentation-only local
+commit; no push, PR or merge. Stop after reporting; Phase E is not started.

@@ -870,3 +870,51 @@ validated separately and together at 33 registrations. Exact commands, raw logs,
 source inventories, local outcomes and limitations are recorded in
 [Phase B acceptance](phase-b-acceptance.md). Local checks never imply hosted CI or
 TSan acceptance, scientific eligibility or physical isolation.
+
+
+## Phase D campaign evidence qualification
+
+[Phase D acceptance](phase-d-acceptance.md) records the fresh c1f607a validation,
+permitted execution mode and remaining experimental limitations. New ignored
+artifacts are at `results/validation/phase-d-benchmark-campaign/` (`E`). The original
+104-trial expansion and both required hashes are in `E/manifest-preservation.json`;
+original plan/manifest copies remain separate from `E/execution/inputs/`.
+
+The existing authoritative entry points are `benchmarks/python/campaign.py`
+`validate`, `expand`, `inspect`, `admit`, `pilot`, `verify-pilot` and
+`inspect-recovery`. Use the [pilot runbook](campaign-pilot.md) to stage a derived
+plan with actual build identities. The unchanged development fixture has zero
+placeholder build hashes. Replacing those hashes changes plan and trial identities;
+record derivation rather than claiming execution of the original manifest.
+
+Phase D selected only the derived diagnostic delta-stepping rows with workers 1/2,
+all three `--enforce-affinity --observe-workload --observe-resources` flags and
+`--execute-development`, bounded to two trials, 60 s wall and 20 s per trial.
+`E/execution/commands.json` contains exact argv, trial IDs, exits and log hashes.
+Both trials verified-complete, with complete coverage and observed_interference.
+No timing worker was launched. Original campaign counts remain 0/104 executed;
+scientifically eligible observations remain zero. Do not split the 104-row matrix
+into pilots or raise the cap to bypass the documented full-campaign restriction.
+
+Fresh canonical Debug/Release/sanitizer profiles, additive diagnostics, full campaign
+tests, rendering/smoke, registration, archive and negative checks are recorded in
+`E/regression/commands.json`. Run through the approved execution mode supporting
+LeakSanitizer inspection and enforcement sockets, using the existing pinned venv.
+The retained regression/postcheck scripts use fresh disjoint outputs and record
+controlled environments. Choose new paths for reproduction; never overwrite E.
+
+`E/offline-verification.json` records independent checks of three new full-profile
+archive/sidecar pairs, nine transferred original published Phase 5 pairs and a
+relocated pilot. The copied trusted kit runs under system Python `-I -S -B` with
+checkout/venv/build reads, network and subprocesses denied. The separately labeled
+`E/pilot-transfer.tar.gz` plus sidecar has complete inventory and existing
+pilot/journal semantic verification; it is not a canonical CTest archive profile.
+`E/audit-sha256.json` inventories retained bytes. Historical evidence remains
+unchanged, checked across 4,357 preexisting file/link/special entries.
+
+Phase E preparation lives in `E/phase-e-preparation/`: 104 unexecuted original rows,
+two separately identified verified diagnostic rows, explicit counts, provenance,
+classifications and output hashes. Timing values are null with an explicit reason.
+These files support evidence auditing/exclusion preparation, not scientific timing
+statistics. TSan acceptance, scientific hardware qualification, full campaign
+execution, speedups and inferential analysis are not established by this output.
