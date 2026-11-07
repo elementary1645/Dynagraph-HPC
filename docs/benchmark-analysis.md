@@ -170,3 +170,40 @@ continuation request supplies this phase's implementation scope, overriding the
 older AGENTS.md phase gate; correspondence to an absent 4A document cannot be
 independently certified. See [research log](research-log.md) for actual commands,
 results and limitations. Stop after implementation/testing for independent review.
+
+
+## Phase E: verified diagnostic evidence assessment
+
+The separate `analyze.py --phase-d DIRECTORY --inventory-sha256 EXPECTED --output NEW`
+input mode extends this analysis entry point without changing legacy `--plan`
+behavior. It reads the raw Phase D pilot through existing offline/journal verifiers,
+checks the complete externally anchored inventory, regenerates original/derived
+manifest membership and reconstructs exported rows/counts. No archived executable
+is run. A matching local hash is integrity evidence, not producer authentication.
+Expected Phase D anchor and exact reproduction commands are in
+[Phase E acceptance](phase-e-acceptance.md). Output must be outside immutable input.
+
+The actual dataset has 104 original trials unexecuted, two selected derived pilot
+trials verified-complete, two observed_interference classifications and zero
+scientifically eligible timings. Missing timings stay null with an explicit reason;
+no runtime, speedup, scaling or performance confidence-interval plot is generated.
+The new report/summary and accounting SVG/PDF distinguish original and derived
+identities and record source/code/output hashes, Python/package versions and method
+configuration. Six output files reproduce byte-for-byte in the verified environment.
+
+`analysis_inference.py` provides mathematical primitives for exact mean, midpoint
+median, sample SD (n−1), extrema and inverse-ECDF p90/p95. Optional 95% percentile
+bootstrap intervals of the mean use 2,000 SplitMix64-v1 resamples, seed 7, and
+nearest-rank endpoints; fewer than five or constant independent-unit samples
+withhold CI. This conservative threshold does not establish adequate replication
+or coverage. Paired candidate/baseline ratios require exactly matching named unit
+keys, retain whole pairs and withhold zero-denominator/numerator ratios. Input order
+is part of numerical input; paired keys are sorted. Work is bounded. No ordered
+update position or warmup is an independent replicate.
+
+These numerical primitives do not accept or attest scientific eligibility. Current
+pilot schemas authorize no scientific timing rows; a future scientific dataset
+requires a qualified admission adapter with verified identities, provenance,
+compatibility and replication before these methods can support performance claims.
+No CLI flag overrides this boundary. The actual Phase D report invokes no numerical
+performance estimation. Synthetic method tests are not benchmark measurements.

@@ -2,6 +2,18 @@
 
 ## Status
 
+The latest local gate is [Phase E statistical/evidence assessment](phase-e-acceptance.md).
+The explicit Phase E request permits verified ingestion, numerical method tests and
+reproducible diagnostic accounting; no new campaign or scientific eligibility is
+authorized. Original campaign completion remains zero of 104. The two retained
+Phase D diagnostic trials are both observed_interference, timing null and scientific
+eligibility false. All performance estimates and intervals remain unavailable.
+Exact-rational descriptive/bootstrap primitives are synthetic-tested mathematical
+methods; future scientific use requires qualified measurements/admission,
+compatible provenance and justified independent experimental units. No warmup,
+ordered update or arbitrary session label establishes independence. No caller flag
+upgrades current diagnostic evidence. Later phases remain unstarted.
+
 The latest local gate is [Phase D campaign/evidence acceptance](phase-d-acceptance.md),
 on c1f607a after accepted Phases A/B/C. The explicit Phase D request permits bounded
 Codespaces development pilots and verification subject to the existing contracts.

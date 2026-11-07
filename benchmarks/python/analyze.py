@@ -200,10 +200,17 @@ def analyze(plan_path,output):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
-    parser.add_argument('--plan',required=True);parser.add_argument('--output',required=True)
+    inputs=parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument('--plan');inputs.add_argument('--phase-d')
+    parser.add_argument('--inventory-sha256');parser.add_argument('--output',required=True)
     args=parser.parse_args()
     try:
-        result=analyze(args.plan,args.output)
+        if args.phase_d:
+            from analysis_evidence_report import analyze_phase_d
+            result=analyze_phase_d(args.phase_d,args.output,args.inventory_sha256)
+        else:
+            if args.inventory_sha256 is not None:raise ValueError('--inventory-sha256 requires --phase-d')
+            result=analyze(args.plan,args.output)
         sys.stdout.buffer.write(canonical_json(result));return 0
     except Exception as exception:
         print('analysis error: '+str(exception),file=sys.stderr);return 2

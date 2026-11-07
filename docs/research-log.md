@@ -5422,3 +5422,52 @@ preexisting historical evidence entries remain unchanged. No dependency was inst
 Final verdict: APPROVED for permitted bounded software/evidence qualification;
 full 104-trial/scientific execution remains unavailable. Documentation-only local
 commit; no push, PR or merge. Stop after reporting; Phase E is not started.
+
+
+## 2026-11-07 — Phase E statistical analysis and evidence assessment
+
+Implemented on expected e0ee5ff base, `feature/phase-e-statistical-analysis`, under
+explicit Phase E authorization. Extended the existing analysis CLI with anchored,
+read-only Phase D ingestion; reused pilot/journal verifiers and pinned rendering.
+Reconstructed all raw/export identities, fields and accounting rather than trusting
+eligibility flags. Added exact-rational descriptive and seeded IID-unit bootstrap/
+paired numerical primitives, clearly separate from scientific admission. No current
+pilot schema authorizes scientific timings. No actual performance statistic or
+interval was calculated. [Phase E acceptance](phase-e-acceptance.md) records all
+methods, commands, evidence and limitations.
+
+Actual assessment: original 104 planned, zero selected/attempted/completed/verified,
+104 unexecuted; derived manifest 104 expanded, two selected/attempted/completed/
+verified, 102 unselected, two diagnostic-only, zero interrupted/rejected and zero
+scientifically eligible. Both retained trials are observed_interference with
+complete coverage and observed teams 1/2. Timing values stay null; no defensible
+multicore speedup or performance confidence interval. No new campaign execution,
+dependency installation, historical relabeling or scientific golden change.
+
+New unit methods 11/11 and six retained-evidence adversarial methods pass; the
+existing analysis_stats CTest now runs 17 methods. Strict full Debug/Release/
+ASan+UBSan+LeakSanitizer profiles pass 31/31 each. Additive workload/resource tiers
+pass 2/2 per build; registration exactly 33. Final full campaign suite passes
+382/382 without skips, with rendering, 32 smoke trials / 14 figures, nine smoke
+negatives, six environment negatives, compatibility, 59 archive tests, 17 repair
+tests and three negative diagnostic controls passing. Source/test overlays are
+identical across profiles. The outer driver received unexplained SIGTERM after
+successful Release publication; completed legs were independently verified, not
+rerun. A continuation campaign run hit AF_UNIX pathname length in one socket
+fixture; preserved as failed, then the whole suite passed using a short fresh
+TMPDIR path. Neither issue required a source/criteria change.
+
+Two analysis regenerations produce byte-identical summary, diagnostic JSONL,
+Markdown, accounting SVG/PDF and manifest. Three new canonical and nine original
+published Phase 5 archives verify independently with sidecars, complete inventories
+and semantic profiles; relocated Phase D pilot verifies without executing it.
+All 5,563 prior historical entries remain unchanged. New reports/logs/scripts and
+checksums are retained in `results/validation/phase-e-statistical-analysis/`.
+Original 104-trial plan and manifest hashes remain exact. Code implements no
+eligibility override or future unqualified scientific adapter. Numerical fixtures
+are synthetic tests, not observations or coverage guarantees.
+
+Verdict: APPROVED for diagnostic/evidence assessment and tested numerical methods.
+Scientific eligibility remains false; TSan acceptance, qualified independent timing
+measurements, isolation/physical-core claims and future scientific admission remain
+unmet. Stop after local commit/report; no push, PR or merge, later phases unstarted.

@@ -918,3 +918,50 @@ classifications and output hashes. Timing values are null with an explicit reaso
 These files support evidence auditing/exclusion preparation, not scientific timing
 statistics. TSan acceptance, scientific hardware qualification, full campaign
 execution, speedups and inferential analysis are not established by this output.
+
+
+## Phase E statistical/evidence assessment
+
+[Phase E acceptance](phase-e-acceptance.md) gives the exact regeneration command,
+method assumptions, attack matrix, source relationships and all results. Use the
+existing pinned venv and a new output directory with `analyze.py --phase-d` plus
+the explicit trusted Phase D inventory digest. Do not infer that digest from an
+unverified input directory. No dependency was installed and no historical input
+was modified. The original plan/manifest hashes remain unchanged.
+
+New ignored evidence is at `results/validation/phase-e-statistical-analysis/` (`E`).
+`E/analysis-one/` contains the report, summary, verified diagnostic rows, accounting
+SVG/PDF and output manifest. `E/analysis-two/` is an independent regeneration;
+`E/reproducibility.json` proves all six output files byte-identical. Source/code
+hashes, Python/package versions and numerical configuration are embedded. Timing
+estimates, speedup and scientific confidence intervals remain null. No new campaign
+was executed; native/smoke executions belong only to required regression controls.
+
+New tests run through the existing `analysis_stats` CTest (17 methods total,
+including 11 new methods); `tests/test_analysis_evidence.py PHASE_D_DIRECTORY`
+explicitly runs six additional retained-evidence methods without launching the
+archived runner. Rehashed eligibility/timing promotions, duplicated/substituted
+rows, failed correctness, unverified flags, mixed environments/configurations and
+original/pilot accounting substitutions reject. Pure numerical tests cover exact
+statistics, missing/nonfinite/negative/zero values, sparse samples, pairing keys,
+CI edges and deterministic resampling. No flag can enable scientific eligibility.
+
+The required default 31-test Debug/Release/sanitizer profiles pass, with separate
+2-test diagnostic tiers and exact additive registration 33. Full campaign tests
+pass 382/382 at `E/tail/campaign-python.log`; renderer/smoke/negative/archive/
+compatibility checks also pass. The initial outer driver received unexplained
+SIGTERM after Release completed; nested receipts and independent archive checks
+verify that leg. Continuation did not rerun completed profiles. Its first full
+campaign suite hit a long TMPDIR AF_UNIX path limit in one socket fixture. Failed
+logs remain separate; using a shorter fresh temporary path produced a full passing
+suite. No source or acceptance gate was weakened.
+
+`E/postcheck/commands.json`, `E/regression*/commands.json` and `E/tail/commands.json`
+record actual argv/environments/exits/log hashes. Driver copies are retained. Use
+the approved execution mode for LeakSanitizer inspection and enforcement sockets,
+with leak detection enabled. The isolated system-Python offline kit verifies three
+new canonical archives, nine transferred original Phase 5 archives and relocated
+Phase D pilot evidence while denying checkout/venv/build reads and network/process
+creation. `E/historical-preservation.json` records 5,563 unchanged prior entries;
+`E/audit-sha256.json` inventories new retained bytes. TSan acceptance and scientific
+performance qualification remain unmet.
