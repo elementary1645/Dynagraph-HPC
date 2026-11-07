@@ -91,4 +91,7 @@ class StatisticsTests(unittest.TestCase):
         self.assertLess(abs(Decimal(value['geometric_mean_ratio'])-Decimal('0.5').sqrt()),Decimal('1e-27'))
         self.assertEqual(panel_summaries(rows[:-1],workloads)[0]['withheld_reason'],'incomplete_fixed_workload_panel')
 
+# Additive Phase E coverage retains the historical analysis_stats registration.
+from test_analysis_evidence import NumericalEvidenceTests, EvidenceImportTests
+
 if __name__=='__main__':unittest.main()

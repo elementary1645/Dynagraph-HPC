@@ -2,19 +2,19 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase D reproducible benchmark campaign and evidence
-  verification on feature/phase-d-benchmark-campaign, based on c1f607a.
-  Phases A, B and C are accepted. The explicit Phase D request authorizes bounded
-  Codespaces pilots, evidence verification, necessary campaign tooling, regression
-  validation, documentation and a local commit. Existing pilot limits and
-  diagnostic-only observation contracts remain mandatory; the original 104-trial
-  plan/goldens must remain unchanged. Do not bypass full-campaign restrictions by
-  batching pilots, raising limits or relabeling timing selections. Preserve
-  correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership, deadlines,
-  framing, cleanup and conservative GO accounting. No automatic retries,
-  dependency changes, push, PR or merge. Scientific eligibility remains false;
-  TSan acceptance remains unmet. Stop after the Phase D local report; Phase E
-  and later phases require a new request and satisfied prerequisites.
+- Current authorized scope: Phase E statistical analysis and scientific evidence
+  assessment on feature/phase-e-statistical-analysis, based on e0ee5ff.
+  Phases A–D are accepted within their documented bounded scopes. The explicit
+  Phase E request authorizes analysis implementation, numerical/adversarial tests,
+  read-only report generation, regression validation, documentation and a local
+  commit. Reverify retained inputs; do not trust exported eligibility flags.
+  Numerical inference primitives may be tested on synthetic independent-unit
+  fixtures; actual Phase D data has no scientific timing admission and must yield
+  unavailable performance statistics. Preserve original manifest hashes, immutable
+  evidence, pilot v2, journal v1, ownership, deadlines, cleanup and conservative GO
+  accounting. No new campaign execution, eligibility override, dependency change,
+  push, PR or merge. Scientific eligibility remains false; TSan acceptance remains
+  unmet. Stop after the Phase E local report; later phases require a new request.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
@@ -28,8 +28,9 @@
   was classified LIKELY TOOL/RUNTIME LIMITATION after calibration, not race freedom.
   Preserve tests/tsan_controls and ignored results/validation/phase5c2a* evidence;
   intentional-race controls must stay outside ordinary CTest and CI.
-  Inferential statistics, performance claims, heuristic tuning, calibrated/learned
-  selection, batch/increase/parallel repair, automatic delta tuning, topology changes
+  Scientific inference/performance claims from actual ineligible data, heuristic
+  tuning, calibrated/learned selection, batch/increase/parallel repair, automatic
+  delta tuning, topology changes
   and concurrent mutation remain deferred. Phase 5B-4B descriptive analysis is merged.
 - Do not install dependencies, commit, or push without explicit user permission.
 - No sub-agent delegation is required by this repository.

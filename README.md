@@ -1,13 +1,23 @@
 # DynaGraph-HPC
 
-Phase 6B-2B-3B-3 implements opt-in workload-region OpenMP/Linux task observations
-and shared pilot/offline/recovery verification. The current
-[Phase A acceptance audit](docs/phase-a-acceptance.md) records verified checks,
-a reproduced classification fix and restored full rendering/registration/smoke
-validation and recovery/verification of nine original published Phase 5 archives.
-Phase A is **APPROVED** for its local workload-instrumentation scope;
-Phase B resource-interference implementation has not started. Scientific
-eligibility remains false. See the [instrumentation runbook](docs/workload-instrumentation.md).
+Phase E adds read-only assessment of the verified Phase D diagnostic evidence,
+exact accounting and tested numerical primitives. The original 104-trial campaign
+remains unexecuted; two pilot trials are diagnostic-only, both observed_interference.
+Scientific timing statistics, speedup and confidence intervals remain unavailable.
+See [Phase E acceptance and reproduction](docs/phase-e-acceptance.md).
+
+```sh
+.venv-analysis/bin/python -B benchmarks/python/analyze.py \
+  --phase-d results/validation/phase-d-benchmark-campaign \
+  --inventory-sha256 1e0d0c658410a53f3a5824369b9c6b0a1dd4e60bb95add79a2cd83f81cc96f06 \
+  --output /tmp/dynagraph-phase-e-new-analysis
+```
+
+Use a new output directory and the existing pinned analysis venv. This command
+reverifies raw pilot/journal evidence and the anchored inventory; no flag grants
+scientific eligibility. It generates diagnostic accounting SVG/PDF, not runtime or
+scaling charts. TSan acceptance remains unmet. Earlier infrastructure summaries
+below retain their historical scope; Phases A–D are now accepted as documented.
 
 Phase 6B-2A adds an explicit, bounded development pilot harness. See the
 [pilot runbook, evidence schemas and limits](docs/campaign-pilot.md). It preserves
