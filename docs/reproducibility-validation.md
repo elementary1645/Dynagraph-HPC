@@ -1,5 +1,13 @@
 # Full validation and isolated builds — Phase 5C-3B-1
 
+Current end-to-end commands are consolidated in the
+[Codespaces reproduction guide](reproducibility-guide.md), with
+[a prepared presentation](professor-demo.md) and [Phase F validation](phase-f-acceptance.md).
+The detailed contracts below retain original phase context. Historical Phase 6
+or later-phase deferrals are not current status; accepted A–E scopes and remaining
+scientific gates are summarized in the current guide. Canonical archive profiles
+and all strict evidence requirements below remain unchanged.
+
 The current archive contract is the repaired v2 format in the Phase 5C-3B-3R
 and 3R2 sections below; the latter refines configure/time validation. Earlier
 phase observations remain historical.

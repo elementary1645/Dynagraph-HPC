@@ -1,6 +1,9 @@
 # Descriptive benchmark analysis — Phase 5B-4B
 
-This layer reads completed Phase 5B-3B experiment directories. It never executes
+The legacy `--plan` path described first reads completed Phase 5B-3B experiment
+directories. The separate Phase E `--phase-d` adapter is documented at the end and
+in the [current reproduction guide](reproducibility-guide.md). It does not assume
+a timing-smoke directory exists in a clean checkout. It never executes
 their staged binaries, modifies raw evidence, changes timing boundaries, or tunes
 the engine. Python 3.11+ is required for decimal logarithms. Import and statistics
 use the standard library; SVG/PDF rendering requires the exact versions in

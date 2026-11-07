@@ -2,19 +2,17 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase E statistical analysis and scientific evidence
-  assessment on feature/phase-e-statistical-analysis, based on e0ee5ff.
-  Phases A–D are accepted within their documented bounded scopes. The explicit
-  Phase E request authorizes analysis implementation, numerical/adversarial tests,
-  read-only report generation, regression validation, documentation and a local
-  commit. Reverify retained inputs; do not trust exported eligibility flags.
-  Numerical inference primitives may be tested on synthetic independent-unit
-  fixtures; actual Phase D data has no scientific timing admission and must yield
-  unavailable performance statistics. Preserve original manifest hashes, immutable
-  evidence, pilot v2, journal v1, ownership, deadlines, cleanup and conservative GO
-  accounting. No new campaign execution, eligibility override, dependency change,
-  push, PR or merge. Scientific eligibility remains false; TSan acceptance remains
-  unmet. Stop after the Phase E local report; later phases require a new request.
+- Current authorized scope: Phase F final documentation and reproducibility on
+  feature/phase-f-final-documentation, based on 0b660ec. Phases A–E are accepted
+  within their documented bounded scopes. The explicit Phase F request authorizes
+  documentation/diagrams, command and demonstration validation, existing tests and
+  a local commit. Bounded explicitly opted-in diagnostic command fixtures must
+  preserve existing pilot/enforcement/observation/recovery limits and be identified
+  separately from historical Phase D trials. Do not alter production algorithms,
+  APIs, evidence contracts, manifests, scientific goldens or historical evidence.
+  No dependency installation, full campaign, eligibility override, push, PR or
+  merge. Scientific timing eligibility remains false and TSan acceptance unmet.
+  Stop after the Phase F local report; later phases require a new request.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all

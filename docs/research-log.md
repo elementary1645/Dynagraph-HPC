@@ -5471,3 +5471,61 @@ Verdict: APPROVED for diagnostic/evidence assessment and tested numerical method
 Scientific eligibility remains false; TSan acceptance, qualified independent timing
 measurements, isolation/physical-core claims and future scientific admission remain
 unmet. Stop after local commit/report; no push, PR or merge, later phases unstarted.
+
+
+## 2026-11-07 — Phase F final documentation and reproducibility
+
+Started clean at expected 0b660ec on `feature/phase-f-final-documentation`, merging
+accepted Phase E. Audited source/build/CLI/benchmark/evidence/recovery/analysis and
+accepted A–E matrices. Replaced the historical-phase-heavy README with a current
+entry point and documentation index, added a Mermaid overview and end-to-end
+architecture/evidence/schema boundaries, retained detailed algorithm invariants/
+complexities, and moved static CLI JSON details into architecture. Corrected stale
+claims of unimplemented benchmark/adaptive/workload components and ordinary-vs-
+diagnostic verification observations. Updated protocol research questions/current
+status while preserving historical phase records. No implementation, schema,
+manifest, timing boundary, dependency or scientific golden changed.
+
+Created the Codespaces reproduction guide with per-step prerequisites, working
+directory, fresh output paths, exact commands, success conditions and explicit
+absence gates for ignored venv/historical artifacts. Added prepared five-/ten-minute
+professor walkthroughs, readiness checks and Q&A. [Phase F acceptance](phase-f-acceptance.md)
+records source relationships, commands, findings and all limitations. Manual
+Codespace creation and Mermaid renderer availability are not claimed tested.
+Static Mermaid flowchart syntax/reference checks and local Markdown links pass.
+
+Fresh guide Release optional-full CTest passed 33/33; source-equivalent reused
+Phase E Debug/sanitizer products freshly executed 33/33 each (145 source/build/test
+hash matches, embedded old revision metadata preserved). Fresh literal README
+Release quick start passed its distinct default 31/31. Current pinned environment,
+registration, 382/382 campaign tests, 32 smoke trials / 14 figures, nine intended
+smoke rejections, 59 archive tests and three negative diagnostic controls passed.
+Every reproduction/presentation Bash block executed successfully; duplicate full
+suite commands shared with the matrix were not needlessly repeated.
+
+The explicitly authorized documentation pilot selected one new derived delta
+trial requesting/observing two workers, confirmed GO, complete correctness/resource
+coverage and observed_interference, with eligibility false. Its ID is
+cddcea525f956e17cd426a7932b49b4cd64b19baad524c7cf39a818d6f482536.
+It is separate from historical Phase D's two diagnostic completions and does not
+execute an original campaign row. No timing worker, retry or resume. All four
+policy verification replays passed full per-update oracles. Static distance vectors
+matched; repair/rollback focused CTests passed. Both original campaign canonical
+hashes and the 104-row expansion remain exact, original execution count still zero.
+
+Retained original Phase D data verified again and regenerated Phase E's six files
+byte-identically to accepted Phase E output. Diagnostic timing/performance estimates
+remain null, with two observed_interference classifications and zero scientific
+samples. Three retained Phase E canonical archives and nine recovered original
+published Phase 5 pairs independently verified under isolated system Python with
+checkout/venv/build/network/process access denied. The fresh F pilot relocated and
+verified read-only. All 6,652 prior historical evidence entries remain unchanged.
+
+New ignored raw logs, command scripts, bundle/inputs, native observations, pilot,
+regenerated analysis, transferred archive bytes and SHA-256 inventory are retained
+at `results/validation/phase-f-final-documentation/`. Verdict: APPROVED for the
+bounded documentation/reproduction/presentation scope in this Codespace. Elsewhere,
+complete historical presentation requires original retained bytes and exact pins;
+missing data is an unavailable prerequisite, never a fabricated replacement.
+Scientific eligibility, physical-core/isolation claims and TSan acceptance remain
+unmet. No push, PR or merge; stop after the documentation commit/report.
