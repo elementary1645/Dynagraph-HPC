@@ -1,31 +1,49 @@
 # Experimental protocol
 
-## Status
+## Current status and answerable questions
 
-The latest local gate is [Phase E statistical/evidence assessment](phase-e-acceptance.md).
-The explicit Phase E request permits verified ingestion, numerical method tests and
-reproducible diagnostic accounting; no new campaign or scientific eligibility is
-authorized. Original campaign completion remains zero of 104. The two retained
-Phase D diagnostic trials are both observed_interference, timing null and scientific
-eligibility false. All performance estimates and intervals remain unavailable.
-Exact-rational descriptive/bootstrap primitives are synthetic-tested mathematical
-methods; future scientific use requires qualified measurements/admission,
-compatible provenance and justified independent experimental units. No warmup,
-ordered update or arbitrary session label establishes independence. No caller flag
-upgrades current diagnostic evidence. Later phases remain unstarted.
+[Phase F documentation acceptance](phase-f-acceptance.md) consolidates the implemented
+system and [verified reproduction](reproducibility-guide.md). Accepted Phases A–E
+provide bounded local software/evidence qualification. The original 104-trial
+campaign remains unexecuted; the two accepted Phase D trials are derived diagnostics,
+both observed_interference, with null timing and false scientific eligibility.
+Phase E numerical primitives are synthetic-tested; no scientific performance
+estimate, interval, multicore speedup or TSan acceptance is established.
+A fresh Phase F command-validation pilot, if run, is a separately identified
+fixture and cannot change original or Phase D historical accounting.
 
-The latest local gate is [Phase D campaign/evidence acceptance](phase-d-acceptance.md),
-on c1f607a after accepted Phases A/B/C. The explicit Phase D request permits bounded
-Codespaces development pilots and verification subject to the existing contracts.
-The original 104-trial plan and hashes remain unchanged; the complete campaign
-was not executed. A separately identified two-trial diagnostic pilot passed with
-workload/resource evidence, observed shared CPU pressure and false scientific
-eligibility. The two visible logical CPUs are reported as SMT siblings on one
-core; no independent physical-core or isolation claim follows. Diagnostic
-observation commands exclude timing, and the eight-trial pilot cap is not a matrix
-execution interface. Full campaigns remain deferred under the current executor;
-no batching or relabeling may bypass this restriction. Phase E is not started.
-Earlier status/scope statements below retain their historical context.
+| Research question | What is supported now? |
+| --- | --- |
+| Do recomputation and repair preserve exact graph/distances across supported decreases and failures? | Hand/seeded independent oracles, full-state comparisons and failure controls pass within tested bounds. |
+| Does the adaptive engine preserve correctness/state coherence across policies? | Forced/heuristic switching, shared fast paths and rollback tests pass; thresholds are not calibrated. |
+| Can diagnostic execution bind and verify lifecycle, actual teams and resource observations? | Confirmed-GO receipts, workload/resource evidence, offline/journal verification and conservative resume controls pass within their documented scope. |
+| When is repair/adaptive selection faster than recomputation including public-call costs? | Unanswered experimentally: no qualified timing observations; the numerical library does not supply missing measurements. |
+| Does worker-count increase produce physical-core scaling? | Unanswered and not inferable from two visible SMT siblings or shared Codespaces counters. |
+
+The original eight-vertex development chain uses graph/weight/source/trace seeds
+1/2/3/4, twelve strict/repeat/equal requests, delta 16 and workers 1/2. Four policies,
+one session, four balanced blocks, two warmups and one diagnostic per policy/cell
+expand to 104 rows (8 diagnostic, 64 warmup, 32 measured). This is a planning fixture,
+not an executable scientific experiment: build digests are placeholders. Additional
+generator families are supported but are not additional executed campaign findings.
+The original plan and manifest canonical hashes remain respectively
+`f3729f556aab4db8742e9ac6bf7acb786faa27ab8780a463e10bfde62810ea24` and
+`f841201155f01ba7456a0344e6ea623bf5e8886f638497c3ede55397a7aa1c8a`.
+
+All timing comparisons would need unchanged workloads/configurations, qualified
+hardware/provenance, valid clock evidence and justified independent units. Loading,
+initialization, public update calls and validation retain their exact existing
+[timing contract](benchmark-timing.md). No ordered update, warmup or arbitrary
+session label establishes independent replication. Diagnostic workload/resource
+observation commands exclude timing and cannot be relabeled as performance runs.
+The existing bounded pilot cap and full-campaign deferral are not bypassable by
+batching. Current authorization is in AGENTS.md; later phases require a new request.
+
+## Historical protocol evolution
+
+The sections below retain the scope and evidence limitations of their original
+implementation phases. Statements of then-deferred infrastructure are historical,
+not a replacement for the current architecture/status or authorization above.
 
 The research-grade completion request begins with the
 [Phase A acceptance audit](phase-a-acceptance.md) of workload instrumentation.
@@ -37,7 +55,7 @@ Phase 5 archives now pass verification. Phase A is approved for its local scope;
 separate missing local-run copies remain unverified and are not used as evidence.
 Earlier phase status statements below retain their historical context.
 
-Current scope is Phase 6B-2B-2 [safe development resume](campaign-recovery.md).
+The Phase 6B-2B-2 scope was [safe development resume](campaign-recovery.md).
 Explicit dual authorization permits verified completion reuse and execution of
 never-launched pending trials only. A single immutable sibling transaction binds
 the original execution and grants a fresh bounded attempt budget. Failed,
@@ -54,7 +72,7 @@ and ELF protections remain unchanged. Every pilot result is measurement-ineligib
 Scientific execution, complete campaigns, analysis, visualization, inference,
 tuning and timing-boundary changes remain deferred.
 
-Current authorized infrastructure scope is Phase 5C-3B-3R: intended-diagnostic
+The Phase 5C-3B-3R authorized infrastructure scope was: intended-diagnostic
 controls, portable evidence archives and independent offline verification. The
 [reproducibility runbook](reproducibility-validation.md#phase-5c-3b-2-ci-contract-and-bounded-pipeline)
 defines exact registration/execution gates and reproduction commands. Historical

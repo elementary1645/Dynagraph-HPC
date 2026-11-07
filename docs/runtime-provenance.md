@@ -154,8 +154,9 @@ exclusive physical cores. This Codespace cannot establish credible multicore
 scaling. All pilot/resume results remain measurement-ineligible regardless of
 observed mappings, affinity, quotas, correctness or successful local tests.
 
-Phase 6B-2B-3B remains deferred: stronger workload-region instrumentation,
-execution-time worker placement/stability, stronger process/resource ownership,
-repeated recovery, isolation and any scientific-admission design require separate
-authorization. Scientific execution, performance claims, inference and the unmet
-TSan acceptance gate remain outside this phase.
+Later Phases A/B implement separate opt-in workload-region and resource-boundary
+evidence; see [workload instrumentation](workload-instrumentation.md) and
+[resource interference](resource-interference.md). They do not retroactively upgrade
+this early runtime snapshot or prove stable placement, exclusive resource ownership,
+isolation or scientific admission. Repeated recovery/scientific execution remain
+outside the supported subset, and TSan acceptance remains unmet.

@@ -1,60 +1,76 @@
 # Architecture
 
-## Current implementation: Phase 5B-4B (awaiting independent review)
+## Implemented system and data flow
 
-The separate read-only Python analysis layer imports complete 5B-3B evidence,
-classifies scientific eligibility, computes exact paired descriptive comparisons
-and per-trial latency summaries, and renders deterministic table-derived figures.
-See [benchmark analysis](benchmark-analysis.md). Production algorithms, graph
-storage, replay and timing semantics are unchanged. No inference or policy tuning
-is implemented. The recovery request authorizes this scope beyond the older gates
-below; no separate 5B-4A document was recoverable from this checkout.
+DynaGraph-HPC is a C++17/OpenMP fixed-topology shortest-path library with separate
+CLI, deterministic Python workload/campaign tooling, bounded diagnostic evidence,
+recovery and read-only analysis. Phases A–E are accepted within their documented
+local scopes; [Phase F](phase-f-acceptance.md) consolidates their documentation.
+The original 104-trial campaign is unexecuted, scientific timing eligibility is
+false and TSan acceptance is unmet. Architecture does not imply performance results.
 
-Phase 5B-1 adds standard-library Python graph/trace generation and independent
-replay validation, specified in [workload artifacts](workload-artifacts.md).
-Phase 5B-2 adds the separate correctness-only `dynagraph_bench` executable,
-whose CLI, strict canonical parser, independent ledger and full-state oracle
-checks are described in [benchmark replay](benchmark-replay.md).
-Phase 5B-3B adds separate timing loops, metadata and Python experiment orchestration
-without production SSSP changes; see [timing contract](benchmark-timing.md). The C++ executable relies
-on the existing Python verifier for SHA-256/manifest/provenance verification.
+```mermaid
+flowchart LR
+    G["Canonical graph and update trace"]
+    V["Python recipe and identity verification"]
+    C["Fixed-topology CSR storage"]
+    A["Dijkstra, delta-stepping and incremental repair"]
+    H["Adaptive engine with one authoritative state"]
+    O["Full recomputation and independent Bellman-Ford checks"]
+    P["Bounded pilot with affinity acknowledgement and GO"]
+    B["Benchmark verification or timing worker"]
+    E["Receipts, streams and optional native observations"]
+    J["Immutable pilot v2 evidence and recovery journal v1"]
+    R["Offline verification and recovery inspection"]
+    U["Explicit pending-only resume authorization"]
+    S["Verified analysis and eligibility assessment"]
+    G --> V
+    V --> C
+    C --> A
+    A --> H
+    H --> O
+    O --> B
+    P --> B
+    B --> E
+    E --> J
+    J --> R
+    R --> S
+    R --> U
+    U --> P
+```
 
-The project builds a static dynagraph library (alias DynaGraph::dynagraph), a
-dynagraph_cli executable, and CTest tests. The public API exposes project version
-and the OpenMP specification date used to compile the library, plus fixed-topology
-CSR storage, strict text edge-list loading, sequential Dijkstra, and OpenMP
-delta-stepping with optional work counters, and an owning sequential transactional
-single-decrease repair state. A forced-strategy engine maintains that authoritative
-state across all three strategies. Deterministic metadata-only heuristic selection
-is implemented; calibrated/learned selection remains planned. The CLI retains
-help/version and both recomputation algorithms with JSON output; repair is a
-library API only.
+Arrows show the conceptual data/control pipeline, not a second algorithm engine.
+The benchmark worker calls the adaptive engine, which dispatches to existing
+algorithms over CSR. Full preflight precedes a separate timing process when that
+mode is supported; correctness-only workers also check every update themselves.
+The independent small-graph Bellman–Ford oracle reads edge records, not production
+CSR traversal. Native observations attach only to opted-in diagnostic verification,
+never the timing interval. Resume is explicit and never an automatic verifier action.
 
-CMake requires C++17 without compiler extensions and finds OpenMP through its
-imported CXX target. GCC is the supported toolchain for this phase. OpenMP linkage
-propagates to library consumers. Debug and Release presets use GCC and treat
-compiler warnings as errors. Tests use a dependency-free C++ harness with checks
-active in Release; CTest handles discovery, timeouts, and CLI checks.
+## Component boundaries
 
-## Module boundaries
-
-| Location | Responsibility |
+| Location | Implemented responsibility |
 | --- | --- |
-| include/dynagraph/, src/ | Public API and implementation |
-| graph/ | Contiguous CSR storage, weight replacement, and text input validation |
-| algorithms/ | Sequential Dijkstra, parallel delta-stepping, shared SSSP result |
-| dynamic/ | Owning transactional single-edge decrease repair |
-| adaptive/ | Transactional strategy switching and deterministic heuristic selection |
-| instrumentation/ | Reserved for timing; algorithm work counters live in algorithm APIs |
-| apps/ | Command-line entry points |
-| tests/ | Correctness and integration tests |
-| benchmarks/configs/, benchmarks/python/ | Deterministic graph/trace specs, randomness, artifact I/O and replay CLI; no timing |
-| data/manifests/ | Dataset provenance and checksums; generated data ignored |
-| results/ | Generated outputs, ignored by default |
-| docs/, paper/ | Design, research records, protocol, and future manuscript |
+| `include/dynagraph`, `src/graph` | Validated owning CSR, stable edge IDs, serial weight replacement and text loading |
+| `src/algorithms` | Reference lazy-heap Dijkstra and persistent-team OpenMP delta-stepping |
+| `src/dynamic` | Owning transactional single-edge decrease repair with an in-memory undo journal |
+| `src/adaptive` | One authoritative repair state, forced policies, shared no-effect paths and deterministic metadata heuristic |
+| `apps/dynagraph_cli.cpp` | Static SSSP CLI: Dijkstra/delta-stepping, JSON distances; no incremental subcommand |
+| `apps/dynagraph_bench.cpp`, `src/benchmark` | Canonical graph/trace replay, per-update oracle checks, separate timing loops and workload loading |
+| `src/instrumentation` | Opt-in workload teams/Linux task membership and bounded resource snapshots |
+| `benchmarks/python` | Generation, independent bundle/oracle verification, timing harness, campaign admission/pilot, enforcement, evidence/journal/resume and analysis |
+| `tools/validation`, `tests` | Strict registration/JUnit gates, independent archive transport, adversarial/native/oracle/regression controls |
+| `data/manifests`, `results` | Curated provenance; generated bundles and raw validation evidence are ignored, not shipped by a clean clone |
+| `docs`, `paper` | Contracts, acceptance evidence and research material; no completed scientific experiment is implied |
 
-Empty future modules are tracked with .gitkeep placeholders. They contain no
-implementation. Python packages and paper tooling are not Phase 0 dependencies.
+CMake builds `DynaGraph::dynagraph`, `dynagraph_cli`, `dynagraph_bench` and test
+executables. It requires C++17 without extensions and links through
+`OpenMP::OpenMP_CXX`. Warning policy is target-scoped; full validation uses the
+existing pinned Python analysis environment and a real Agg render.
+
+The detailed storage/algorithm sections below describe implemented APIs and cost
+models, not future features or speedup guarantees. Public headers and source are
+the authority when investigating a discrepancy.
 
 ## Graph semantics and supported limits
 
@@ -184,20 +200,28 @@ list, then moves it into the builder. Loading requires O(V+E+L) peak storage for
 longest input line length L; the resulting graph is O(V+E). No input file size or
 line-length resource quota is imposed by this library.
 
-## Future phase gates
+## Current boundaries
 
-Phases 1B and 2B implement independently verified sequential Dijkstra and parallel
-delta-stepping. Phase 3B adds sequential single-edge decrease repair. Phase 4B-1
-adds forced-strategy switching; Phase 4B-2 adds a deterministic heuristic.
-Phase 5A's read-only experimental design is complete; Phase 5B-1 implements only
-artifact generation/integrity/replay. Phase 5B-2 adds correctness-only engine
-replay; stop for review before Phase 5B-3.
-Batch/parallel repair, adaptive selection, and automatic
-delta tuning remain future work.
-Storage updates and full recomputation support increases; incremental processing
-of increases remains deferred. Future timed replay will use the adaptive engine;
-current artifact interoperability tests consume the existing CLI JSON.
+All three algorithms, fixed and heuristic adaptive policies, benchmark replay and
+timing harnesses, bounded diagnostic pilots, evidence verification, safe resume and
+Phase E diagnostic assessment are implemented. Incremental increases, topology
+changes, batches/parallel repair, learned selection and automatic delta tuning
+remain deferred. Storage/full recomputation may handle supported weight increases;
+repair accepts decreases/equality only. All graph updates occur between queries.
+One shared adaptive engine requires external serialization of every access.
 
+## Static CLI output contract
+
+`dynagraph_cli sssp` emits schema v1: integer `schema_version=1`, algorithm name,
+source and exactly V distances in vertex order. Unreachable is JSON null; finite
+values are uint64 integers (JavaScript Number cannot exactly represent all values
+above 2^53−1). Delta output additionally includes delta, requested_threads and
+actual_threads; no timing or work counters are emitted. Delta requires positive
+`--delta`; threads defaults to 0 (runtime default), and those options are forbidden
+with Dijkstra. Required options appear once; invalid/unknown/duplicate options,
+source, input or numeric values produce stderr and exit 2. Success exits 0.
+No-argument/help/version commands remain available. The general loader format
+above differs from the stricter canonical benchmark format.
 
 ## Phase 1B: sequential SSSP baseline
 
@@ -535,9 +559,9 @@ and destruction costs. No full distance vector is copied or returned per update.
 Worst-case A and E_A cover the reachable graph. Transaction overhead can make
 repair slower than full recomputation; no speedup or novelty claim is made.
 Paths/predecessors and shared graph ownership are not maintained. Batches,
-increases, parallel repair, adaptive scheduling and benchmark orchestration remain
-outside this phase. Any future policy must include state-coherence/switching cost
-and must not use the actual affected region as a free predecision feature.
+increases and parallel repair remain deferred. The implemented adaptive engine and
+benchmark orchestration build on this API, include state-coherence/switching costs
+and do not use the actual affected region as a free predecision feature.
 
 ## Phase 4B-1: forced-strategy execution and transactional switching
 
@@ -657,8 +681,8 @@ complete update cost. Persistent ownership is one CSR + distance + journal marks
 full execution additionally holds temporary CSR, new distances, and algorithm
 scratch. No O(V) per-call scratch reset is introduced. Future comparisons must
 charge these coherence, allocation and publication costs to each forced strategy.
-P4, tuning, batches, increases and benchmarking remain gated. The forced core
-and Phase 4B-2 heuristic establish no performance superiority.
+Tuning, batches and incremental increases remain gated. Benchmarking infrastructure
+is implemented; the forced core and heuristic establish no performance superiority.
 
 ## Phase 4B-2: deterministic workload-aware heuristic
 
@@ -719,5 +743,95 @@ local_degree decision improves 2 vertices in one and 511 in the other. The latte
 is a long propagation chain. This does not establish which strategy is faster;
 it establishes that cheap degree metadata cannot bound the affected region.
 Neither optimality nor speedup nor novelty is claimed. Calibration/online learning,
-benchmark infrastructure, topology/increase/batch changes and later phases remain
-unimplemented and require separate approval.
+topology/incremental-increase/batch changes remain unimplemented and require
+separate approval. Benchmark infrastructure is implemented as described below.
+
+## Benchmark, campaign and evidence architecture
+
+`generate.py` implements versioned SplitMix64 deterministic recipes, canonical
+sorted graph bytes, endpoint-based ordered decrease traces and SHA-256 manifests.
+Five generator families are supported: see the authoritative
+[artifact contract](workload-artifacts.md). The original example campaign uses
+only the eight-vertex chain, seeds 1/2/3/4 and 12 updates; it is not coverage of all
+families. The original 104 rows are 8 diagnostics + 64 warmups + 32 measured
+selections, across four policies, workers 1/2 and delta 16. Planning hashes do not
+execute a trial. Placeholder build hashes prevent execution unchanged.
+
+`dynagraph_bench verify` replays one policy with an independent endpoint/weight
+ledger, fresh Dijkstra and eligible small-graph Bellman–Ford after initialization
+and every update. Python verifies recipe/digests first and independently reconciles
+pilot final-state distances. `time` is a separate worker: engine-update-service-v1
+includes the public engine call, allocation/transaction/selector work and call-local temporary teardown
+within the documented [timing contract](benchmark-timing.md), with loading,
+initialization and correctness outside timing as specified there. Full-trace and
+per-update modes are distinct measurement levels. Direct worker identity arguments
+are unverified assertions; neither process exit nor a duration grants eligibility.
+
+`campaign.py` validates/expands/adjudicates plans and provides a bounded development
+pilot, not a full matrix executor. It rejects scientific plans; max 8 selected
+trials, 120 s wall and 30 s per trial. Full 104 execution cannot be implemented by
+splitting pilots. New plans/output directories are distinct identities. The
+[enforcement contract](resource-enforcement.md) stages/hash-pins the executable,
+applies the requested visible affinity through a private child session, verifies
+acknowledgement/process generation/cgroups and sends one GO only after validation.
+R1 correctness reconciliation and R2 conservative GO accounting remain mandatory.
+Unknown release, failed publication or interrupted execution cannot authorize reuse.
+Process groups are cleaned up; this is not a hostile-process sandbox or total RSS
+limit. Hidden host constraints/exclusive ownership remain unknown.
+
+[Workload instrumentation](workload-instrumentation.md) samples actual persistent
+delta regions: teams, ancestry and per-task Linux membership/generation/CPU entry
+and exit. Requests and observed teams are different facts. The
+[resource layer](resource-interference.md) takes four bounded boundary snapshots,
+binds process/workload/configuration identities and evaluates counters/configuration
+changes. It reports observed_stable, observed_interference,
+observed_configuration_change, insufficient_evidence or contradictory_evidence;
+coverage is separate. Serial/no-region execution cannot establish complete sampled
+resource coverage. Shared PSI/throttling observations are not causal attribution.
+Neither sampled stability nor complete diagnostic evidence grants timing eligibility.
+
+| Evidence | Current contract |
+| --- | --- |
+| Campaign plan / expanded manifest | v1; content-derived deterministic IDs |
+| Hardware / admission | v2; development admitted does not mean scientific eligibility |
+| Captured child runtime sidecar | v1; mapped ELF evidence, when available, has its own v3 structure |
+| Pilot execution / record / result index | v2; complete inventory and correctness/receipt reconciliation |
+| Affinity enforcement receipt | v2 with conservative release ledger; strict historical v1 supported |
+| Workload native / bound | Native v2 normally, v3 with resource monotonic envelopes; bound v1 |
+| Resource native / bound / classification | v1; fixed bounds and semantic checks |
+| Recovery journal | v1; immutable chained transitions, independent of the algorithm's RAM undo journal |
+| Resource-observing resume authorization | v4; earlier supported versions retain their own contracts |
+
+`verify-pilot` verifies consistency and can successfully describe intact failed
+execution evidence; inspect `execution_status`. `inspect-recovery` independently
+reconciles journal lifecycle. [Safe resume](campaign-recovery.md) requires explicit
+execution/resume and renewed observation authorizations, original ownership,
+unchanged inputs and verified completions; it reuses completed originals unchanged
+and launches never-launched pending selections in one fresh child attempt. Failed,
+interrupted, unknown-GO, unresolved/orphan or repeated attempts are not retried.
+
+[Archive verification](reproducibility-validation.md) bounds gzip/tar expansion,
+rejects unsafe members, verifies complete hashes/modes/sizes and enforces canonical
+CTest profiles with SHA-256 sidecars. A copied trusted verifier runs without the
+checkout, venv, network or subprocesses. Integrity is not producer authentication.
+Nine recovered original published Phase 5 bundles are distinct from newly generated
+validation archives and from still-missing specific older local-run copies.
+
+## Analysis and scientific boundary
+
+The existing `analyze.py --plan` imports complete legacy timing-harness datasets,
+keeps compatibility/evidence classes separate and provides descriptive tables and
+figures with its original limitations. Phase E adds `--phase-d` with an explicit
+trusted inventory digest. It reverifies raw pilot/journal evidence, original and
+derived manifest identities, provenance and every exported field/count. It emits
+accounting JSON/JSONL, Markdown and SVG/PDF with source/code/output hashes.
+It cannot upgrade diagnostic evidence through a flag.
+
+Numerical helpers implement exact mean/median/extrema/empirical percentiles,
+sample SD and deterministic IID-unit percentile bootstrap/paired ratios, tested
+on synthetic fixtures. This does not admit scientific timings or establish
+independence. Actual Phase D assessment is 104 original rows unexecuted, two derived
+diagnostic completions with observed_interference, zero scientific timing samples
+and null performance statistics. No speedup, confidence interval, exclusive-core
+scaling or race-freedom result follows. See [Phase E methods](phase-e-acceptance.md)
+and [the experimental protocol](experimental-protocol.md).

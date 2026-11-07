@@ -4,7 +4,9 @@
 execution. `apps/dynagraph_bench.cpp` handles CLI/output; the separate
 `src/benchmark/replay.cpp` handles canonical parsing, ledger, oracles and replay.
 Production storage, Dijkstra, delta-stepping, repair and adaptive implementations
-are unchanged. The `verify` command collects no clocks or measurements. Separate Phase 5B-3B
+are unchanged. The ordinary `verify` path reports correctness without algorithm timing. Explicit
+workload/resource diagnostic options add monotonic observation timestamps and
+native evidence; they exclude timing and confer no performance eligibility. Separate Phase 5B-3B
 `time` and Python orchestration are specified in [benchmark-timing.md](benchmark-timing.md).
 
 ## Invocation and integrity boundary
@@ -38,7 +40,8 @@ commands and during replay. No concurrent-writer defense is provided.
 integer in 1..UINT64_MAX for every policy; worker request is 0..64, with 0 using
 the OpenMP runtime default (which may exceed 64). Actual teams may be smaller
 than requested. The upper bound of 64 is a runner input quota, not a tuning
-recommendation. No actual-worker measurement is reported.
+recommendation. The ordinary output does not report actual workers; explicitly opted-in workload
+sidecars separately observe teams as documented in the instrumentation contract.
 
 Optional `--no-effect shared_fast_path|execute_selected` defaults to
 `shared_fast_path`. Optional `--verification full` defaults to `full`; all other
