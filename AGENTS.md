@@ -2,16 +2,19 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase C final system integration and research-grade
-  validation on feature/phase-c-final-integration, based on main 7abb900.
-  Phase A and Phase B are accepted. Inspection, bounded Codespaces diagnostics,
-  demonstrated integration fixes with regression tests, local verification,
-  documentation and a local commit are authorized by the explicit Phase C request.
-  Preserve correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership,
-  deadlines, framing, cleanup and conservative GO accounting. No benchmark retries,
-  dependency changes, scientific campaigns, push, PR or merge. Stop after the
-  Phase C local report; later phases require approval. Scientific eligibility
-  remains false and TSan acceptance remains unmet.
+- Current authorized scope: Phase D reproducible benchmark campaign and evidence
+  verification on feature/phase-d-benchmark-campaign, based on c1f607a.
+  Phases A, B and C are accepted. The explicit Phase D request authorizes bounded
+  Codespaces pilots, evidence verification, necessary campaign tooling, regression
+  validation, documentation and a local commit. Existing pilot limits and
+  diagnostic-only observation contracts remain mandatory; the original 104-trial
+  plan/goldens must remain unchanged. Do not bypass full-campaign restrictions by
+  batching pilots, raising limits or relabeling timing selections. Preserve
+  correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership, deadlines,
+  framing, cleanup and conservative GO accounting. No automatic retries,
+  dependency changes, push, PR or merge. Scientific eligibility remains false;
+  TSan acceptance remains unmet. Stop after the Phase D local report; Phase E
+  and later phases require a new request and satisfied prerequisites.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
