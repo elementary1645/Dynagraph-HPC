@@ -5335,3 +5335,40 @@ are unchanged; 825 historical audit entries match. Exact source relationships,
 commands, versions, initial corrections and limits are in the Phase B matrix.
 No scientific eligibility, TSan acceptance, hosted CI, isolation or contention-free
 execution claim follows. Stop after the local commit; no later phase started.
+
+
+## 2026-11-07 — Phase C final system integration
+
+Explicitly authorized local integration validation on
+`feature/phase-c-final-integration` at `7abb9004aaf3b1a784719cbcff5033da838ccb03`,
+confirmed against local and remote main. Phase A/B acceptance is present.
+No production defect was demonstrated; changes are documentation only.
+[Phase C acceptance matrix](phase-c-acceptance.md) records exact evidence,
+reproduction commands, coverage and limitations.
+
+Fresh canonical Debug, Release and ASan+UBSan+LeakSanitizer profiles each pass
+31/31 CTests. Additive workload/resource diagnostics pass 2/2 CTests per build
+(14 + 11 methods), and full campaign discovery passes 382/382 without skips.
+Exact optional registration is 33. Release smoke passes 32 trials, 14 figures
+and nine negative controls; six environment negatives, four compatibility
+configurations, 59 archive tests, 17 repair tests and three negative diagnostic
+tests pass. Three canonical archive/sidecar pairs independently verify under
+isolated system Python with checkout/venv/network/subprocess access denied.
+A retained real-control lifecycle demonstration verifies immutable reuse,
+pending-only resume, renewed authorization, duplicate prevention and rejection
+after publication failure/post-GO interruption. The original 104-trial expansion
+and both required SHA-256 hashes are unchanged.
+
+An initial sandbox sanitizer run failed with LeakSanitizer's ptrace limitation;
+it remains retained as failed and is not counted as passing. A fresh approved-mode
+run passed with leak detection enabled. Sandbox sockets and DNS were also
+restricted; approved-mode checks succeeded without changing requirements or
+installing dependencies. Raw evidence and driver scripts are retained at
+`results/validation/phase-c-final-integration/`, with an independently checked
+SHA-256 inventory. Historical evidence was not modified or regenerated.
+
+Final Phase C verdict: APPROVED for local software integration. Scientific
+eligibility remains false; TSan acceptance remains unmet. No isolation, absence
+of contention, physical-core scaling, hosted-CI or publishable-speedup claim is
+made. No push, PR or merge; stop after the authorized local commit and report.
+Later phases remain unstarted and require a new request.

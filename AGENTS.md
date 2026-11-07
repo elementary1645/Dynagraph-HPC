@@ -2,15 +2,16 @@
 
 ## Authorization and phase gates
 
-- Current authorized scope: Phase 6B-2B-3B-4 resource interference evidence on
-  feature/phase6b2b3b4-resource-interference, based on be3588a. Phase A is accepted.
-  Explicit opt-in, bounded Codespaces diagnostics, implementation, adversarial tests,
-  local verification, documentation and a local commit are authorized. Preserve
-  correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership, deadlines,
-  framing, cleanup and conservative GO accounting. No retries, dependency changes,
-  scientific campaigns, push, PR or merge. Stop after this phase's local report;
-  later phases require approval. Scientific eligibility remains false and TSan
-  acceptance remains unmet.
+- Current authorized scope: Phase C final system integration and research-grade
+  validation on feature/phase-c-final-integration, based on main 7abb900.
+  Phase A and Phase B are accepted. Inspection, bounded Codespaces diagnostics,
+  demonstrated integration fixes with regression tests, local verification,
+  documentation and a local commit are authorized by the explicit Phase C request.
+  Preserve correctness, immutable evidence, pilot v2, journal v1, R1/R2 ownership,
+  deadlines, framing, cleanup and conservative GO accounting. No benchmark retries,
+  dependency changes, scientific campaigns, push, PR or merge. Stop after the
+  Phase C local report; later phases require approval. Scientific eligibility
+  remains false and TSan acceptance remains unmet.
 - Completed Phase 5C-3B-3R scope: mandatory evidence
   profiles, terminal reconciliation, bounded gzip/tar verification and SHA-256
   sidecars, with local/CI integration and documentation. Preserve all
